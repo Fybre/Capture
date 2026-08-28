@@ -10,7 +10,9 @@ public class JsonWatchSettingsStoreTests
     public async Task Roundtrips_watch_settings()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
-        var store = new JsonWatchSettingsStore(paths);
+        // Explicit NullOsCredentialStore — this must never exercise the real macOS Keychain / Linux
+        // Secret Service, or a test run would write/overwrite entries in the developer's actual store.
+        var store = new JsonWatchSettingsStore(paths, new NullOsCredentialStore());
         var profileId = Guid.NewGuid();
         var otherProfileId = Guid.NewGuid();
 
@@ -61,7 +63,9 @@ public class JsonWatchSettingsStoreTests
               "settleMilliseconds": 1500
             }
             """);
-        var store = new JsonWatchSettingsStore(paths);
+        // Explicit NullOsCredentialStore — this must never exercise the real macOS Keychain / Linux
+        // Secret Service, or a test run would write/overwrite entries in the developer's actual store.
+        var store = new JsonWatchSettingsStore(paths, new NullOsCredentialStore());
 
         var loaded = await store.LoadAsync();
 
@@ -70,5 +74,48 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal("/tmp/inbox", entry.Folder);
         Assert.Equal(profileId, entry.ProfileId);
         Assert.Equal(1500, entry.SettleMilliseconds);
+    }
+
+    [Fact]
+    public async Task Hands_the_ai_api_key_to_the_credential_store_and_reads_it_back()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        var credentialStore = new FakeCredentialStore();
+        var store = new JsonWatchSettingsStore(paths, credentialStore);
+
+        await store.SaveAsync(new WatchSettings { AiApiKey = "sk-real-secret" });
+
+        // The plaintext key never lands in settings.json — only a sentinel does.
+        var raw = await File.ReadAllTextAsync(paths.SettingsPath);
+        Assert.DoesNotContain("sk-real-secret", raw);
+        Assert.Equal("sk-real-secret", credentialStore.Stored);
+
+        var loaded = await store.LoadAsync();
+        Assert.Equal("sk-real-secret", loaded.AiApiKey);
+    }
+
+    [Fact]
+    public async Task Falls_back_to_plaintext_when_the_credential_store_is_unavailable()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        var store = new JsonWatchSettingsStore(paths, new NullOsCredentialStore());
+
+        await store.SaveAsync(new WatchSettings { AiApiKey = "sk-real-secret" });
+        var loaded = await store.LoadAsync();
+
+        Assert.Equal("sk-real-secret", loaded.AiApiKey);
+    }
+
+    private sealed class FakeCredentialStore : IOsCredentialStore
+    {
+        public string? Stored { get; private set; }
+
+        public bool TryStore(string value)
+        {
+            Stored = value;
+            return true;
+        }
+
+        public string? TryRead() => Stored;
     }
 }

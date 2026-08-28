@@ -82,9 +82,14 @@ public sealed partial class TesseractCliOcrEngine : IOcrEngine
         {
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Kill the process regardless of which token fired — Process.Dispose() (via the `using`
+            // above) only releases the managed handle, it does not terminate the OS process, so without
+            // this an orphaned tesseract keeps running to completion even after this method returns.
             TryKill(process);
+            if (cancellationToken.IsCancellationRequested)
+                throw;
             throw new TimeoutException("Tesseract timed out.");
         }
 

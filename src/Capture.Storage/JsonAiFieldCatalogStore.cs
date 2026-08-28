@@ -47,9 +47,6 @@ public sealed class JsonAiFieldCatalogStore : IAiFieldCatalogStore
         }
     }
 
-    private async Task WriteAsync(IReadOnlyList<AiFieldType> types, CancellationToken cancellationToken)
-    {
-        await using var stream = File.Create(_paths.AiFieldCatalogPath);
-        await JsonSerializer.SerializeAsync(stream, types, Options, cancellationToken).ConfigureAwait(false);
-    }
+    private Task WriteAsync(IReadOnlyList<AiFieldType> types, CancellationToken cancellationToken) =>
+        LatticeJson.WriteJsonAsync(_paths.AiFieldCatalogPath, types, Options, cancellationToken);
 }

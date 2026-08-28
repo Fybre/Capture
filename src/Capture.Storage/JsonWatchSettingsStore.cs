@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -6,15 +7,53 @@ using Capture.Core.Watch;
 
 namespace Capture.Storage;
 
+/// <summary>Hands the AI API key off to an OS-level secret store instead of writing it to settings.json.
+/// Swappable so tests don't touch the real macOS Keychain / Linux Secret Service — see <see cref="NullOsCredentialStore"/>.</summary>
+public interface IOsCredentialStore
+{
+    bool TryStore(string value);
+
+    string? TryRead();
+}
+
+/// <summary>No-op store: never claims a value was stored, so callers keep the plaintext fallback.
+/// Used on platforms with no supported store, and by tests.</summary>
+public sealed class NullOsCredentialStore : IOsCredentialStore
+{
+    public bool TryStore(string value) => false;
+
+    public string? TryRead() => null;
+}
+
 public sealed class JsonWatchSettingsStore : IWatchSettingsStore
 {
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("Capture.WatchSettings.AiApiKey");
 
-    private readonly IAppPaths _paths;
+    // Written to settings.json in place of the actual key once it's been handed off to the OS
+    // credential store (macOS Keychain / Linux Secret Service) — tells LoadAsync to fetch the real
+    // value from there instead of trusting the file to hold it.
+    private const string KeychainSentinel = "::keychain::";
 
-    public JsonWatchSettingsStore(IAppPaths paths)
+    private readonly IAppPaths _paths;
+    private readonly IOsCredentialStore _credentialStore;
+
+    public JsonWatchSettingsStore(IAppPaths paths) : this(paths, ResolveDefaultCredentialStore())
+    {
+    }
+
+    public JsonWatchSettingsStore(IAppPaths paths, IOsCredentialStore credentialStore)
     {
         _paths = paths;
+        _credentialStore = credentialStore;
+    }
+
+    private static IOsCredentialStore ResolveDefaultCredentialStore()
+    {
+        if (OperatingSystem.IsMacOS())
+            return new MacKeychainCredentialStore();
+        if (OperatingSystem.IsLinux())
+            return new LinuxSecretServiceCredentialStore();
+        return new NullOsCredentialStore(); // Windows protects the value with DPAPI directly instead.
     }
 
     public async Task<WatchSettings> LoadAsync(CancellationToken cancellationToken = default)
@@ -49,7 +88,7 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         });
     }
 
-    public async Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default)
+    public Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default)
     {
         _paths.EnsureCreated();
         var toSave = new WatchSettings
@@ -60,42 +99,175 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             AiEndpoint = settings.AiEndpoint,
             AiApiKey = Protect(settings.AiApiKey),
             AiModel = settings.AiModel,
-            AiMaxDocumentChars = settings.AiMaxDocumentChars
+            AiMaxDocumentChars = settings.AiMaxDocumentChars,
+            LastImportProfileId = settings.LastImportProfileId,
+            LastBatchProfileId = settings.LastBatchProfileId
         };
-        await using var stream = File.Create(_paths.SettingsPath);
-        await JsonSerializer.SerializeAsync(stream, toSave, LatticeJson.Options, cancellationToken)
-            .ConfigureAwait(false);
+        return LatticeJson.WriteJsonAsync(_paths.SettingsPath, toSave, LatticeJson.Options, cancellationToken);
     }
 
-    // DPAPI is only available on Windows; on other platforms the key is stored as-is.
-    private static string? Protect(string? plainText)
+    private string? Protect(string? plainText)
     {
-        if (string.IsNullOrEmpty(plainText) || !OperatingSystem.IsWindows())
+        if (string.IsNullOrEmpty(plainText))
             return plainText;
 
-        var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(plainText), Entropy, DataProtectionScope.CurrentUser);
-        return Convert.ToBase64String(bytes);
+        if (OperatingSystem.IsWindows())
+        {
+            var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(plainText), Entropy, DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(bytes);
+        }
+
+        // macOS/Linux: hand the real value to the OS credential store and leave only a sentinel in
+        // the settings file. If that store isn't available (headless box, tool not installed, etc.),
+        // fall back to writing the plaintext value as before rather than losing the key entirely.
+        return _credentialStore.TryStore(plainText) ? KeychainSentinel : plainText;
     }
 
-    private static string? Unprotect(string? storedValue)
+    private string? Unprotect(string? storedValue)
     {
-        if (string.IsNullOrEmpty(storedValue) || !OperatingSystem.IsWindows())
+        if (string.IsNullOrEmpty(storedValue))
             return storedValue;
 
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(storedValue), Entropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch (FormatException)
+            {
+                // Pre-existing plaintext value from before encryption was introduced.
+                return storedValue;
+            }
+            catch (CryptographicException)
+            {
+                // Pre-existing plaintext value from before encryption was introduced.
+                return storedValue;
+            }
+        }
+
+        if (storedValue != KeychainSentinel)
+            return storedValue; // pre-existing plaintext value from before this was introduced
+
+        var fromStore = _credentialStore.TryRead();
+        if (fromStore is null)
+            Trace.TraceWarning("Could not read the AI API key back from the OS credential store.");
+
+        return fromStore;
+    }
+}
+
+public sealed class MacKeychainCredentialStore : IOsCredentialStore
+{
+    private const string Service = "Capture.WatchSettings";
+    private const string Account = "AiApiKey";
+
+    public bool TryStore(string value)
+    {
         try
         {
-            var bytes = ProtectedData.Unprotect(Convert.FromBase64String(storedValue), Entropy, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(bytes);
+            // -U updates the item in place if one already exists, instead of erroring.
+            using var process = Process.Start(new ProcessStartInfo("/usr/bin/security")
+            {
+                ArgumentList = { "add-generic-password", "-U", "-a", Account, "-s", Service, "-w", value },
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (process is null)
+                return false;
+            process.WaitForExit(5000);
+            return process.HasExited && process.ExitCode == 0;
         }
-        catch (FormatException)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // Pre-existing plaintext value from before encryption was introduced.
-            return storedValue;
+            Trace.TraceWarning($"Could not store the AI API key in the macOS Keychain: {ex.Message}");
+            return false;
         }
-        catch (CryptographicException)
+    }
+
+    public string? TryRead()
+    {
+        try
         {
-            // Pre-existing plaintext value from before encryption was introduced.
-            return storedValue;
+            using var process = Process.Start(new ProcessStartInfo("/usr/bin/security")
+            {
+                ArgumentList = { "find-generic-password", "-a", Account, "-s", Service, "-w" },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (process is null)
+                return null;
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(5000);
+            return process.HasExited && process.ExitCode == 0 ? output.Trim() : null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+}
+
+// Uses secret-tool (libsecret) — the standard CLI for the Secret Service API on Linux desktops
+// (GNOME Keyring, KWallet via a compatible provider, etc). Not present on headless systems with no
+// Secret Service running, which Protect()/Unprotect() fall back gracefully around via TryStore/TryRead
+// returning false/null.
+public sealed class LinuxSecretServiceCredentialStore : IOsCredentialStore
+{
+    private const string Service = "Capture.WatchSettings";
+    private const string Account = "AiApiKey";
+
+    public bool TryStore(string value)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("secret-tool")
+            {
+                ArgumentList = { "store", "--label=Capture AI API key", "service", Service, "account", Account },
+                RedirectStandardInput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (process is null)
+                return false;
+            process.StandardInput.Write(value);
+            process.StandardInput.Close();
+            process.WaitForExit(5000);
+            return process.HasExited && process.ExitCode == 0;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Trace.TraceWarning($"Could not store the AI API key in the Linux Secret Service: {ex.Message}");
+            return false;
+        }
+    }
+
+    public string? TryRead()
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("secret-tool")
+            {
+                ArgumentList = { "lookup", "service", Service, "account", Account },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (process is null)
+                return null;
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(5000);
+            return process.HasExited && process.ExitCode == 0 ? output.Trim() : null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;
         }
     }
 }

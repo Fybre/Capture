@@ -318,14 +318,19 @@ public partial class MainViewModel : ViewModelBase
     private void PreviousPage()
     {
         CurrentPageNumber--;
-        _ = ShowPageAsync();
+        // Each navigation gets its own generation, not just each document load — otherwise rapid
+        // clicking shares one generation and a slower earlier page load can finish after a faster
+        // later one and overwrite the page the user is actually looking at.
+        var generation = Interlocked.Increment(ref _loadGeneration);
+        _ = ShowPageAsync(generation);
     }
 
     [RelayCommand(CanExecute = nameof(CanGoNext))]
     private void NextPage()
     {
         CurrentPageNumber++;
-        _ = ShowPageAsync();
+        var generation = Interlocked.Increment(ref _loadGeneration);
+        _ = ShowPageAsync(generation);
     }
 
     private async Task ApplyProfileToRowAsync(DocumentRow row, IndexingProfile profile)
@@ -479,6 +484,10 @@ public partial class MainViewModel : ViewModelBase
             return;
         SelectedDocument = row;
         ViewMode = WorkspaceMode.Preview;
+        // The Inbox grid is hidden while in Table mode, and Avalonia's DataGrid doesn't reliably sync
+        // its own SelectedItem highlight/scroll-into-view from a binding assigned while it wasn't
+        // visible — reassert the selection once the mode switch's layout pass has made it visible.
+        Dispatcher.UIThread.Post(() => SelectedDocument = row, DispatcherPriority.Loaded);
     }
 
     [RelayCommand(CanExecute = nameof(CanScan))]
@@ -572,6 +581,7 @@ public partial class MainViewModel : ViewModelBase
             DocumentRow? last = null;
             var batchSources = new Dictionary<Guid, CaptureDocument>();
             var batchSeparatorValues = new Dictionary<Guid, string?>();
+            var failedFiles = 0;
             foreach (var path in paths)
             {
                 index++;
@@ -603,12 +613,15 @@ public partial class MainViewModel : ViewModelBase
                             failed = true;
                     }
 
-                    MoveWatchFile(path, watchRoot, success: imported.Count > 0 && !failed);
+                    if (imported.Count == 0 || failed)
+                        failedFiles++;
+                    MoveWatchFile(path, watchRoot, watchFolderEntry, success: imported.Count > 0 && !failed);
                 }
                 catch (Exception ex)
                 {
+                    failedFiles++;
                     StatusText = ex.Message;
-                    MoveWatchFile(path, watchRoot, success: false);
+                    MoveWatchFile(path, watchRoot, watchFolderEntry, success: false);
                 }
             }
 
@@ -638,7 +651,11 @@ public partial class MainViewModel : ViewModelBase
                 await LoadSelectedDocumentAsync(last).ConfigureAwait(true);
             }
 
-            StatusText = $"Imported {paths.Count} file(s)";
+            StatusText = failedFiles == 0
+                ? $"Imported {paths.Count} file(s)"
+                : failedFiles == paths.Count
+                    ? $"Import failed for all {paths.Count} file(s)"
+                    : $"Imported {paths.Count - failedFiles} of {paths.Count} file(s) — {failedFiles} failed";
         }
         catch (Exception ex)
         {
@@ -744,7 +761,7 @@ public partial class MainViewModel : ViewModelBase
         };
     }
 
-    private static void MoveWatchFile(string path, string? watchRoot, bool success)
+    private void MoveWatchFile(string path, string? watchRoot, WatchFolderEntry? watchFolderEntry, bool success)
     {
         if (string.IsNullOrWhiteSpace(watchRoot) || !File.Exists(path))
             return;
@@ -753,8 +770,19 @@ public partial class MainViewModel : ViewModelBase
         {
             WatchFileMover.Move(path, watchRoot, success);
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceError($"Failed to file away watch file '{path}': {ex}");
+            var fileName = Path.GetFileName(path);
+            if (watchFolderEntry is null)
+            {
+                StatusText = $"Couldn't file away {fileName}: {ex.Message}";
+                return;
+            }
+
+            StatusText = _watch.ReportFailure(watchFolderEntry, path)
+                ? $"Couldn't file away {fileName} ({ex.Message}) — will retry"
+                : $"Couldn't file away {fileName} after repeated attempts ({ex.Message}) — left in the watch folder, needs manual attention";
         }
     }
 

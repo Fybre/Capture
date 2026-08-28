@@ -188,40 +188,64 @@ public sealed class DocumentImporter : IDocumentImporter
             // forward, the batch boundary it represents (and its captured value) would simply vanish,
             // leaving every subsequent document in the prior batch with no separator value at all.
             BatchTriggerHit? pendingHit = null;
-            foreach (var split in splits)
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                BatchTriggerHit? hit = null;
-                foreach (var sourcePage in split.SourcePages)
+                foreach (var split in splits)
                 {
-                    if (batchHitsByPage.TryGetValue(sourcePage, out var found))
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    BatchTriggerHit? hit = null;
+                    foreach (var sourcePage in split.SourcePages)
                     {
-                        hit = found;
-                        break;
+                        if (batchHitsByPage.TryGetValue(sourcePage, out var found))
+                        {
+                            hit = found;
+                            break;
+                        }
+                    }
+
+                    hit ??= pendingHit;
+
+                    var effectiveSplit = hit is { DiscardPage: true }
+                        ? new ClassifiedSplit
+                        {
+                            Profile = split.Profile,
+                            SourcePages = split.SourcePages.Where(page => page != hit.PageNumber).ToList(),
+                            SeparatorValues = split.SeparatorValues
+                        }
+                        : split;
+
+                    if (effectiveSplit.SourcePages.Count == 0)
+                    {
+                        pendingHit = hit;
+                        continue;
+                    }
+
+                    pendingHit = null;
+                    results.Add(await MaterializeSplitAsync(
+                        path, originalName, source, rasters, effectiveSplit, hit, cancellationToken).ConfigureAwait(false));
+                }
+            }
+            catch
+            {
+                // A split failing partway through (disk full, OCR error, cancellation, ...) used to
+                // leave every split materialized before it as a permanently-committed "ghost" document —
+                // present in the store but never surfaced to the caller — and retrying the same source
+                // would then duplicate them. Roll back everything this file has committed so far instead,
+                // so the whole file either imports completely or leaves nothing behind to retry against.
+                foreach (var document in results)
+                {
+                    try
+                    {
+                        await _store.DeleteAsync(document.Document.Id, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        Trace.TraceError($"Failed to roll back partially-imported document {document.Document.Id} for '{path}': {cleanupEx}");
                     }
                 }
 
-                hit ??= pendingHit;
-
-                var effectiveSplit = hit is { DiscardPage: true }
-                    ? new ClassifiedSplit
-                    {
-                        Profile = split.Profile,
-                        SourcePages = split.SourcePages.Where(page => page != hit.PageNumber).ToList(),
-                        SeparatorValues = split.SeparatorValues
-                    }
-                    : split;
-
-                if (effectiveSplit.SourcePages.Count == 0)
-                {
-                    pendingHit = hit;
-                    continue;
-                }
-
-                pendingHit = null;
-                results.Add(await MaterializeSplitAsync(
-                    path, originalName, source, rasters, effectiveSplit, hit, cancellationToken).ConfigureAwait(false));
+                throw;
             }
 
             return results.Count == 0
@@ -316,7 +340,27 @@ public sealed class DocumentImporter : IDocumentImporter
             CreatedUtc = DateTimeOffset.UtcNow
         };
         await _store.SaveAsync(document, pages, cancellationToken).ConfigureAwait(false);
-        await _latticeBuilder.BuildDocumentAsync(document, pages, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _latticeBuilder.BuildDocumentAsync(document, pages, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Already persisted by SaveAsync above but never returned to the caller — clean it up
+            // ourselves so it doesn't linger as an orphaned document ImportAsync's own rollback (which
+            // only knows about splits that made it into its results list) can't see.
+            try
+            {
+                await _store.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception cleanupEx)
+            {
+                Trace.TraceError($"Failed to roll back partially-imported document {id} for '{path}': {cleanupEx}");
+            }
+
+            throw;
+        }
+
         return new ImportedDocument
         {
             Document = document,

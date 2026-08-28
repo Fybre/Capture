@@ -84,32 +84,55 @@ public sealed class SqliteDocumentStore : IDocumentStore
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await TryAddColumnAsync(connection, "ALTER TABLE documents ADD COLUMN batch_id TEXT;", cancellationToken)
+        await TryAddColumnAsync(connection, "documents", "batch_id", "TEXT", cancellationToken)
             .ConfigureAwait(false);
-        await TryAddColumnAsync(connection, "ALTER TABLE batches ADD COLUMN number INTEGER NOT NULL DEFAULT 0;", cancellationToken)
+        await TryAddColumnAsync(connection, "batches", "number", "INTEGER NOT NULL DEFAULT 0", cancellationToken)
             .ConfigureAwait(false);
-        await TryAddColumnAsync(connection, "ALTER TABLE batches ADD COLUMN watch_folder_entry_id TEXT;", cancellationToken)
+        await TryAddColumnAsync(connection, "batches", "watch_folder_entry_id", "TEXT", cancellationToken)
             .ConfigureAwait(false);
-        await TryAddColumnAsync(connection, "ALTER TABLE pages ADD COLUMN source_page_number INTEGER;", cancellationToken)
+        await TryAddColumnAsync(connection, "pages", "source_page_number", "INTEGER", cancellationToken)
             .ConfigureAwait(false);
         await BackfillBatchesAsync(connection, cancellationToken).ConfigureAwait(false);
         await BackfillBatchNumbersAsync(connection, cancellationToken).ConfigureAwait(false);
     }
 
+    // Checks the schema before altering it rather than attempting the ALTER and swallowing whatever
+    // SqliteException comes back — that used to hide real failures (locking, corruption, a malformed
+    // migration) behind the same "column already exists" assumption.
     private static async Task TryAddColumnAsync(
         SqliteConnection connection,
-        string sql,
+        string table,
+        string column,
+        string columnDefinition,
         CancellationToken cancellationToken)
     {
-        try
+        if (await ColumnExistsAsync(connection, table, column, cancellationToken).ConfigureAwait(false))
+            return;
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {columnDefinition};";
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> ColumnExistsAsync(
+        SqliteConnection connection,
+        string table,
+        string column,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({table});";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var nameOrdinal = -1;
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            if (nameOrdinal < 0)
+                nameOrdinal = reader.GetOrdinal("name");
+            if (string.Equals(reader.GetString(nameOrdinal), column, StringComparison.OrdinalIgnoreCase))
+                return true;
         }
-        catch (SqliteException)
-        {
-        }
+
+        return false;
     }
 
     private static async Task BackfillBatchesAsync(SqliteConnection connection, CancellationToken cancellationToken)

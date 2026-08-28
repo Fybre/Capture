@@ -44,15 +44,17 @@ public sealed class JsonIndexValueStore : IIndexValueStore
         return ReadAsync(_paths.BatchIndexesPath(batchId), cancellationToken);
     }
 
-    private static async Task WriteAsync(
+    private static Task WriteAsync(
         string path,
         IReadOnlyList<IndexValue> values,
         CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, values.ToList(), LatticeJson.Options, cancellationToken)
-            .ConfigureAwait(false);
+        // Snapshot now, before LatticeJson's per-path lock — the IndexValue objects backing this list
+        // are mutated in place, so without this an earlier-queued save could serialize a later edit's
+        // values under an earlier write, which is harmless here since it's still the latest state, but
+        // taking the snapshot up front keeps this write's output deterministic regardless of how long
+        // it waits behind another in-flight save.
+        return LatticeJson.WriteJsonAsync(path, values.ToList(), LatticeJson.Options, cancellationToken);
     }
 
     private static async Task<IReadOnlyList<IndexValue>> ReadAsync(string path, CancellationToken cancellationToken)

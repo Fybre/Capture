@@ -20,6 +20,7 @@
           <Color x:Key="ThemeAccentStrong">#145350</Color>
           <Color x:Key="ThemeAccentInk">#FFFFFF</Color>
           <Color x:Key="ThemeAccentWash">#E2F0EE</Color>
+          <Color x:Key="ThemeRowSelected">#CDE9E6</Color>
           <Color x:Key="ThemeGood">#2E7D4F</Color>
           <Color x:Key="ThemeGoodWash">#E4F3E9</Color>
           <Color x:Key="ThemeWarn">#96660C</Color>
@@ -45,6 +46,7 @@
           <Color x:Key="ThemeAccentStrong">#7FD6CC</Color>
           <Color x:Key="ThemeAccentInk">#08211F</Color>
           <Color x:Key="ThemeAccentWash">#1C3634</Color>
+          <Color x:Key="ThemeRowSelected">#284B48</Color>
           <Color x:Key="ThemeGood">#63C489</Color>
           <Color x:Key="ThemeGoodWash">#1C3327</Color>
           <Color x:Key="ThemeWarn">#E0AC4C</Color>
@@ -72,6 +74,7 @@
       <SolidColorBrush x:Key="AccentStrongBrush" Color="{DynamicResource ThemeAccentStrong}" />
       <SolidColorBrush x:Key="AccentInkBrush" Color="{DynamicResource ThemeAccentInk}" />
       <SolidColorBrush x:Key="AccentWashBrush" Color="{DynamicResource ThemeAccentWash}" />
+      <SolidColorBrush x:Key="RowSelectedBrush" Color="{DynamicResource ThemeRowSelected}" />
       <SolidColorBrush x:Key="GoodBrush" Color="{DynamicResource ThemeGood}" />
       <SolidColorBrush x:Key="GoodWashBrush" Color="{DynamicResource ThemeGoodWash}" />
       <SolidColorBrush x:Key="WarnBrush" Color="{DynamicResource ThemeWarn}" />
@@ -333,7 +336,7 @@
   </Style>
 
   <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
-    <Setter Property="Fill" Value="{DynamicResource AccentWashBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource RowSelectedBrush}" />
   </Style>
 
   <!-- ===================== Progress ===================== -->

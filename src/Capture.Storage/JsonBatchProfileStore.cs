@@ -47,13 +47,10 @@ public sealed class JsonBatchProfileStore : IBatchProfileStore
         return ReadAsync(_paths.BatchProfileJsonPath(id), cancellationToken);
     }
 
-    public async Task SaveAsync(BatchProfile profile, CancellationToken cancellationToken = default)
+    public Task SaveAsync(BatchProfile profile, CancellationToken cancellationToken = default)
     {
         profile.ModifiedUtc = DateTimeOffset.UtcNow;
-        var path = _paths.BatchProfileJsonPath(profile.Id);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, profile, Options, cancellationToken).ConfigureAwait(false);
+        return LatticeJson.WriteJsonAsync(_paths.BatchProfileJsonPath(profile.Id), profile, Options, cancellationToken);
     }
 
     public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

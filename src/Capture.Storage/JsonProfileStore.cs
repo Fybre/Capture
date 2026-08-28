@@ -47,13 +47,10 @@ public sealed class JsonProfileStore : IProfileStore
         return ReadAsync(_paths.ProfileJsonPath(id), cancellationToken);
     }
 
-    public async Task SaveAsync(IndexingProfile profile, CancellationToken cancellationToken = default)
+    public Task SaveAsync(IndexingProfile profile, CancellationToken cancellationToken = default)
     {
         profile.ModifiedUtc = DateTimeOffset.UtcNow;
-        var path = _paths.ProfileJsonPath(profile.Id);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, profile, Options, cancellationToken).ConfigureAwait(false);
+        return LatticeJson.WriteJsonAsync(_paths.ProfileJsonPath(profile.Id), profile, Options, cancellationToken);
     }
 
     public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
