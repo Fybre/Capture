@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Capture.App.ViewModels"
+             x:Class="Capture.App.Views.BatchProfileDesignerView"
+             x:DataType="vm:BatchProfileDesignerViewModel">
+    <Grid RowDefinitions="Auto,*" Background="{DynamicResource GroundBrush}">
+        <Border Grid.Row="0"
+                Padding="16,10"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush1}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Command="{Binding CloseCommand}" Classes="ghost">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="12" Height="12" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" />
+                        <TextBlock Text="Back" />
+                    </StackPanel>
+                </Button>
+                <TextBox Grid.Column="1"
+                         Text="{Binding Name}"
+                         Watermark="Batch profile name"
+                         Margin="12,0"
+                         VerticalAlignment="Center" />
+                <Button Grid.Column="2"
+                        Command="{Binding SaveCommand}"
+                        Classes="accent">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconSave}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round" />
+                        <TextBlock Text="Save" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <Grid Margin="24,16" ColumnDefinitions="*">
+                <StackPanel Spacing="14" HorizontalAlignment="Stretch" MaxWidth="640">
+
+                    <Border Classes="card" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="New batch when" Classes="section-title" />
+                            <ComboBox ItemsSource="{Binding TriggerOptions}"
+                                      SelectedItem="{Binding Trigger}"
+                                      HorizontalAlignment="Stretch" />
+
+                            <StackPanel Spacing="4" IsVisible="{Binding IsEveryNPages}">
+                                <TextBlock Text="Pages per batch" Classes="field-label" />
+                                <NumericUpDown Value="{Binding PageCount}" Minimum="1" Maximum="500" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding IsBarcode}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Barcode type" Classes="field-label" />
+                                    <ComboBox ItemsSource="{Binding BarcodeFormatOptions}"
+                                              SelectedItem="{Binding BarcodeFormat}"
+                                              PlaceholderText="Any format"
+                                              HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Barcode value to match" Classes="field-label" />
+                                    <TextBox Text="{Binding BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
+                                </StackPanel>
+                                <CheckBox Content="Discard the separator page" IsChecked="{Binding DiscardSeparatorPage}" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding IsRegexMatch}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Page text pattern" Classes="field-label" />
+                                    <TextBox Text="{Binding TextPattern}" Watermark="Regex matched against the page's whole text" />
+                                </StackPanel>
+                                <CheckBox Content="Discard the separator page" IsChecked="{Binding DiscardSeparatorPage}" />
+                            </StackPanel>
+
+                            <TextBlock Text="A batch is one imported file at a time — nothing else to configure."
+                                       TextWrapping="Wrap"
+                                       Classes="hint"
+                                       IsVisible="{Binding !IsEveryNPages}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Classes="card" HorizontalAlignment="Stretch" Margin="0,0,0,40">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Test separation" Classes="section-title" />
+                            <TextBlock Text="Pick a document and see where this configuration would split it into batches."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Test with a document…" Command="{Binding TestCommand}" IsEnabled="{Binding !IsBusy}" />
+                                <TextBlock Text="{Binding TestFileName}" VerticalAlignment="Center" Classes="field-label" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding TestSummary}"
+                                       TextWrapping="Wrap"
+                                       FontWeight="SemiBold"
+                                       IsVisible="{Binding IsTesting}" />
+                            <ItemsControl ItemsSource="{Binding TestHits}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock Text="{Binding}" Classes="mono field-label" Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="{DynamicResource CriticalBrush}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasStatusText}" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

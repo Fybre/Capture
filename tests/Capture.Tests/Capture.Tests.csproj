@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="ZXing.Net" Version="0.16.9" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Capture.Core\Capture.Core.csproj" />
+    <ProjectReference Include="..\..\src\Capture.Storage\Capture.Storage.csproj" />
+    <ProjectReference Include="..\..\src\Capture.Pdf\Capture.Pdf.csproj" />
+    <ProjectReference Include="..\..\src\Capture.Ocr\Capture.Ocr.csproj" />
+  </ItemGroup>
+</Project>

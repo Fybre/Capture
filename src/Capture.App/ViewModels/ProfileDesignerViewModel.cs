@@ -1,0 +1,948 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Input;
+using Avalonia.Media.Imaging;
+using Capture.Core.Indexing;
+using Capture.Core.Lattice;
+using Capture.Core.Profiles;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace Capture.App.ViewModels;
+
+public partial class ProfileDesignerViewModel : ViewModelBase
+{
+    private readonly IProfileSampleService _samples;
+    private readonly IProfileStore _store;
+    private readonly List<string> _pageImages = [];
+    private readonly Dictionary<int, PageLattice> _lattices = [];
+    private int _loadGeneration;
+
+    private readonly IBarcodeDecoder? _barcodes;
+    private readonly IAiExtractor? _ai;
+
+    public ProfileDesignerViewModel(
+        IndexingProfile profile,
+        bool isNew,
+        IProfileSampleService samples,
+        IProfileStore store,
+        IBarcodeDecoder? barcodes = null,
+        IAiExtractor? ai = null)
+    {
+        Profile = profile;
+        IsNew = isNew;
+        _samples = samples;
+        _store = store;
+        _barcodes = barcodes;
+        _ai = ai;
+        _name = profile.Name;
+        _separationTrigger = profile.Separation.Trigger;
+        _separationPageCount = Math.Max(1, profile.Separation.PageCount);
+        _separationDiscardPage = profile.Separation.DiscardSeparatorPage;
+        foreach (var field in profile.Fields)
+            Fields.Add(Wrap(field));
+        RefreshBarcodeFieldOptions();
+        _separationBarcodeField = BarcodeFieldOptions.FirstOrDefault(field => field.Id == profile.Separation.BarcodeFieldId);
+        Fields.CollectionChanged += (_, _) => RefreshBarcodeFieldOptions();
+    }
+
+    private void RefreshBarcodeFieldOptions()
+    {
+        var selectedId = SeparationBarcodeField?.Id;
+        BarcodeFieldOptions.Clear();
+        foreach (var field in Fields.Where(item => item.IsBarcode))
+            BarcodeFieldOptions.Add(field);
+
+        if (selectedId is { } id)
+            SeparationBarcodeField = BarcodeFieldOptions.FirstOrDefault(field => field.Id == id);
+
+        OnPropertyChanged(nameof(HasBarcodeFieldOptions));
+    }
+
+    public bool HasBarcodeFieldOptions => BarcodeFieldOptions.Count > 0;
+
+    public IndexingProfile Profile { get; }
+
+    public bool IsNew { get; private set; }
+
+    public bool Saved { get; private set; }
+
+    public ObservableCollection<FieldRow> Fields { get; } = [];
+
+    public FieldFormat[] Formats { get; } = Enum.GetValues<FieldFormat>();
+
+    public ICommand? CloseCommand { get; set; }
+
+    public string PageLabel => PageCount == 0 ? "—" : $"{CurrentPageNumber} / {PageCount}";
+
+    public enum PatternSuggestTarget
+    {
+        None,
+        Key,
+        Value
+    }
+
+    public PatternSuggestTarget SuggestTarget { get; set; }
+
+    public string Hint => "Draw a rectangle for a zone or barcode. Click in key/value/regex, then draw to suggest a pattern. Otherwise draw to set a search region.";
+
+    public IReadOnlyList<DocumentSeparationTrigger> SeparationTriggerOptions { get; } = Enum.GetValues<DocumentSeparationTrigger>();
+
+    public ObservableCollection<FieldRow> BarcodeFieldOptions { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSeparationBarcode))]
+    [NotifyPropertyChangedFor(nameof(IsSeparationBlank))]
+    [NotifyPropertyChangedFor(nameof(IsSeparationEveryNPages))]
+    private DocumentSeparationTrigger _separationTrigger;
+
+    [ObservableProperty]
+    private FieldRow? _separationBarcodeField;
+
+    [ObservableProperty]
+    private int _separationPageCount = 1;
+
+    [ObservableProperty]
+    private bool _separationDiscardPage;
+
+    public bool IsSeparationBarcode => SeparationTrigger == DocumentSeparationTrigger.Barcode;
+
+    public bool IsSeparationBlank => SeparationTrigger == DocumentSeparationTrigger.BlankPage;
+
+    public bool IsSeparationEveryNPages => SeparationTrigger == DocumentSeparationTrigger.EveryNPages;
+
+    [ObservableProperty]
+    private string _name;
+
+    [ObservableProperty]
+    private FieldRow? _selectedField;
+
+    [ObservableProperty]
+    private Bitmap? _pageImage;
+
+    [ObservableProperty]
+    private IReadOnlyList<IndexHighlight> _highlights = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    [NotifyPropertyChangedFor(nameof(PageLabel))]
+    private int _currentPageNumber = 1;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    [NotifyPropertyChangedFor(nameof(PageLabel))]
+    private int _pageCount;
+
+    [ObservableProperty]
+    private string _statusText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExtractAiCommand))]
+    private bool _isBusy;
+
+    public async Task InitializeAsync()
+    {
+        _pageImages.Clear();
+        _pageImages.AddRange(_samples.GetPageImagePaths(Profile.Id));
+        PageCount = _pageImages.Count;
+        CurrentPageNumber = PageCount == 0 ? 1 : 1;
+        for (var page = 1; page <= PageCount; page++)
+        {
+            var lattice = await _samples.GetLatticeAsync(Profile.Id, page);
+            if (lattice is not null)
+                _lattices[page] = lattice;
+        }
+
+        await ShowPageAsync();
+        RefreshAllExtracts();
+        StatusText = PageCount == 0 ? "No sample pages" : Hint;
+    }
+
+    [RelayCommand]
+    private void CompleteZone(NormalizedRect rect)
+    {
+        if (rect.Width < 0.004f || rect.Height < 0.004f)
+            return;
+
+        if (SelectedField is { IsPatternField: true } patternField && SuggestTarget != PatternSuggestTarget.None)
+        {
+            SuggestPatternFromZone(patternField, rect);
+            return;
+        }
+
+        if (SelectedField is { IsPatternField: true })
+        {
+            ApplySearchZone(SelectedField, rect);
+            return;
+        }
+
+        if (SelectedField is { IsZoneField: true })
+        {
+            AssignZone(SelectedField, rect);
+            return;
+        }
+
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Zonal,
+            Format = FieldFormat.String,
+            PageNumber = CurrentPageNumber,
+            Zone = new ZoneRect
+            {
+                PageNumber = CurrentPageNumber,
+                X = rect.X,
+                Y = rect.Y,
+                Width = rect.Width,
+                Height = rect.Height
+            }
+        };
+
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        Extract(row);
+        RefreshHighlights();
+    }
+
+    private void RefreshMacroChoices(FieldRow row)
+    {
+        var names = Fields
+            .Where(item => item.Id != row.Id && !string.IsNullOrWhiteSpace(item.Name))
+            .Select(item => item.Name)
+            .ToList();
+        row.SetFieldChoices(names);
+    }
+
+    [RelayCommand]
+    private void AddZone()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Zonal,
+            Format = FieldFormat.String,
+            PageNumber = CurrentPageNumber
+        };
+
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Draw on the page to set the zone";
+    }
+
+    [RelayCommand]
+    private void AddBarcode()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Barcode,
+            Format = FieldFormat.String,
+            PageNumber = CurrentPageNumber,
+            PageScope = PageScope.Number,
+            PageScopeConfigured = true
+        };
+
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Draw a zone around the barcode, or leave empty to scan the whole page";
+    }
+
+    [RelayCommand]
+    private void AddKeyValue()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.KeyValue,
+            Format = FieldFormat.String,
+            KeyPattern = string.Empty,
+            ValuePattern = ValuePatterns.For(FieldFormat.String),
+            Occurrence = MatchOccurrence.First,
+            PageScope = PageScope.First,
+            PageNumber = CurrentPageNumber
+        };
+
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = @"Enter a key pattern, e.g. Invoice\s*No";
+    }
+
+    [RelayCommand]
+    private void AddRegex()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Regex,
+            Format = FieldFormat.String,
+            ValuePattern = @"(.+)",
+            Occurrence = MatchOccurrence.First,
+            PageScope = PageScope.First,
+            PageNumber = CurrentPageNumber
+        };
+
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = @"Enter a regex, e.g. PO[-\s]?(\d+) — group 1 is the value if present.";
+    }
+
+    [RelayCommand]
+    private void AddMacro()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Macro,
+            Format = FieldFormat.String,
+            PageNumber = CurrentPageNumber
+        };
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        RefreshMacroChoices(row);
+        StatusText = "Add text, counters, date/time, or other fields";
+    }
+
+    [RelayCommand]
+    private void AddAi()
+    {
+        var type = AiFieldCatalog.All[0];
+        var field = new IndexField
+        {
+            Name = type.Name,
+            Kind = FieldKind.Ai,
+            Format = type.Format,
+            AiTypeId = type.Id,
+            PageNumber = CurrentPageNumber
+        };
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = _ai?.IsConfigured == true
+            ? "Choose a field type, then Extract with AI"
+            : "Configure an OpenAI endpoint in Settings";
+    }
+
+    [RelayCommand]
+    private void AddBatchSeparatorValue()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.BatchSeparatorValue,
+            Format = FieldFormat.String,
+            PageNumber = CurrentPageNumber
+        };
+
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Value supplied at import time from the batch profile's barcode/regex trigger — nothing to configure here.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExtractAi))]
+    private async Task ExtractAiAsync()
+    {
+        var rows = Fields.Where(item => item.IsAi).ToList();
+        if (rows.Count == 0)
+            return;
+        if (_ai is null || !_ai.IsConfigured)
+        {
+            StatusText = "Configure an OpenAI endpoint in Settings";
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = rows.Count == 1 ? "Extracting with AI…" : $"Extracting {rows.Count} AI fields…";
+        try
+        {
+            var text = DocumentText.FromLattices(_lattices.Values);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                StatusText = "No document text to send";
+                return;
+            }
+
+            var extracted = await _ai.ExtractAsync(text, rows.Select(item => item.Field).ToList()).ConfigureAwait(true);
+            foreach (var row in rows)
+            {
+                if (!extracted.TryGetValue(row.Id, out var hit))
+                    continue;
+                row.LiveValue = hit.Value;
+                row.LiveConfidence = hit.Confidence;
+            }
+
+            StatusText = extracted.Count == 0 ? "AI returned no values" : $"Extracted {extracted.Count} AI field(s)";
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void AddMacroText() => AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.Literal, Text = "-" });
+
+    [RelayCommand]
+    private void AddMacroDocumentCounter() =>
+        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.DocumentCounter, CounterWidth = 3 });
+
+    [RelayCommand]
+    private void AddMacroBatchCounter() =>
+        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.BatchCounter, CounterWidth = 3 });
+
+    [RelayCommand]
+    private void AddMacroDate() =>
+        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.DateTime, Text = "yyyy-MM-dd" });
+
+    [RelayCommand]
+    private void AddMacroTime() =>
+        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.DateTime, Text = "HH:mm:ss" });
+
+    [RelayCommand]
+    private void AddMacroField()
+    {
+        var name = Fields.FirstOrDefault(item => item.Id != SelectedField?.Id)?.Name ?? string.Empty;
+        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.Field, Text = name });
+    }
+
+    [RelayCommand]
+    private void AddMacroProfileName() =>
+        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.ProfileName });
+
+    private void AddMacroSegment(MacroSegment segment)
+    {
+        if (SelectedField is not { IsMacro: true } row)
+            return;
+        row.AddSegment(segment);
+        Extract(row);
+        StatusText = $"Added {segment.Kind}";
+    }
+
+    [RelayCommand]
+    private void ClearSearchZone()
+    {
+        if (SelectedField is not { IsPatternField: true })
+            return;
+
+        SelectedField.Field.SearchZone = null;
+        SelectedField.NotifySearchZone();
+        Extract(SelectedField);
+        RefreshHighlights();
+        StatusText = "Search region cleared";
+    }
+
+    [RelayCommand]
+    private void ChangeZone(NormalizedRect rect)
+    {
+        if (SelectedField is { IsPatternField: true })
+        {
+            ApplySearchZone(SelectedField, rect);
+            return;
+        }
+
+        if (SelectedField?.Field.Zone is null)
+            return;
+
+        var zone = SelectedField.Field.Zone;
+        zone.X = Math.Clamp(rect.X, 0, 1);
+        zone.Y = Math.Clamp(rect.Y, 0, 1);
+        zone.Width = Math.Clamp(rect.Width, 0.002f, 1);
+        zone.Height = Math.Clamp(rect.Height, 0.002f, 1);
+        zone.PageNumber = CurrentPageNumber;
+        SelectedField.Field.PageNumber = CurrentPageNumber;
+        SelectedField.NotifyPage();
+        Extract(SelectedField);
+        RefreshHighlights();
+    }
+
+    [RelayCommand]
+    private void SelectHighlight(Guid id)
+    {
+        var row = Fields.FirstOrDefault(item => item.Id == id);
+        if (row is not null)
+            SelectedField = row;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoPrevious))]
+    private void PreviousPage()
+    {
+        CurrentPageNumber--;
+        _ = ShowPageAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoNext))]
+    private void NextPage()
+    {
+        CurrentPageNumber++;
+        _ = ShowPageAsync();
+    }
+
+    [RelayCommand]
+    private void DeleteField()
+    {
+        if (SelectedField is null)
+            return;
+
+        var index = Fields.IndexOf(SelectedField);
+        Fields.Remove(SelectedField);
+        SelectedField = Fields.Count == 0 ? null : Fields[Math.Clamp(index, 0, Fields.Count - 1)];
+        RefreshHighlights();
+    }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        Profile.Name = string.IsNullOrWhiteSpace(Name) ? "Untitled profile" : Name.Trim();
+        Profile.Separation = new DocumentSeparation
+        {
+            Trigger = SeparationTrigger,
+            BarcodeFieldId = SeparationBarcodeField?.Id,
+            PageCount = Math.Max(1, SeparationPageCount),
+            DiscardSeparatorPage = SeparationDiscardPage
+        };
+        Profile.Fields = Fields.Select(row => row.Field).ToList();
+        await _store.SaveAsync(Profile);
+        Saved = true;
+        IsNew = false;
+        StatusText = "Saved";
+    }
+
+    partial void OnSelectedFieldChanged(FieldRow? value)
+    {
+        OnPropertyChanged(nameof(SelectedFieldPageNumber));
+
+        if (value is not null && value.Field.PageNumber != CurrentPageNumber && value.Field.PageNumber >= 1)
+        {
+            CurrentPageNumber = value.Field.PageNumber;
+            _ = ShowPageAsync();
+            return;
+        }
+
+        RefreshHighlights();
+        if (value is not null)
+        {
+            RefreshMacroChoices(value);
+            Extract(value);
+        }
+    }
+
+    /// <summary>Lets the user see and correct which page a Zonal/Barcode field's zone targets, instead of
+    /// it only ever being set implicitly by whichever page happened to be showing when the zone was drawn.
+    /// Jumps the viewer to the new page so a wrong zone can be spotted and redrawn immediately.</summary>
+    public int? SelectedFieldPageNumber
+    {
+        get => SelectedField?.Field.PageNumber;
+        set
+        {
+            if (SelectedField is null || value is null)
+                return;
+
+            var page = Math.Clamp(value.Value, 1, Math.Max(1, PageCount));
+            if (page == SelectedField.Field.PageNumber)
+                return;
+
+            SelectedField.Field.PageNumber = page;
+            if (SelectedField.Field.Zone is not null)
+                SelectedField.Field.Zone.PageNumber = page;
+            SelectedField.NotifyPage();
+            OnPropertyChanged();
+
+            CurrentPageNumber = page;
+            _ = ShowPageAsync();
+            RefreshHighlights();
+        }
+    }
+
+    partial void OnNameChanged(string value)
+    {
+        Profile.Name = value;
+    }
+
+    partial void OnSeparationTriggerChanged(DocumentSeparationTrigger value)
+    {
+        // Default "remove separator page" on for the common case when a user freshly switches to
+        // Blank pages, so the first click through doesn't require a second one to get today's
+        // long-standing default (blank pages were always discarded before this was configurable).
+        if (value == DocumentSeparationTrigger.BlankPage && !SeparationDiscardPage)
+            SeparationDiscardPage = true;
+    }
+
+    private bool CanExtractAi() => !IsBusy;
+
+    private bool CanGoPrevious() => !IsBusy && CurrentPageNumber > 1;
+
+    private bool CanGoNext() => !IsBusy && CurrentPageNumber < PageCount;
+
+    private async Task ShowPageAsync()
+    {
+        var generation = Interlocked.Increment(ref _loadGeneration);
+        SetPageImage(null);
+
+        if (CurrentPageNumber < 1 || CurrentPageNumber > _pageImages.Count)
+        {
+            Highlights = [];
+            return;
+        }
+
+        var path = _pageImages[CurrentPageNumber - 1];
+        var bitmap = await Task.Run(() =>
+        {
+            using var stream = File.OpenRead(path);
+            return new Bitmap(stream);
+        }).ConfigureAwait(true);
+
+        if (generation != _loadGeneration)
+        {
+            bitmap.Dispose();
+            return;
+        }
+
+        SetPageImage(bitmap);
+
+        if (!_lattices.ContainsKey(CurrentPageNumber))
+        {
+            var lattice = await _samples.GetLatticeAsync(Profile.Id, CurrentPageNumber).ConfigureAwait(true);
+            if (generation != _loadGeneration)
+                return;
+            if (lattice is not null)
+                _lattices[CurrentPageNumber] = lattice;
+        }
+
+        RefreshHighlights();
+        if (SelectedField is not null)
+            Extract(SelectedField);
+    }
+
+    private void Extract(FieldRow row)
+    {
+        row.MatchBounds = null;
+
+        if (row.IsAi)
+        {
+            row.LiveFormat = "AI";
+            return;
+        }
+
+        if (row.IsBatchSeparatorValue)
+        {
+            row.LiveValue = string.Empty;
+            row.LiveFormat = "Batch trigger";
+            row.LiveConfidence = 0;
+            StatusText = "This field's value comes from whichever batch profile trigger fires at import time — there's nothing to preview here.";
+            return;
+        }
+
+        if (row.IsBarcode)
+        {
+            var page = row.Field.Zone?.PageNumber ?? row.Field.PageNumber;
+            if (page < 1 || page > _pageImages.Count)
+                page = CurrentPageNumber;
+            if (_barcodes is null || page < 1 || page > _pageImages.Count)
+            {
+                row.LiveValue = string.Empty;
+                row.LiveFormat = string.Empty;
+                row.LiveConfidence = 0;
+                return;
+            }
+
+            var decoded = _barcodes.Decode(_pageImages[page - 1], row.Field.Zone);
+            row.LiveValue = decoded?.Text ?? string.Empty;
+            row.LiveFormat = BarcodePatterns.DisplayType(decoded?.Format);
+            row.LiveConfidence = decoded?.Confidence ?? 0;
+            if (decoded is not null)
+            {
+                row.Field.BarcodeFormat = decoded.Format;
+                if (row.Field.Zone is null && decoded.Bounds is not null)
+                {
+                    decoded.Bounds.PageNumber = page;
+                    row.Field.Zone = decoded.Bounds;
+                    row.Field.PageNumber = page;
+                    row.NotifyPage();
+                    RefreshHighlights();
+                }
+
+                StatusText = $"Found {row.LiveFormat}: {decoded.Text}";
+            }
+            else
+            {
+                StatusText = "No barcode found on this page — draw a zone around it";
+            }
+
+            return;
+        }
+
+        if (row.IsMacro)
+        {
+            var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in Fields)
+            {
+                if (item.Id == row.Id)
+                    continue;
+                fields[item.Name] = item.LiveValue ?? string.Empty;
+            }
+
+            row.LiveValue = MacroEvaluator.Evaluate(row.Field.Macro ?? [], new MacroContext
+            {
+                DocumentNumber = 1,
+                BatchNumber = 1,
+                Timestamp = DateTimeOffset.Now,
+                ProfileName = Name,
+                Fields = fields
+            });
+            row.LiveConfidence = 100;
+            return;
+        }
+
+        if (row.IsKeyValue || row.IsRegex)
+        {
+            var result = row.IsRegex
+                ? RegexExtractor.Extract(_lattices.Values.ToList(), row.Field)
+                : KeyValueExtractor.Extract(_lattices.Values.ToList(), row.Field);
+            row.LiveValue = result.Text;
+            row.LiveConfidence = result.Confidence;
+            row.MatchBounds = result.Bounds;
+            if (result.Bounds is not null)
+                row.Field.PageNumber = result.PageNumber;
+            return;
+        }
+
+        if (row.Field.Zone is null)
+        {
+            row.LiveValue = string.Empty;
+            row.LiveConfidence = 0;
+            return;
+        }
+
+        if (!_lattices.TryGetValue(row.Field.PageNumber, out var lattice))
+            return;
+
+        var zonal = ZonalExtractor.Extract(lattice, row.Field.Zone);
+        row.LiveValue = zonal.Text;
+        row.LiveConfidence = zonal.Confidence;
+    }
+
+    private void RefreshAllExtracts()
+    {
+        foreach (var row in Fields)
+            Extract(row);
+    }
+
+    private void RefreshHighlights()
+    {
+        Highlights = Fields.SelectMany(row => HighlightsFor(row, CurrentPageNumber)).ToList();
+    }
+
+    private IEnumerable<IndexHighlight> HighlightsFor(FieldRow row, int pageNumber)
+    {
+        if (row.IsZoneField && row.Field.Zone is not null && row.Field.PageNumber == pageNumber)
+        {
+            yield return new IndexHighlight
+            {
+                FieldId = row.Id,
+                FieldName = row.Name,
+                X = row.Field.Zone.X,
+                Y = row.Field.Zone.Y,
+                Width = row.Field.Zone.Width,
+                Height = row.Field.Zone.Height,
+                IsSelected = SelectedField?.Id == row.Id,
+                CanEdit = true
+            };
+            yield break;
+        }
+
+        if (!row.IsPatternField)
+            yield break;
+
+        if (row.MatchBounds is not null && row.MatchBounds.PageNumber == pageNumber)
+        {
+            yield return new IndexHighlight
+            {
+                FieldId = row.Id,
+                FieldName = row.Name,
+                X = row.MatchBounds.X,
+                Y = row.MatchBounds.Y,
+                Width = row.MatchBounds.Width,
+                Height = row.MatchBounds.Height,
+                IsSelected = false,
+                CanEdit = false
+            };
+        }
+
+        if (row.Field.SearchZone is not null && row.Field.SearchZone.PageNumber == pageNumber)
+        {
+            yield return new IndexHighlight
+            {
+                FieldId = row.Id,
+                FieldName = row.Name,
+                X = row.Field.SearchZone.X,
+                Y = row.Field.SearchZone.Y,
+                Width = row.Field.SearchZone.Width,
+                Height = row.Field.SearchZone.Height,
+                IsSelected = SelectedField?.Id == row.Id,
+                CanEdit = true,
+                IsSearchZone = true
+            };
+        }
+    }
+
+    public void BeginSuggestKey()
+    {
+        SuggestTarget = PatternSuggestTarget.Key;
+        StatusText = "Draw on the page to suggest a key pattern";
+    }
+
+    public void BeginSuggestValue()
+    {
+        SuggestTarget = PatternSuggestTarget.Value;
+        StatusText = "Draw on the page to suggest a value pattern";
+    }
+
+    private void SuggestPatternFromZone(FieldRow row, NormalizedRect rect)
+    {
+        if (!_lattices.TryGetValue(CurrentPageNumber, out var lattice))
+        {
+            StatusText = "No text on this page to suggest from";
+            return;
+        }
+
+        var zone = new ZoneRect
+        {
+            PageNumber = CurrentPageNumber,
+            X = rect.X,
+            Y = rect.Y,
+            Width = rect.Width,
+            Height = rect.Height
+        };
+        var sample = ZonalExtractor.Extract(lattice, zone).Text;
+        if (string.IsNullOrWhiteSpace(sample))
+        {
+            StatusText = "No text in that selection";
+            return;
+        }
+
+        if (SuggestTarget == PatternSuggestTarget.Key && row.IsKeyValue)
+        {
+            row.KeyPattern = PatternSuggester.ForKey(sample);
+            StatusText = $"Key pattern from “{TrimSample(sample)}”";
+        }
+        else
+        {
+            row.ValuePattern = PatternSuggester.ForValue(sample, row.Format);
+            StatusText = $"Value pattern from “{TrimSample(sample)}”";
+        }
+
+        Extract(row);
+        RefreshHighlights();
+    }
+
+    private static string TrimSample(string sample)
+    {
+        sample = sample.Trim();
+        return sample.Length <= 40 ? sample : sample[..40] + "…";
+    }
+
+    private void AssignZone(FieldRow row, NormalizedRect rect)
+    {
+        row.Field.PageNumber = CurrentPageNumber;
+        row.Field.Zone = new ZoneRect
+        {
+            PageNumber = CurrentPageNumber,
+            X = Math.Clamp(rect.X, 0, 1),
+            Y = Math.Clamp(rect.Y, 0, 1),
+            Width = Math.Clamp(rect.Width, 0.002f, 1),
+            Height = Math.Clamp(rect.Height, 0.002f, 1)
+        };
+        row.NotifyPage();
+        Extract(row);
+        RefreshHighlights();
+        StatusText = $"Zone set for {row.Name}";
+    }
+
+    private void ApplySearchZone(FieldRow row, NormalizedRect rect)
+    {
+        row.Field.SearchZone = new ZoneRect
+        {
+            PageNumber = CurrentPageNumber,
+            X = Math.Clamp(rect.X, 0, 1),
+            Y = Math.Clamp(rect.Y, 0, 1),
+            Width = Math.Clamp(rect.Width, 0.002f, 1),
+            Height = Math.Clamp(rect.Height, 0.002f, 1)
+        };
+        row.Field.PageScope = PageScope.Number;
+        row.Field.PageNumber = CurrentPageNumber;
+        row.PageScope = PageScope.Number;
+        row.NotifySearchZone();
+        Extract(row);
+        RefreshHighlights();
+        StatusText = "Search region set";
+    }
+
+    private FieldRow Wrap(IndexField field)
+    {
+        var row = new FieldRow(field);
+        row.PropertyChanged += OnFieldPropertyChanged;
+        return row;
+    }
+
+    private void OnFieldPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not FieldRow row)
+            return;
+
+        if (e.PropertyName is nameof(FieldRow.LiveValue)
+            or nameof(FieldRow.LiveFormat)
+            or nameof(FieldRow.HasLiveFormat)
+            or nameof(FieldRow.LiveConfidence)
+            or nameof(FieldRow.Name)
+            or nameof(FieldRow.Mandatory)
+            or nameof(FieldRow.PageDisplay)
+            or nameof(FieldRow.ConfidenceDisplay)
+            or nameof(FieldRow.HasSearchZone)
+            or nameof(FieldRow.KindDisplay)
+            or nameof(FieldRow.Level)
+            or nameof(FieldRow.FieldChoices)
+            or nameof(FieldRow.SelectedClassification)
+            or nameof(FieldRow.SelectedAiType)
+            or nameof(FieldRow.AiPrompt)
+            or nameof(FieldRow.AiTypes))
+            return;
+
+        if (e.PropertyName == nameof(FieldRow.PageScope) && row.PageScope == PageScope.Number)
+            row.Field.PageNumber = CurrentPageNumber;
+
+        Extract(row);
+        RefreshHighlights();
+    }
+
+    private string NextFieldName()
+    {
+        var n = Fields.Count + 1;
+        string name;
+        do
+        {
+            name = $"Field{n}";
+            n++;
+        } while (Fields.Any(row => string.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase)));
+
+        return name;
+    }
+
+    private void SetPageImage(Bitmap? bitmap)
+    {
+        var previous = PageImage;
+        PageImage = bitmap;
+        previous?.Dispose();
+    }
+}

@@ -1,0 +1,351 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Default">
+          <Color x:Key="ThemeGround">#EEF2F1</Color>
+          <Color x:Key="ThemeSurface">#FFFFFF</Color>
+          <Color x:Key="ThemeSurface2">#F6F9F8</Color>
+          <Color x:Key="ThemeSurface3">#EEF4F3</Color>
+          <Color x:Key="ThemeBorder">#D8E1DF</Color>
+          <Color x:Key="ThemeBorderStrong">#C2CECB</Color>
+          <Color x:Key="ThemeInk">#16201F</Color>
+          <Color x:Key="ThemeInkSoft">#3A4744</Color>
+          <Color x:Key="ThemeMuted">#5C6D69</Color>
+          <Color x:Key="ThemeFaint">#93A19D</Color>
+          <Color x:Key="ThemeAccent">#1F6F6B</Color>
+          <Color x:Key="ThemeAccentStrong">#145350</Color>
+          <Color x:Key="ThemeAccentInk">#FFFFFF</Color>
+          <Color x:Key="ThemeAccentWash">#E2F0EE</Color>
+          <Color x:Key="ThemeGood">#2E7D4F</Color>
+          <Color x:Key="ThemeGoodWash">#E4F3E9</Color>
+          <Color x:Key="ThemeWarn">#96660C</Color>
+          <Color x:Key="ThemeWarnWash">#FAF0DC</Color>
+          <Color x:Key="ThemeCritical">#B23A2E</Color>
+          <Color x:Key="ThemeCriticalWash">#F9E6E3</Color>
+          <Color x:Key="ThemeBatchA">#3C7FB1</Color>
+          <Color x:Key="ThemeBatchB">#B1793C</Color>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+          <Color x:Key="ThemeGround">#101717</Color>
+          <Color x:Key="ThemeSurface">#1A2423</Color>
+          <Color x:Key="ThemeSurface2">#202B29</Color>
+          <Color x:Key="ThemeSurface3">#27332F</Color>
+          <Color x:Key="ThemeBorder">#313F3C</Color>
+          <Color x:Key="ThemeBorderStrong">#3D4D49</Color>
+          <Color x:Key="ThemeInk">#E8EFED</Color>
+          <Color x:Key="ThemeInkSoft">#C2D0CC</Color>
+          <Color x:Key="ThemeMuted">#8FA19C</Color>
+          <Color x:Key="ThemeFaint">#62726D</Color>
+          <Color x:Key="ThemeAccent">#56C2B8</Color>
+          <Color x:Key="ThemeAccentStrong">#7FD6CC</Color>
+          <Color x:Key="ThemeAccentInk">#08211F</Color>
+          <Color x:Key="ThemeAccentWash">#1C3634</Color>
+          <Color x:Key="ThemeGood">#63C489</Color>
+          <Color x:Key="ThemeGoodWash">#1C3327</Color>
+          <Color x:Key="ThemeWarn">#E0AC4C</Color>
+          <Color x:Key="ThemeWarnWash">#392E18</Color>
+          <Color x:Key="ThemeCritical">#E58579</Color>
+          <Color x:Key="ThemeCriticalWash">#3A221F</Color>
+          <Color x:Key="ThemeBatchA">#7DB3DD</Color>
+          <Color x:Key="ThemeBatchB">#DBA86C</Color>
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- Brushes resolve the active theme dictionary's colors above. -->
+      <SolidColorBrush x:Key="GroundBrush" Color="{DynamicResource ThemeGround}" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{DynamicResource ThemeSurface}" />
+      <SolidColorBrush x:Key="Surface2Brush" Color="{DynamicResource ThemeSurface2}" />
+      <SolidColorBrush x:Key="Surface3Brush" Color="{DynamicResource ThemeSurface3}" />
+      <SolidColorBrush x:Key="BorderBrush1" Color="{DynamicResource ThemeBorder}" />
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="{DynamicResource ThemeBorderStrong}" />
+      <SolidColorBrush x:Key="InkBrush" Color="{DynamicResource ThemeInk}" />
+      <SolidColorBrush x:Key="InkSoftBrush" Color="{DynamicResource ThemeInkSoft}" />
+      <SolidColorBrush x:Key="MutedBrush" Color="{DynamicResource ThemeMuted}" />
+      <SolidColorBrush x:Key="FaintBrush" Color="{DynamicResource ThemeFaint}" />
+      <SolidColorBrush x:Key="AccentBrush1" Color="{DynamicResource ThemeAccent}" />
+      <SolidColorBrush x:Key="AccentStrongBrush" Color="{DynamicResource ThemeAccentStrong}" />
+      <SolidColorBrush x:Key="AccentInkBrush" Color="{DynamicResource ThemeAccentInk}" />
+      <SolidColorBrush x:Key="AccentWashBrush" Color="{DynamicResource ThemeAccentWash}" />
+      <SolidColorBrush x:Key="GoodBrush" Color="{DynamicResource ThemeGood}" />
+      <SolidColorBrush x:Key="GoodWashBrush" Color="{DynamicResource ThemeGoodWash}" />
+      <SolidColorBrush x:Key="WarnBrush" Color="{DynamicResource ThemeWarn}" />
+      <SolidColorBrush x:Key="WarnWashBrush" Color="{DynamicResource ThemeWarnWash}" />
+      <SolidColorBrush x:Key="CriticalBrush" Color="{DynamicResource ThemeCritical}" />
+      <SolidColorBrush x:Key="CriticalWashBrush" Color="{DynamicResource ThemeCriticalWash}" />
+      <SolidColorBrush x:Key="BatchABrush" Color="{DynamicResource ThemeBatchA}" />
+      <SolidColorBrush x:Key="BatchBBrush" Color="{DynamicResource ThemeBatchB}" />
+
+      <FontFamily x:Key="PlexSansFontFamily">avares://Capture.App/Assets/Fonts/IBMPlexSans#IBM Plex Sans,Segoe UI,Helvetica Neue,Arial,sans-serif</FontFamily>
+      <FontFamily x:Key="PlexMonoFontFamily">avares://Capture.App/Assets/Fonts/IBMPlexMono#IBM Plex Mono,Consolas,monospace</FontFamily>
+
+      <!-- Shared icon glyphs, 16x16 viewBox, used across every window's toolbar. -->
+      <StreamGeometry x:Key="IconImportFile">M8 10.5V2m0 8.5l-3-3m3 3l3-3M2.5 12v1.5A1.5 1.5 0 004 15h8a1.5 1.5 0 001.5-1.5V12</StreamGeometry>
+      <StreamGeometry x:Key="IconImportFolder">M2 5.5A1.5 1.5 0 013.5 4H6l1.2 1.5H12.5A1.5 1.5 0 0114 7v5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 12V5.5z</StreamGeometry>
+      <StreamGeometry x:Key="IconApply">M8 2v8m0 0l-3-3m3 3l3-3M3 13h10</StreamGeometry>
+      <StreamGeometry x:Key="IconProfiles">M2 3h12v10H2zM2 6.5h12</StreamGeometry>
+      <StreamGeometry x:Key="IconSettings">M8 5.9a2.1 2.1 0 100 4.2 2.1 2.1 0 000-4.2zM8 2.5v1.4M8 12.1v1.4M13.5 8h-1.4M3.9 8H2.5M11.8 4.2l-1 1M5.2 10.8l-1 1M11.8 11.8l-1-1M5.2 5.2l-1-1</StreamGeometry>
+      <StreamGeometry x:Key="IconScan">M2.5 6h11v6h-11zM4.5 6V3.5h7V6</StreamGeometry>
+      <StreamGeometry x:Key="IconExport">M8 10.5V2m0 0L5 5m3-3l3 3M2.5 12v1.5A1.5 1.5 0 004 15h8a1.5 1.5 0 001.5-1.5V12</StreamGeometry>
+      <StreamGeometry x:Key="IconRemove">M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M4.5 4.5V13a1 1 0 001 1h5a1 1 0 001-1V4.5</StreamGeometry>
+      <StreamGeometry x:Key="IconChevronLeft">M10 3L5 8l5 5</StreamGeometry>
+      <StreamGeometry x:Key="IconChevronRight">M6 3l5 5-5 5</StreamGeometry>
+      <StreamGeometry x:Key="IconNew">M8 3v10M3 8h10</StreamGeometry>
+      <StreamGeometry x:Key="IconEdit">M11 2.5l2.5 2.5L5 13.5H2.5V11z</StreamGeometry>
+      <StreamGeometry x:Key="IconDelete">M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M4.5 4.5V13a1 1 0 001 1h5a1 1 0 001-1V4.5M6.5 7v4M9.5 7v4</StreamGeometry>
+      <StreamGeometry x:Key="IconSave">M3.5 8.5l3 3 6-7</StreamGeometry>
+      <StreamGeometry x:Key="IconAddZone">M8 3v10M3 8h10 M3 3h1M12 3h1M3 12h1M12 12h1</StreamGeometry>
+      <StreamGeometry x:Key="IconPreviewMode">M2 2.5h4.5v11H2zM7.7 2.5h6.3v11H7.7z</StreamGeometry>
+      <StreamGeometry x:Key="IconTableMode">M2 3h12v10H2zM2 6.5h12M6.3 6.5v6.5M10.6 6.5v6.5</StreamGeometry>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- ===================== Base ===================== -->
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexMonoFontFamily}" />
+  </Style>
+
+  <Style Selector="TextBlock.confidence-value">
+    <Setter Property="Foreground" Value="{DynamicResource FaintBrush}" />
+  </Style>
+  <Style Selector="TextBlock.confidence-value.low">
+    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.eyebrow">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+    <Setter Property="LetterSpacing" Value="0.4" />
+  </Style>
+
+  <Style Selector="TextBlock.field-label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.hint">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource FaintBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.critical">
+    <Setter Property="Foreground" Value="{DynamicResource CriticalBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.issue-cell">
+    <Setter Property="Foreground" Value="{DynamicResource FaintBrush}" />
+  </Style>
+  <Style Selector="TextBlock.issue-cell.critical">
+    <Setter Property="Foreground" Value="{DynamicResource CriticalBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.group-title">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.group-title.is-unassigned">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="FontStyle" Value="Italic" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.section-title">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="Button.nav">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ===================== Buttons ===================== -->
+
+  <Style Selector="Button">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Padding" Value="12,7" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+  </Style>
+
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush1}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush1}" />
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentStrongBrush}" />
+  </Style>
+
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+  </Style>
+
+  <Style Selector="Button.soon">
+    <Setter Property="Opacity" Value="0.55" />
+  </Style>
+
+  <Style Selector="Border.segment">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="2" />
+  </Style>
+
+  <Style Selector="Button.segment">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="9,5" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="Button.segment.accent">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+
+  <!-- ===================== Inputs ===================== -->
+
+  <Style Selector="TextBox">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="9,7" />
+  </Style>
+
+  <Style Selector="TextBox.invalid">
+    <Setter Property="BorderBrush" Value="{DynamicResource CriticalBrush}" />
+    <Setter Property="BorderThickness" Value="1.5" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+
+  <!-- ===================== Status chips ===================== -->
+
+  <Style Selector="Border.chip">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="8,2" />
+  </Style>
+
+  <Style Selector="Border.chip TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Border.chip-review">
+    <Setter Property="Background" Value="{DynamicResource WarnWashBrush}" />
+  </Style>
+  <Style Selector="Border.chip-review TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+  </Style>
+
+  <Style Selector="Border.chip-ready">
+    <Setter Property="Background" Value="{DynamicResource GoodWashBrush}" />
+  </Style>
+  <Style Selector="Border.chip-ready TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource GoodBrush}" />
+  </Style>
+
+  <Style Selector="Border.chip-error">
+    <Setter Property="Background" Value="{DynamicResource CriticalWashBrush}" />
+  </Style>
+  <Style Selector="Border.chip-error TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource CriticalBrush}" />
+  </Style>
+
+  <Style Selector="Border.chip-neutral">
+    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+  </Style>
+  <Style Selector="Border.chip-neutral TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+  </Style>
+
+  <!-- ===================== DataGrid ===================== -->
+
+  <Style Selector="DataGrid">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="RowBackground" Value="Transparent" />
+    <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderBrush1}" />
+    <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource BorderBrush1}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource AccentWashBrush}" />
+  </Style>
+
+  <!-- ===================== Progress ===================== -->
+
+  <Style Selector="ProgressBar">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush1}" />
+    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+    <Setter Property="CornerRadius" Value="999" />
+  </Style>
+
+  <Style Selector="ProgressBar.low">
+    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+  </Style>
+
+</Styles>

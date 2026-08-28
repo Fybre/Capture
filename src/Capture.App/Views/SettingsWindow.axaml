@@ -1,0 +1,185 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        xmlns:profiles="using:Capture.Core.Profiles"
+        xmlns:batches="using:Capture.Core.Batches"
+        x:Class="Capture.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="640"
+        Height="680"
+        MinWidth="560"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+        <TextBlock Grid.Row="0"
+                   Text="Settings"
+                   FontSize="17"
+                   FontWeight="SemiBold"
+                    Margin="24,18,24,4" />
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
+
+                <Border Grid.Row="0" Classes="card" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Startup" Classes="section-title" />
+                        <TextBlock Text="Start view" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding StartViewOptions}"
+                                  SelectedItem="{Binding StartView}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="Preview opens straight to a document; Table opens a spreadsheet-style summary of the whole inbox."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Theme" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                  SelectedItem="{Binding Theme}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="System follows your OS's light/dark setting."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Watch folders" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="Add folder"
+                                    Command="{Binding AddWatchFolderCommand}"
+                                    Classes="ghost"
+                                    DockPanel.Dock="Right"
+                                    FontSize="12.5"
+                                    Padding="9,5" />
+                        </DockPanel>
+                        <TextBlock Text="Each folder is watched independently and imported with its own profile."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="No folders configured yet — add one to enable auto-import."
+                                   TextWrapping="Wrap"
+                                   Classes="hint"
+                                   IsVisible="{Binding !HasWatchFolders}" />
+
+                        <ItemsControl ItemsSource="{Binding WatchFolders}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:WatchFolderEntryViewModel">
+                                    <Border Background="{DynamicResource Surface2Brush}"
+                                            CornerRadius="8"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
+                                                <Button Grid.Column="2"
+                                                        Content="Remove"
+                                                        Command="{Binding RemoveCommand}"
+                                                        Classes="ghost"
+                                                        Foreground="{DynamicResource CriticalBrush}"
+                                                        FontSize="12"
+                                                        Padding="8,4" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBox Text="{Binding Folder}" Watermark="Folder to watch" />
+                                                <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseCommand}" Margin="8,0,0,0" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="Profile" Classes="field-label" />
+                                                    <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).Profiles}"
+                                                              SelectedItem="{Binding SelectedProfile}"
+                                                              PlaceholderText="None"
+                                                              HorizontalAlignment="Stretch">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="profiles:IndexingProfile">
+                                                                <TextBlock Text="{Binding Name}" />
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+                                                    <TextBlock Text="Settle sec" Classes="field-label" />
+                                                    <NumericUpDown Value="{Binding SettleSeconds}" Minimum="1" Maximum="60" HorizontalAlignment="Stretch" />
+                                                </StackPanel>
+                                            </Grid>
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="Batch profile" Classes="field-label" />
+                                                <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).BatchProfiles}"
+                                                          SelectedItem="{Binding SelectedBatchProfile}"
+                                                          PlaceholderText="None (new batch per file)"
+                                                          HorizontalAlignment="Stretch">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="batches:BatchProfile">
+                                                            <TextBlock Text="{Binding Name}" />
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="AI extraction" Classes="section-title" />
+                        <TextBlock Text="Endpoint" Classes="field-label" />
+                        <TextBox Text="{Binding AiEndpoint}" Watermark="https://api.openai.com/v1" />
+                        <TextBlock Text="API key" Classes="field-label" />
+                        <TextBox Text="{Binding AiApiKey}" PasswordChar="•" />
+                        <TextBlock Text="Model" Classes="field-label" />
+                        <TextBox Text="{Binding AiModel}" Watermark="gpt-4o-mini" />
+                        <TextBlock Text="Max document characters sent to AI" Classes="field-label" />
+                        <NumericUpDown Value="{Binding AiMaxDocumentChars}"
+                                       Minimum="1000"
+                                       Maximum="1000000"
+                                       Increment="1000"
+                                       FormatString="0"
+                                       HorizontalAlignment="Stretch" />
+                        <TextBlock Text="Longer documents are truncated to this length before being sent — raise it for long contracts, lower it to cut cost/latency."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="3" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="AI field catalog" Classes="section-title" />
+                        <TextBlock Text="The list of AI field types (Invoice No, Supplier Name, etc.) is a JSON file you can edit directly to add your own."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="{Binding AiFieldCatalogPath}"
+                                   Classes="mono field-label"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Open folder" Command="{Binding OpenCatalogFolderCommand}" />
+                            <Button Content="Reload catalog" Command="{Binding ReloadCatalogCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Grid.Row="4"
+                           Text="{Binding StatusText}"
+                           Foreground="{DynamicResource InkSoftBrush}"
+                           Classes.critical="{Binding StatusIsError}"
+                           TextWrapping="Wrap"
+                           Margin="0,10,0,0"
+                           IsVisible="{Binding HasStatusText}" />
+            </Grid>
+        </ScrollViewer>
+
+        <Border Grid.Row="2"
+                 Padding="24,14"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                Background="{DynamicResource Surface2Brush}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

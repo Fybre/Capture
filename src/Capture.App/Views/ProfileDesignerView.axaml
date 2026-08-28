@@ -1,0 +1,388 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Capture.App.ViewModels"
+              xmlns:controls="using:Capture.App.Controls"
+              xmlns:indexing="using:Capture.Core.Indexing"
+             x:Class="Capture.App.Views.ProfileDesignerView"
+             x:DataType="vm:ProfileDesignerViewModel">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+        <Border Grid.Row="0"
+                Padding="16,10"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush1}">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <Button Command="{Binding CloseCommand}" Classes="ghost">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="12" Height="12" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" />
+                        <TextBlock Text="Back" />
+                    </StackPanel>
+                </Button>
+                <TextBox Grid.Column="1"
+                         Text="{Binding Name}"
+                         Watermark="Profile name"
+                         Margin="12,0"
+                         VerticalAlignment="Center" />
+                <Button Grid.Column="2"
+                        Command="{Binding SaveCommand}"
+                        Classes="accent"
+                        Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconSave}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round" />
+                        <TextBlock Text="Save" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="240,1,*,1,260">
+            <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
+                <TextBlock Text="Fields"
+                           Classes="eyebrow"
+                           Margin="16,14,16,8" />
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Fields}"
+                         SelectedItem="{Binding SelectedField}"
+                         BorderThickness="0"
+                         Margin="8,0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FieldRow">
+                            <StackPanel Spacing="2" Margin="4,6">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                <TextBlock Text="{Binding PageDisplay}" Classes="field-label" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Grid.Row="2" Margin="12" Spacing="8">
+                    <Button Content="Add zone"
+                            Command="{Binding AddZoneCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Add barcode"
+                            Command="{Binding AddBarcodeCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Add key/value"
+                            Command="{Binding AddKeyValueCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Add regex"
+                            Command="{Binding AddRegexCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Add macro"
+                            Command="{Binding AddMacroCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Add AI"
+                            Command="{Binding AddAiCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Add batch separator value"
+                            Command="{Binding AddBatchSeparatorValueCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Delete field"
+                            Command="{Binding DeleteFieldCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            Foreground="{DynamicResource CriticalBrush}" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <TextBlock Text="Page separation" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SeparationTriggerOptions}"
+                              SelectedItem="{Binding SeparationTrigger}"
+                              HorizontalAlignment="Stretch" />
+
+                    <StackPanel Spacing="6" IsVisible="{Binding IsSeparationBarcode}">
+                        <TextBlock Text="Barcode field" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding BarcodeFieldOptions}"
+                                  SelectedItem="{Binding SeparationBarcodeField}"
+                                  PlaceholderText="Choose a barcode field"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FieldRow">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Add a barcode field first (see above), then pick it here."
+                                   TextWrapping="Wrap"
+                                   Classes="hint"
+                                   IsVisible="{Binding !HasBarcodeFieldOptions}" />
+                        <CheckBox Content="Remove separator page" IsChecked="{Binding SeparationDiscardPage}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6" IsVisible="{Binding IsSeparationBlank}">
+                        <CheckBox Content="Remove separator page" IsChecked="{Binding SeparationDiscardPage}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6" IsVisible="{Binding IsSeparationEveryNPages}">
+                        <TextBlock Text="Pages per document" Classes="field-label" />
+                        <NumericUpDown Value="{Binding SeparationPageCount}" Minimum="1" Maximum="500" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <Border Grid.Column="1" Background="{DynamicResource BorderBrush1}" />
+
+            <Grid Grid.Column="2" RowDefinitions="Auto,*" Background="{DynamicResource SurfaceBrush}">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="12,10">
+                    <Button Classes="ghost nav" Command="{Binding PreviousPageCommand}">
+                        <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
+                    </Button>
+                    <TextBlock Grid.Column="1"
+                               Classes="mono"
+                               Text="{Binding PageLabel}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="12.5"
+                               FontWeight="Medium" />
+                    <Button Grid.Column="2" Classes="ghost nav" Command="{Binding NextPageCommand}">
+                        <Path Data="{StaticResource IconChevronRight}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
+                    </Button>
+                </Grid>
+                <Border Grid.Row="1"
+                        Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{DynamicResource BorderBrush1}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="12,0,12,10"
+                        ClipToBounds="True">
+                    <Grid>
+                        <controls:PagePreview x:Name="PreviewImage"
+                                              PageImage="{Binding PageImage}"
+                                              Highlights="{Binding Highlights}"
+                                              AllowDraw="True"
+                                              ZoneDrawnCommand="{Binding CompleteZoneCommand}"
+                                              ZoneChangedCommand="{Binding ChangeZoneCommand}"
+                                              HighlightClickedCommand="{Binding SelectHighlightCommand}"
+                                              Margin="8" />
+                        <Border HorizontalAlignment="Right"
+                                VerticalAlignment="Bottom"
+                                Margin="10"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderBrush1}"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="3"
+                                IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <Button Classes="ghost"
+                                        Width="26" Height="26" Padding="0" CornerRadius="6"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                        ToolTip.Tip="Zoom out"
+                                        Click="OnZoomOutClick">
+                                    <TextBlock Text="−" FontSize="15" FontWeight="Medium" />
+                                </Button>
+                                <TextBlock Text="{Binding #PreviewImage.Zoom, StringFormat={}{0:P0}}"
+                                           VerticalAlignment="Center"
+                                           Width="44"
+                                           TextAlignment="Center"
+                                           Classes="mono"
+                                           FontSize="11.5" />
+                                <Button Classes="ghost"
+                                        Width="26" Height="26" Padding="0" CornerRadius="6"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                        ToolTip.Tip="Zoom in"
+                                        Click="OnZoomInClick">
+                                    <TextBlock Text="+" FontSize="15" FontWeight="Medium" />
+                                </Button>
+                                <Button Classes="ghost"
+                                        Width="26" Height="26" Padding="0" CornerRadius="6"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                        ToolTip.Tip="Fit to window"
+                                        Click="OnZoomResetClick">
+                                    <TextBlock Text="⤢" FontSize="12.5" />
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border Grid.Column="3" Background="{DynamicResource BorderBrush1}" />
+
+             <ScrollViewer Grid.Column="4">
+             <Panel Margin="16,12">
+             <StackPanel Spacing="10"
+                         IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNull}}">
+                <TextBlock Text="Field" Classes="section-title" />
+                <TextBlock Text="Add a field or select one from the list."
+                           TextWrapping="Wrap"
+                           Classes="hint" />
+                <TextBlock Text="{Binding Hint}"
+                           TextWrapping="Wrap"
+                           Classes="hint"
+                           Margin="0,8,0,0" />
+             </StackPanel>
+             <StackPanel Spacing="10"
+                         IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <TextBlock Text="Field" Classes="section-title" />
+                <TextBlock Text="Name" Classes="field-label" />
+                <TextBox Text="{Binding SelectedField.Name}"
+                         IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}"
+                         GotFocus="OnClearPatternGotFocus" />
+                <TextBlock Text="Format" Classes="field-label" />
+                <ComboBox ItemsSource="{Binding Formats}"
+                          SelectedItem="{Binding SelectedField.Format}"
+                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <CheckBox Content="Mandatory"
+                          IsChecked="{Binding SelectedField.Mandatory}"
+                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Text="Level" Classes="field-label" />
+                <ComboBox ItemsSource="{Binding SelectedField.Levels}"
+                          SelectedItem="{Binding SelectedField.Level}"
+                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsZonal}">
+                    <TextBlock Text="Page" Classes="field-label" />
+                    <NumericUpDown Value="{Binding SelectedFieldPageNumber}" Minimum="1" Maximum="{Binding PageCount}" />
+                    <TextBlock Text="Which page of the sample this zone was drawn on — change it if the field targets a different page than the one shown."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsAi}">
+                    <TextBlock Text="Classification" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SelectedField.Classifications}"
+                              SelectedItem="{Binding SelectedField.SelectedClassification}" />
+                    <TextBlock Text="Field type" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SelectedField.AiTypes}"
+                              SelectedItem="{Binding SelectedField.SelectedAiType}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="indexing:AiFieldType">
+                                <TextBlock Text="{Binding Name}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="{Binding SelectedField.AiPromptLabel}" Classes="field-label" />
+                    <TextBox Text="{Binding SelectedField.AiPrompt}"
+                             Watermark="{Binding SelectedField.AiPromptWatermark}"
+                             TextWrapping="Wrap" />
+                    <TextBlock Text="This field has no preset meaning — the description above is the only thing telling the AI what to extract."
+                               TextWrapping="Wrap"
+                               Classes="hint"
+                               IsVisible="{Binding SelectedField.IsCustomAiType}" />
+                    <Button Content="Extract with AI"
+                            Command="{Binding ExtractAiCommand}"
+                            HorizontalAlignment="Stretch" />
+                    <TextBlock Text="All AI fields on this profile are sent in one request."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsBarcode}">
+                    <TextBlock Text="Page" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SelectedField.PageScopes}"
+                              SelectedItem="{Binding SelectedField.PageScope}" />
+                    <NumericUpDown Value="{Binding SelectedFieldPageNumber}" Minimum="1" Maximum="{Binding PageCount}"
+                                   IsVisible="{Binding SelectedField.IsPageNumberScope}" />
+                    <TextBlock Text="Value pattern (optional)" Classes="field-label" />
+                    <TextBox Text="{Binding SelectedField.ValuePattern}"
+                             Watermark="Leave empty for any barcode" />
+                    <TextBlock Text="Draw a zone around the barcode, or leave it unset to scan the whole page. To use this field for document splitting, set it under Page separation."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+                <StackPanel Spacing="10"
+                            IsVisible="{Binding SelectedField.IsKeyValue}">
+                    <TextBlock Text="Key pattern" Classes="field-label" Margin="0,8,0,0" />
+                    <TextBox Text="{Binding SelectedField.KeyPattern}"
+                             Watermark="Invoice\s*No"
+                             GotFocus="OnKeyPatternGotFocus" />
+                    <TextBlock Text="Value pattern" Classes="field-label" />
+                    <TextBox Text="{Binding SelectedField.ValuePattern}"
+                             Watermark="\S+"
+                             GotFocus="OnValuePatternGotFocus" />
+                </StackPanel>
+                <StackPanel Spacing="10"
+                            IsVisible="{Binding SelectedField.IsRegex}">
+                    <TextBlock Text="Regex" Classes="field-label" Margin="0,8,0,0" />
+                    <TextBox Text="{Binding SelectedField.ValuePattern}"
+                             Watermark="PO[-\s]?(\d+)"
+                             GotFocus="OnValuePatternGotFocus" />
+                </StackPanel>
+                <StackPanel Spacing="10"
+                            IsVisible="{Binding SelectedField.IsPatternField}">
+                    <TextBlock Text="Occurrence" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SelectedField.Occurrences}"
+                              SelectedItem="{Binding SelectedField.Occurrence}" />
+                    <TextBlock Text="Page" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SelectedField.PageScopes}"
+                              SelectedItem="{Binding SelectedField.PageScope}" />
+                    <NumericUpDown Value="{Binding SelectedFieldPageNumber}" Minimum="1" Maximum="{Binding PageCount}"
+                                   IsVisible="{Binding SelectedField.IsPageNumberScope}" />
+                    <TextBlock Text="Click in a pattern box, then draw on the page to suggest a regex. Draw without a pattern box focused to set a search region."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <Button Content="Clear search region"
+                            Command="{Binding ClearSearchZoneCommand}"
+                            IsVisible="{Binding SelectedField.HasSearchZone}" />
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsMacro}">
+                    <TextBlock Text="Parts" Classes="field-label" Margin="0,8,0,0" />
+                    <ItemsControl ItemsSource="{Binding SelectedField.Segments}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MacroSegmentRow">
+                                <Border Margin="0,0,0,8" Padding="8" BorderBrush="{DynamicResource BorderBrush1}" BorderThickness="1">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding KindLabel}" FontWeight="SemiBold" />
+                                            <Button Grid.Column="1" Content="✕" Command="{Binding RemoveCommand}" Padding="6,2" />
+                                        </Grid>
+                                        <TextBox Text="{Binding Text}"
+                                                 IsVisible="{Binding IsLiteral}"
+                                                 Watermark="Literal text" />
+                                        <TextBox Text="{Binding Text}"
+                                                 IsVisible="{Binding IsDateTime}"
+                                                 Watermark="yyyy-MM-dd" />
+                                        <ComboBox ItemsSource="{Binding FieldChoices}"
+                                                  SelectedItem="{Binding Text}"
+                                                  IsVisible="{Binding IsField}" />
+                                        <StackPanel IsVisible="{Binding IsCounter}" Spacing="4">
+                                            <TextBlock Text="Zero-pad width (0 = none)" Classes="field-label" FontSize="12" />
+                                            <NumericUpDown Value="{Binding CounterWidth}" Minimum="0" Maximum="8" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <WrapPanel>
+                        <Button Content="Text" Command="{Binding AddMacroTextCommand}" Margin="0,0,6,6" />
+                        <Button Content="Doc #" Command="{Binding AddMacroDocumentCounterCommand}" Margin="0,0,6,6" />
+                        <Button Content="Batch #" Command="{Binding AddMacroBatchCounterCommand}" Margin="0,0,6,6" />
+                        <Button Content="Date" Command="{Binding AddMacroDateCommand}" Margin="0,0,6,6" />
+                        <Button Content="Time" Command="{Binding AddMacroTimeCommand}" Margin="0,0,6,6" />
+                        <Button Content="Field" Command="{Binding AddMacroFieldCommand}" Margin="0,0,6,6" />
+                        <Button Content="Profile name" Command="{Binding AddMacroProfileNameCommand}" Margin="0,0,6,6" />
+                    </WrapPanel>
+                </StackPanel>
+                <TextBlock Text="Extracted value" Classes="field-label" Margin="0,12,0,0" />
+                <TextBlock Text="{Binding SelectedField.LiveFormat}"
+                           FontWeight="SemiBold"
+                           IsVisible="{Binding SelectedField.HasLiveFormat}" />
+                <TextBox Text="{Binding SelectedField.LiveValue}"
+                         IsReadOnly="True"
+                         TextWrapping="Wrap"
+                         MinHeight="72" />
+                <TextBlock Text="{Binding SelectedField.ConfidenceDisplay}" Classes="field-label" />
+                <TextBlock Text="{Binding Hint}"
+                           TextWrapping="Wrap"
+                           Classes="hint"
+                           Margin="0,16,0,0" />
+             </StackPanel>
+             </Panel>
+             </ScrollViewer>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Padding="16,8"
+                Background="{DynamicResource Surface2Brush}"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource BorderBrush1}">
+            <TextBlock Text="{Binding StatusText}"
+                       Foreground="{DynamicResource InkSoftBrush}"
+                       FontSize="12.5"
+                       TextTrimming="CharacterEllipsis" />
+        </Border>
+    </Grid>
+</UserControl>

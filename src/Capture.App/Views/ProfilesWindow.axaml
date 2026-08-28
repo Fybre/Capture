@@ -1,0 +1,89 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        x:Class="Capture.App.Views.ProfilesWindow"
+        x:DataType="vm:ProfilesViewModel"
+        Title="Indexing profiles"
+        Width="1200"
+        Height="800"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid Background="{DynamicResource GroundBrush}">
+        <Grid RowDefinitions="Auto,*,Auto" IsVisible="{Binding !IsDesignerOpen}">
+            <Border Grid.Row="0"
+                    Padding="16,10"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="{DynamicResource BorderBrush1}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Indexing profiles"
+                               FontSize="17"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Command="{Binding NewProfileCommand}" Classes="accent">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconNew}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" />
+                                <TextBlock Text="New from sample" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding EditProfileCommand}" Classes="ghost">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconEdit}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round" />
+                                <TextBlock Text="Edit" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding DeleteProfileCommand}" Classes="ghost">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconDelete}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource CriticalBrush}" StrokeThickness="1.4" />
+                                <TextBlock Text="Delete" Foreground="{DynamicResource CriticalBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="12">
+                <DataGrid ItemsSource="{Binding Profiles}"
+                          SelectedItem="{Binding SelectedProfile}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          SelectionMode="Single"
+                          GridLinesVisibility="Horizontal"
+                          CanUserResizeColumns="True"
+                          BorderThickness="0"
+                          DoubleTapped="OnProfilesDoubleTapped">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                        <DataGridTextColumn Header="Fields" Binding="{Binding Fields.Count}" Width="80" />
+                        <DataGridTextColumn Header="Sample" Binding="{Binding SampleFileName}" Width="240" />
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="Create a profile from a sample document, then draw zones on the page."
+                           IsVisible="{Binding HasNoProfiles}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource MutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="48"
+                           TextAlignment="Center" />
+            </Grid>
+
+            <Border Grid.Row="2"
+                    Padding="16,8"
+                    Background="{DynamicResource Surface2Brush}"
+                    BorderThickness="0,1,0,0"
+                    BorderBrush="{DynamicResource BorderBrush1}">
+                <TextBlock Text="{Binding StatusText}"
+                           Foreground="{DynamicResource InkSoftBrush}"
+                           FontSize="12.5"
+                           TextTrimming="CharacterEllipsis" />
+            </Border>
+        </Grid>
+
+        <ContentControl Content="{Binding Designer}"
+                        IsVisible="{Binding IsDesignerOpen}" />
+    </Grid>
+</Window>
