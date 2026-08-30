@@ -42,6 +42,7 @@ public sealed class PagePreview : Control
     private const double HandleHit = 10;
     private const double MinScreenSize = 6;
     private const double WheelZoomStep = 1.15;
+    private const double WheelPanStep = 50;
 
     private double _panX;
     private double _panY;
@@ -63,6 +64,12 @@ public sealed class PagePreview : Control
     };
     private static readonly IBrush DraftFill = new SolidColorBrush(Color.FromArgb(40, 80, 200, 255));
     private static readonly Pen DraftStroke = new(new SolidColorBrush(Color.FromArgb(220, 80, 200, 255)), 1)
+    {
+        DashStyle = DashStyle.Dash
+    };
+    private static readonly IBrush RedactionFill = new SolidColorBrush(Color.FromArgb(70, 220, 40, 40));
+    private static readonly Pen RedactionStroke = new(new SolidColorBrush(Color.FromArgb(220, 220, 40, 40)), 1.5);
+    private static readonly Pen RedactionRejectedStroke = new(new SolidColorBrush(Color.FromArgb(160, 220, 40, 40)), 1.5)
     {
         DashStyle = DashStyle.Dash
     };
@@ -157,7 +164,14 @@ public sealed class PagePreview : Control
                     continue;
 
                 var rect = ToScreen(highlight, dest);
-                if (highlight.IsSearchZone)
+                if (highlight.IsRedaction)
+                {
+                    context.DrawRectangle(
+                        highlight.IsRejected ? null : (highlight.IsSelected ? SelectedFill : RedactionFill),
+                        highlight.IsRejected ? RedactionRejectedStroke : (highlight.IsSelected ? SelectedStroke : RedactionStroke),
+                        rect);
+                }
+                else if (highlight.IsSearchZone)
                 {
                     context.DrawRectangle(
                         highlight.IsSelected ? SelectedFill : SearchFill,
@@ -226,6 +240,15 @@ public sealed class PagePreview : Control
         if (fit.Width <= 0)
             return;
 
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            _panY += e.Delta.Y * WheelPanStep;
+            ClampPan(fit);
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         var point = e.GetPosition(this);
         var before = ImageDestination();
         var relX = before.Width > 0 ? (point.X - before.X) / before.Width : 0.5;
@@ -258,6 +281,20 @@ public sealed class PagePreview : Control
         if (PageImage is not null)
         {
             var panProps = e.GetCurrentPoint(this).Properties;
+            if (panProps.IsLeftButtonPressed && !AllowDraw)
+            {
+                var clickDest = ImageDestination();
+                var clickPoint = e.GetPosition(this);
+                var clickedHighlight = clickDest.Contains(clickPoint) ? HitHighlight(clickDest, clickPoint) : null;
+                if (clickedHighlight is not null)
+                {
+                    if (HighlightClickedCommand?.CanExecute(clickedHighlight.FieldId) == true)
+                        HighlightClickedCommand.Execute(clickedHighlight.FieldId);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (panProps.IsMiddleButtonPressed || (panProps.IsLeftButtonPressed && !AllowDraw))
             {
                 _panning = true;

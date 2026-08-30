@@ -5,12 +5,13 @@
         xmlns:conv="using:Capture.App.Converters"
         xmlns:profiles="using:Capture.Core.Profiles"
         xmlns:batches="using:Capture.Core.Batches"
+        xmlns:redaction="using:Capture.Core.Redaction"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
         x:Class="Capture.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/capture.ico"
         Title="Capture"
         Width="1280"
         Height="800"
@@ -20,11 +21,21 @@
         <!-- Icon glyphs live in Styles/Theme.axaml and resolve globally via StaticResource. -->
 
         <DataTemplate x:Key="IndexFieldTemplate" x:DataType="vm:IndexValueRow">
-            <Border Padding="0,0,0,14">
+            <Button Classes="review-row"
+                    Classes.selected="{Binding IsSelected}"
+                    Command="{Binding SelectCommand}"
+                    Margin="0,0,0,8"
+                    ToolTip.Tip="Click to highlight this field's zone in the preview">
                 <StackPanel Spacing="5">
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" />
                         <TextBlock Grid.Column="1"
+                                   Text="🔒"
+                                   FontSize="11"
+                                   Margin="0,0,6,0"
+                                   IsVisible="{Binding IsReadOnly}"
+                                   ToolTip.Tip="Read only" />
+                        <TextBlock Grid.Column="2"
                                    Text="{Binding Flag}"
                                    Foreground="{DynamicResource WarnBrush}"
                                    IsVisible="{Binding HasFlag}"
@@ -32,7 +43,25 @@
                                    FontWeight="SemiBold" />
                     </Grid>
                     <TextBox Text="{Binding Text}"
+                             IsVisible="{Binding IsTextEntry}"
+                             IsEnabled="{Binding !IsReadOnly}"
                              Classes.invalid="{Binding HasFormatError}" />
+                    <CalendarDatePicker SelectedDate="{Binding SelectedDate}"
+                                        IsVisible="{Binding IsDate}"
+                                        IsEnabled="{Binding !IsReadOnly}"
+                                        HorizontalAlignment="Stretch" />
+                    <ComboBox ItemsSource="{Binding LookupChoices}"
+                              SelectedItem="{Binding SelectedLookup}"
+                              IsVisible="{Binding IsLookup}"
+                              IsEnabled="{Binding !IsReadOnly}"
+                              PlaceholderText="Choose a value"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LookupChoice">
+                                <TextBlock Text="{Binding Display}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                     <Grid ColumnDefinitions="*,Auto" Margin="0,1,0,0">
                         <ProgressBar Value="{Binding ConfidenceValue}"
                                      Maximum="100"
@@ -47,31 +76,25 @@
                                    Margin="8,0,0,0" />
                     </Grid>
                 </StackPanel>
-            </Border>
+            </Button>
         </DataTemplate>
     </Window.Resources>
 
     <Grid RowDefinitions="Auto,*,Auto">
         <!-- Toolbar -->
         <Border Grid.Row="0"
-                Padding="16,10"
+                Padding="16,7"
                 Background="{DynamicResource SurfaceBrush}"
                 BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush1}">
-            <StackPanel Spacing="8">
+            <StackPanel Spacing="5">
 
                 <!-- Row 1: view mode, one-shot actions -->
                 <StackPanel Orientation="Horizontal">
 
                     <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center" Margin="0,2,16,2">
-                        <Border Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush1}">
-                            <TextBlock Text="C"
-                                       Foreground="{DynamicResource AccentInkBrush}"
-                                       FontWeight="Bold"
-                                       FontSize="14"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Border>
+                        <Image Source="avares://Capture.App/Assets/Brand/capture-icon-128.png"
+                               Width="28" Height="28" Stretch="Uniform" />
                         <TextBlock Text="Capture" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </StackPanel>
 
@@ -98,13 +121,16 @@
 
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2">
                         <Button Command="{Binding ScanCommand}"
-                                Classes="soon"
-                                ToolTip.Tip="Scanner support comes later">
+                                ToolTip.Tip="Scan a document from the first available scanner">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Path Data="{StaticResource IconScan}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
                                 <TextBlock Text="Scan" />
                             </StackPanel>
                         </Button>
+                        <Button Command="{Binding CancelScanCommand}"
+                                IsVisible="{Binding IsScanning}"
+                                Classes="ghost"
+                                Content="Cancel scan" />
                         <Button Command="{Binding ImportFilesCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Path Data="{StaticResource IconImportFile}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
@@ -122,18 +148,29 @@
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" />
 
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,0,2">
-                        <Button Command="{Binding ExportCommand}"
-                                Classes="soon"
-                                ToolTip.Tip="Export adapters come later">
+                        <SplitButton Command="{Binding ExportSelectedCommand}"
+                                     ToolTip.Tip="Export every Ready document in the current selection">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Path Data="{StaticResource IconExport}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
-                                <TextBlock Text="Export" />
+                                <Path Data="{StaticResource IconExport}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" />
+                                <TextBlock Text="Export selected" />
                             </StackPanel>
-                        </Button>
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="Export all"
+                                              Command="{Binding ExportAllCommand}"
+                                              ToolTip.Tip="Export every Ready document in the inbox" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                     </StackPanel>
                 </StackPanel>
 
-                <!-- Row 2: active batch/profile selection -->
+                <!-- Row 2: active batch/profile selection — a subtly tinted band (bleeding past the
+                     toolbar's own padding via negative margins) to visually separate it from Row 1's
+                     one-shot actions above. -->
+                <Border Background="{DynamicResource Surface2Brush}"
+                        Margin="-16,3,-16,-7"
+                        Padding="16,5,16,7">
                 <DockPanel LastChildFill="False">
 
                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" DockPanel.Dock="Right">
@@ -171,6 +208,22 @@
                                                 <TextBlock Text="Settings…" />
                                             </StackPanel>
                                         </Button>
+                                        <Separator Margin="4,3" />
+                                        <Button Command="{Binding OpenAboutCommand}"
+                                                Classes="ghost"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Path Data="M7,2 A5,5 0 1 1 7,12 A5,5 0 1 1 7,2 M7,6.2 L7,10 M7,4.2 L7,4.3"
+                                                      Stretch="Uniform"
+                                                      Width="14"
+                                                      Height="14"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="1.4"
+                                                      StrokeLineCap="Round" />
+                                                <TextBlock Text="About Capture" />
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
                                 </Flyout>
                             </Button.Flyout>
@@ -192,6 +245,14 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+                        <Button Classes="ghost"
+                                Width="22" Height="22" Padding="0" CornerRadius="6"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Command="{Binding ClearBatchProfileCommand}"
+                                IsVisible="{Binding SelectedBatchProfile, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                ToolTip.Tip="Clear batch profile (use None)">
+                            <TextBlock Text="×" FontSize="15" FontWeight="Medium" />
+                        </Button>
                     </StackPanel>
 
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" DockPanel.Dock="Left" />
@@ -210,6 +271,14 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+                        <Button Classes="ghost"
+                                Width="22" Height="22" Padding="0" CornerRadius="6"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Command="{Binding ClearImportProfileCommand}"
+                                IsVisible="{Binding SelectedImportProfile, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                ToolTip.Tip="Clear indexing profile (use None)">
+                            <TextBlock Text="×" FontSize="15" FontWeight="Medium" />
+                        </Button>
                         <Button Command="{Binding ApplySelectedProfileCommand}"
                                 CommandParameter="{Binding SelectedImportProfile}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -222,15 +291,27 @@
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" DockPanel.Dock="Left" />
 
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left">
-                        <Button Command="{Binding RemoveSelectedCommand}"
-                                Classes="ghost"
-                                Foreground="{DynamicResource CriticalBrush}"
-                                ToolTip.Tip="Remove the selected document(s) (Delete)">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Path Data="{StaticResource IconRemove}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
-                                <TextBlock Text="Remove" />
+                        <Border Classes="segment" Padding="4" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Button Command="{Binding RedactSelectedCommand}"
+                                        Classes="accent"
+                                        ToolTip.Tip="{Binding RedactSelectedTooltip}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Path Data="{StaticResource IconRedact}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" />
+                                        <TextBlock Text="Redact" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding RemoveSelectedCommand}"
+                                        Classes="ghost"
+                                        Foreground="{DynamicResource CriticalBrush}"
+                                        ToolTip.Tip="Remove the selected document(s) (Delete)">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Path Data="{StaticResource IconRemove}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                                        <TextBlock Text="Remove" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
-                        </Button>
+                        </Border>
                         <TextBlock Text="{Binding SelectedDocumentsSummary}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource MutedBrush}"
@@ -238,10 +319,65 @@
                                    IsVisible="{Binding HasSelectedDocuments}" />
                     </StackPanel>
                 </DockPanel>
+                </Border>
+
+                <Border IsVisible="{Binding IsRedactPickerOpen}"
+                        Background="{DynamicResource Surface2Brush}"
+                        BorderBrush="{DynamicResource BorderBrush1}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14,12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Redact now — choose which redaction set to use"
+                                   FontWeight="Medium"
+                                   FontSize="12.5" />
+                        <ListBox ItemsSource="{Binding RedactEntitySetOptions}"
+                                 SelectedItem="{Binding SelectedRedactEntitySet}"
+                                 SelectionMode="Single"
+                                 Background="Transparent"
+                                 Padding="0">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="10,6" />
+                                    <Setter Property="Margin" Value="0,0,8,6" />
+                                    <Setter Property="CornerRadius" Value="6" />
+                                    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+                                </Style>
+                                <Style Selector="ListBoxItem:selected">
+                                    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="redaction:RedactionEntitySet">
+                                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Entities, Converter={x:Static conv:EntityListSummaryConverter.Instance}}" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Text="Manage redaction sets from Settings."
+                                   FontSize="11"
+                                   Foreground="{DynamicResource FaintBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Redact" Command="{Binding ConfirmRedactCommand}" />
+                            <Button Content="Cancel" Classes="ghost" Command="{Binding CancelRedactCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="300,1,*,1,292" Background="{DynamicResource GroundBrush}" IsVisible="{Binding IsPreviewMode}">
+        <Grid Grid.Row="1" Background="{DynamicResource GroundBrush}" IsVisible="{Binding IsPreviewMode}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" MinWidth="180" MaxWidth="560" />
+                <ColumnDefinition Width="9" />
+                <ColumnDefinition Width="*" MinWidth="280" />
+                <ColumnDefinition Width="9" />
+                <ColumnDefinition Width="292" MinWidth="220" MaxWidth="560" />
+            </Grid.ColumnDefinitions>
             <!-- Inbox -->
             <Grid Grid.Column="0" RowDefinitions="Auto,*">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="16,14,16,8">
@@ -308,6 +444,12 @@
                                                            Foreground="{DynamicResource CriticalBrush}"
                                                            IsVisible="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
                                                            VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding RedactionStatusDisplay}"
+                                                           Classes="mono"
+                                                           FontSize="10.5"
+                                                           Foreground="{DynamicResource MutedBrush}"
+                                                           IsVisible="{Binding RedactionStatusDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                                           VerticalAlignment="Center" />
                                             </StackPanel>
                                         </StackPanel>
                                     </DataTemplate>
@@ -326,7 +468,20 @@
                 </Grid>
             </Grid>
 
-            <Border Grid.Column="1" Background="{DynamicResource BorderBrush1}" />
+            <GridSplitter Grid.Column="1"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="False"
+                          DragIncrement="1"
+                          Background="Transparent"
+                          Cursor="SizeWestEast"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch" />
+            <Border Grid.Column="1"
+                    Width="1"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource BorderBrush1}"
+                    IsHitTestVisible="False" />
 
             <!-- Preview -->
             <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto" Background="{DynamicResource SurfaceBrush}">
@@ -425,7 +580,20 @@
                            TextTrimming="CharacterEllipsis" />
             </Grid>
 
-            <Border Grid.Column="3" Background="{DynamicResource BorderBrush1}" />
+            <GridSplitter Grid.Column="3"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="False"
+                          DragIncrement="1"
+                          Background="Transparent"
+                          Cursor="SizeWestEast"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch" />
+            <Border Grid.Column="3"
+                    Width="1"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource BorderBrush1}"
+                    IsHitTestVisible="False" />
 
             <!-- Indexes -->
             <Grid Grid.Column="4" RowDefinitions="Auto,*,Auto">
@@ -461,15 +629,85 @@
                         </DockPanel>
                         <ItemsControl ItemsSource="{Binding ReviewDocumentIndexes}"
                                       ItemTemplate="{StaticResource IndexFieldTemplate}" />
+                        <DockPanel Margin="0,8,0,10"
+                                   IsVisible="{Binding HasRedactionCandidates}"
+                                   LastChildFill="True">
+                            <TextBlock Text="REDACTIONS"
+                                       DockPanel.Dock="Left"
+                                       Classes="eyebrow"
+                                       FontSize="11"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
+                            <Border Height="1" Background="{DynamicResource BorderBrush1}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding RedactionCandidates}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RedactionCandidateRow">
+                                    <Button Classes="redaction-row"
+                                            Classes.selected="{Binding IsSelected}"
+                                            Command="{Binding SelectCommand}"
+                                            Margin="0,0,0,6"
+                                            ToolTip.Tip="Click to highlight this region in the preview">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <CheckBox Grid.Column="0"
+                                                      IsChecked="{Binding IsConfirmed}"
+                                                      VerticalAlignment="Top" />
+                                            <StackPanel Grid.Column="1" Spacing="2" Margin="6,0">
+                                                <TextBlock Text="{Binding Label}" FontWeight="Medium" FontSize="12.5" />
+                                                <TextBlock Text="{Binding PreviewText}"
+                                                           Classes="mono"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource MutedBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           IsVisible="{Binding PreviewText, Converter={x:Static conv:StringNotEmptyConverter.Instance}}" />
+                                                <TextBlock Text="{Binding SourceDisplay}"
+                                                           FontSize="10.5"
+                                                           Foreground="{DynamicResource FaintBrush}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding ScoreDisplay}"
+                                                       Classes="mono"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource MutedBrush}"
+                                                       VerticalAlignment="Top" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
-                <Button Grid.Row="2"
-                        Content="Mark ready"
-                        Command="{Binding MarkReadyCommand}"
-                        Classes="accent"
-                        Margin="16,12"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                <StackPanel Grid.Row="2" Margin="16,12" Spacing="8">
+                    <Border IsVisible="{Binding HasRedactedFile}"
+                            Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush1}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="10">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Redacted PDF saved" FontWeight="Medium" FontSize="12.5" />
+                            <TextBlock Text="An image-only copy with the confirmed regions burned in black — the original file is untouched. Change a checkbox below and re-apply to regenerate it."
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedBrush}" />
+                            <Button Content="Open redacted file"
+                                    Command="{Binding OpenRedactedFileCommand}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <Button Content="{Binding ApplyRedactionsButtonLabel}"
+                            Command="{Binding ApplyRedactionsCommand}"
+                            IsVisible="{Binding HasRedactionCandidates}"
+                            Classes="accent"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Mark ready"
+                            Command="{Binding MarkReadyCommand}"
+                            Classes="accent"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                </StackPanel>
             </Grid>
         </Grid>
 
@@ -485,7 +723,7 @@
                            VerticalAlignment="Center" />
             </Grid>
 
-            <ScrollViewer Grid.Row="1">
+            <ScrollViewer Grid.Row="1" PointerPressed="OnGroupsAreaPointerPressed">
                 <StackPanel Margin="20,0,20,20" Spacing="16">
                     <TextBlock Text="Import a PDF or image to get started"
                                IsVisible="{Binding HasNoDocuments}"

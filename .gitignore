@@ -5,3 +5,13 @@ obj/
 *.user
 *.suo
 .DS_Store
+
+# Locally-downloaded Capture.Presidio.Binaries package (see README.md) — a few hundred MB of frozen
+# Python/spaCy binaries per platform. Never commit this; each dev/build machine fetches its own copy.
+local-nuget-feed/
+
+# CaptureScanHelperMac build output — build.sh (re)generates these; only the source (main.swift,
+# entitlements.plist, build.sh) belongs in git.
+native/CaptureScanHelperMac/.build/
+native/CaptureScanHelperMac/CaptureScanHelperMac
+native/CaptureScanHelperMac/CaptureScanHelperMac.app/

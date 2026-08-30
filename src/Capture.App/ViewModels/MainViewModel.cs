@@ -7,6 +7,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Capture.App.Services;
 using Capture.Core.Batches;
+using Capture.Core.Diagnostics;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
@@ -14,6 +15,7 @@ using Capture.Core.Models;
 using Capture.Core.Paths;
 using Capture.Core.Pipeline;
 using Capture.Core.Profiles;
+using Capture.Core.Redaction;
 using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.Export;
@@ -30,7 +32,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IDocumentImporter _importer;
     private readonly IFileDialogService _dialogs;
     private readonly IScanSource _scanSource;
-    private readonly IExportAdapter _exportAdapter;
+    private readonly ProfileExportRunner _exportRunner;
     private readonly ILatticeStore _latticeStore;
     private readonly ILatticeBuilder _latticeBuilder;
     private readonly IProfileDialogService _profiles;
@@ -43,6 +45,13 @@ public partial class MainViewModel : ViewModelBase
     private readonly IWatchSettingsStore _watchStore;
     private readonly IAiFieldCatalogStore _aiCatalogStore;
     private readonly ISettingsDialogService _settings;
+    private readonly IAboutDialogService _about;
+    private readonly IRedactionCandidateStore _redactionCandidates;
+    private readonly IRedactionEntitySetStore _redactionSets;
+    private readonly RedactionApplier _redactionApplier;
+    private readonly RedactionDetectionStep _redactionDetection;
+    private readonly PresidioSidecarLauncher _presidioLauncher;
+    private readonly IDebugLogService _debugLog;
     private readonly IReadOnlyList<IPostIndexStep> _postIndexSteps;
     private readonly Queue<(string Path, WatchFolderEntry Entry)> _watchQueue = new();
     private readonly HashSet<string> _watchQueued = new(StringComparer.OrdinalIgnoreCase);
@@ -66,7 +75,7 @@ public partial class MainViewModel : ViewModelBase
         IDocumentImporter importer,
         IFileDialogService dialogs,
         IScanSource scanSource,
-        IExportAdapter exportAdapter,
+        ProfileExportRunner exportRunner,
         ILatticeStore latticeStore,
         ILatticeBuilder latticeBuilder,
         IProfileDialogService profiles,
@@ -79,6 +88,13 @@ public partial class MainViewModel : ViewModelBase
         IWatchSettingsStore watchStore,
         IAiFieldCatalogStore aiCatalogStore,
         ISettingsDialogService settings,
+        IAboutDialogService about,
+        IRedactionCandidateStore redactionCandidates,
+        IRedactionEntitySetStore redactionSets,
+        RedactionApplier redactionApplier,
+        RedactionDetectionStep redactionDetection,
+        PresidioSidecarLauncher presidioLauncher,
+        IDebugLogService debugLog,
         IEnumerable<IPostIndexStep>? postIndexSteps = null)
     {
         _paths = paths;
@@ -86,7 +102,7 @@ public partial class MainViewModel : ViewModelBase
         _importer = importer;
         _dialogs = dialogs;
         _scanSource = scanSource;
-        _exportAdapter = exportAdapter;
+        _exportRunner = exportRunner;
         _latticeStore = latticeStore;
         _latticeBuilder = latticeBuilder;
         _profiles = profiles;
@@ -99,11 +115,23 @@ public partial class MainViewModel : ViewModelBase
         _watchStore = watchStore;
         _aiCatalogStore = aiCatalogStore;
         _settings = settings;
+        _about = about;
+        _redactionCandidates = redactionCandidates;
+        _redactionSets = redactionSets;
+        _redactionApplier = redactionApplier;
+        _redactionDetection = redactionDetection;
+        _presidioLauncher = presidioLauncher;
+        _debugLog = debugLog;
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
         SelectedDocuments.CollectionChanged += OnSelectedDocumentsChanged;
         Profiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProfiles));
+        RedactionCandidates.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ApplyRedactionsButtonLabel));
         _watch.FilesReady += OnWatchFilesReady;
+        // A cold sidecar start can take well over a minute — without this, the only feedback during
+        // that time would be the generic busy spinner, indistinguishable from a hang. May fire on a
+        // background thread, so marshal back to the UI thread before touching StatusText.
+        _presidioLauncher.StatusChanged += message => Dispatcher.UIThread.Post(() => StatusText = message);
     }
 
     public ObservableCollection<DocumentRow> Documents { get; } = [];
@@ -115,6 +143,28 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<IndexValueRow> ReviewBatchIndexes { get; } = [];
 
     public ObservableCollection<IndexValueRow> ReviewDocumentIndexes { get; } = [];
+
+    public ObservableCollection<RedactionCandidateRow> RedactionCandidates { get; } = [];
+
+    // Deliberately NOT gated on RedactionStatus: the redacted PDF is a derived artifact regenerated
+    // from the original pages plus whatever's currently confirmed, not a one-shot irreversible action —
+    // so the checklist (and the button below it) stay available to adjust and re-apply even after a
+    // document has already been redacted (manually or via the profile's auto-bypass threshold), not
+    // just while it's sitting in PendingReview.
+    public bool HasRedactionCandidates => RedactionCandidates.Count > 0;
+
+    /// <summary>True once the selected document has an applied, on-disk redacted PDF to show/open —
+    /// drives the "Redacted" confirmation panel, shown alongside (not instead of) the still-editable
+    /// checklist below it.</summary>
+    public bool HasRedactedFile =>
+        SelectedDocument?.Document.RedactionStatus == RedactionStatus.Applied
+        && !string.IsNullOrEmpty(SelectedDocument.Document.RedactedPath);
+
+    /// <summary>"Apply" the first time; "Re-apply" once a redacted file already exists, since clicking
+    /// it again regenerates (overwrites) that file from the current checkbox state.</summary>
+    public string ApplyRedactionsButtonLabel => HasRedactedFile
+        ? $"Re-apply redactions ({RedactionCandidates.Count})"
+        : $"Apply redactions ({RedactionCandidates.Count})";
 
     public ObservableCollection<DocumentGroupViewModel> DocumentGroups { get; } = [];
 
@@ -130,6 +180,22 @@ public partial class MainViewModel : ViewModelBase
             return count == 1 ? "1 selected" : $"{count} selected";
         }
     }
+
+    public string RedactSelectedTooltip =>
+        "Choose which PII types to detect and redact now, regardless of any profile's Redaction setting.";
+
+    /// <summary>Backs the inline "which redaction set to use" picker opened by the "Redact" toolbar
+    /// button — the built-in sets plus whatever custom sets exist, populated fresh each time it opens
+    /// since custom sets can change via Settings between uses.</summary>
+    public ObservableCollection<RedactionEntitySet> RedactEntitySetOptions { get; } = [];
+
+    [ObservableProperty]
+    private RedactionEntitySet? _selectedRedactEntitySet;
+
+    [ObservableProperty]
+    private bool _isRedactPickerOpen;
+
+    private IReadOnlyList<DocumentRow> _redactPickerRows = [];
 
     // In Preview mode there's no multi-select UI — the single InboxGrid selection is the source of
     // truth, read directly here rather than mirrored into SelectedDocuments. A mirror requires staying
@@ -186,6 +252,9 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportSelectedCommand))]
     [NotifyPropertyChangedFor(nameof(HasSelectedDocuments))]
     [NotifyPropertyChangedFor(nameof(SelectedDocumentsSummary))]
     private DocumentRow? _selectedDocument;
@@ -215,6 +284,9 @@ public partial class MainViewModel : ViewModelBase
     private IndexValueRow? _selectedIndex;
 
     [ObservableProperty]
+    private RedactionCandidateRow? _selectedRedactionCandidate;
+
+    [ObservableProperty]
     private string _statusText = "Starting…";
 
     [ObservableProperty]
@@ -227,12 +299,21 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(OpenSettingsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
     [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
     private bool _isBusy;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CancelScanCommand))]
+    private bool _isScanning;
+
+    private CancellationTokenSource? _scanCancellation;
 
     public void AttachHost(object host)
     {
@@ -346,6 +427,86 @@ public partial class MainViewModel : ViewModelBase
 
     private bool CanActOnSelected() => !IsBusy && GetActingRows().Count > 0;
 
+    // Manual "redact now" is available on any document regardless of its profile's Redaction.Enabled
+    // flag (or even having a profile at all) — Enabled only gates the automatic post-index pipeline.
+    // Clicking "Redact" doesn't run detection immediately: it opens an inline picker (RedactEntitySetOptions
+    // + IsRedactPickerOpen) so the reviewer can choose which redaction set to use first, since there's
+    // no profile config to fall back on to say what should be detected.
+    [RelayCommand(CanExecute = nameof(CanActOnSelected))]
+    private async Task RedactSelectedAsync()
+    {
+        _redactPickerRows = GetActingRows();
+        if (_redactPickerRows.Count == 0)
+            return;
+
+        RedactEntitySetOptions.Clear();
+        foreach (var set in BuiltInRedactionSets.All)
+            RedactEntitySetOptions.Add(set);
+        foreach (var set in await _redactionSets.GetAllAsync().ConfigureAwait(true))
+            RedactEntitySetOptions.Add(set);
+
+        SelectedRedactEntitySet = RedactEntitySetOptions.FirstOrDefault(set => set.Id == BuiltInRedactionSets.CoreId);
+        IsRedactPickerOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelRedact()
+    {
+        IsRedactPickerOpen = false;
+        _redactPickerRows = [];
+    }
+
+    [RelayCommand]
+    private async Task ConfirmRedactAsync()
+    {
+        var rows = _redactPickerRows;
+        IsRedactPickerOpen = false;
+        _redactPickerRows = [];
+        if (rows.Count == 0)
+            return;
+
+        var entities = SelectedRedactEntitySet?.Entities.ToList() ?? [];
+
+        IsBusy = true;
+        try
+        {
+            var failures = 0;
+            foreach (var row in rows)
+            {
+                if (row.Document.Status == DocumentStatus.Error)
+                    continue;
+
+                try
+                {
+                    var settings = new RedactionSettings { Entities = entities };
+                    var pages = await _store.GetPagesAsync(row.Id).ConfigureAwait(true);
+                    await _redactionDetection.DetectAsync(row.Document, pages, row.Indexes, settings).ConfigureAwait(true);
+                    row.NotifyIndexes();
+                }
+                catch (Exception ex)
+                {
+                    failures++;
+                    Trace.TraceError($"Manual redaction failed for document {row.Id}: {ex}");
+                }
+            }
+
+            if (SelectedDocument is not null && rows.Contains(SelectedDocument))
+            {
+                await LoadRedactionCandidatesAsync(SelectedDocument).ConfigureAwait(true);
+                RefreshIndexHighlights();
+                ApplyRedactionsCommand.NotifyCanExecuteChanged();
+            }
+
+            StatusText = failures == 0
+                ? $"Redaction checked for {rows.Count} document(s)"
+                : $"Redaction checked for {rows.Count} document(s) — {failures} failed";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanActOnSelected))]
     private async Task ApplySelectedProfileAsync(IndexingProfile? profile)
     {
@@ -359,7 +520,15 @@ public partial class MainViewModel : ViewModelBase
             foreach (var row in rows)
                 await ApplyProfileToRowAsync(row, profile).ConfigureAwait(true);
             if (SelectedDocument is not null && rows.Contains(SelectedDocument))
+            {
                 LoadReviewIndexes(SelectedDocument);
+                // ApplyProfileToRowAsync can trigger automatic redaction (if the profile has it
+                // enabled) via the post-index pipeline — reload candidates so a fresh detection shows
+                // up immediately instead of only after reselecting the document.
+                await LoadRedactionCandidatesAsync(SelectedDocument).ConfigureAwait(true);
+                ApplyRedactionsCommand.NotifyCanExecuteChanged();
+            }
+
             RefreshIndexHighlights();
             RefreshDocumentGroups();
             StatusText = $"Applied {profile.Name} to {rows.Count} document(s)";
@@ -431,10 +600,45 @@ public partial class MainViewModel : ViewModelBase
         if (SelectedDocument is null)
             return;
 
-        SelectedDocument.Document.Status = DocumentStatus.Ready;
-        await _store.UpdateAsync(SelectedDocument.Document);
-        SelectedDocument.NotifyIndexes();
-        StatusText = "Marked ready";
+        // This can now trigger automatic redaction (a cold Presidio start can take well over a
+        // minute — see PresidioSidecarLauncher), so it needs the same busy indication as any other
+        // potentially-slow action, not just an instantaneous status flip.
+        IsBusy = true;
+        try
+        {
+            var document = SelectedDocument.Document;
+            document.Status = DocumentStatus.Ready;
+            await _store.UpdateAsync(document);
+            SelectedDocument.NotifyIndexes();
+            StatusText = "Marked ready";
+
+            // Reaching Ready by manual override should trigger the same post-index steps (redaction,
+            // etc.) as reaching it automatically through indexing — otherwise a document only gets
+            // those side effects depending on how it got to Ready, which isn't a distinction the user
+            // meant to make.
+            if (document.ProfileId is { } profileId
+                && await _profileStore.GetAsync(profileId).ConfigureAwait(true) is { } profile)
+            {
+                var indexes = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
+                var batchValues = document.BatchId is { } batchId
+                    ? await _indexes.GetBatchAsync(batchId).ConfigureAwait(true)
+                    : [];
+                await RunPostIndexStepsAsync(document, batchValues.Concat(indexes).ToList(), profile).ConfigureAwait(true);
+
+                // RunPostIndexStepsAsync can trigger automatic redaction — reload candidates so a
+                // fresh detection shows up immediately instead of only after reselecting the document.
+                if (SelectedDocument?.Document.Id == document.Id)
+                {
+                    await LoadRedactionCandidatesAsync(SelectedDocument).ConfigureAwait(true);
+                    RefreshIndexHighlights();
+                    ApplyRedactionsCommand.NotifyCanExecuteChanged();
+                }
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanImport))]
@@ -472,6 +676,22 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task OpenAboutAsync()
+    {
+        var host = _dialogs.Host;
+        if (host is null)
+            return;
+        await _about.ShowAsync(host);
+        _dialogs.Host = host;
+    }
+
+    [RelayCommand]
+    private void ClearBatchProfile() => SelectedBatchProfile = null;
+
+    [RelayCommand]
+    private void ClearImportProfile() => SelectedImportProfile = null;
+
+    [RelayCommand]
     private void ShowPreviewMode() => ViewMode = WorkspaceMode.Preview;
 
     [RelayCommand]
@@ -490,14 +710,180 @@ public partial class MainViewModel : ViewModelBase
         Dispatcher.UIThread.Post(() => SelectedDocument = row, DispatcherPriority.Loaded);
     }
 
+    // Uses the preferred scanner and source selected in Settings, falling back to the first currently
+    // available device if that scanner has since been disconnected.
     [RelayCommand(CanExecute = nameof(CanScan))]
-    private void Scan()
+    private async Task ScanAsync()
     {
+        IsBusy = true;
+        IsScanning = true;
+        _scanCancellation = new CancellationTokenSource();
+        var cancellationToken = _scanCancellation.Token;
+        var scannedPages = new List<ScannedPageInfo>();
+        try
+        {
+            var devices = await _scanSource.ListDevicesAsync(cancellationToken).ConfigureAwait(true);
+            if (devices.Count == 0)
+            {
+                StatusText = "No scanner found";
+                return;
+            }
+
+            var device = devices.FirstOrDefault(item => item.Id == _watchSettings.ScanPreferredDeviceId) ?? devices[0];
+            var colorMode = _watchSettings.ScanGrayscale ? ScanColorMode.Grayscale : ScanColorMode.Color;
+            var source = _watchSettings.ScanSource == ScanInputSource.Feeder
+                ? ScanSourceKind.Feeder
+                : ScanSourceKind.Flatbed;
+            StatusText = $"Scanning from {device.Name}…";
+            var options = new ScanOptions(device.Id, _watchSettings.ScanDpi, _watchSettings.ScanDuplex, colorMode, source);
+            await foreach (var page in _scanSource.ScanAsync(options, cancellationToken).ConfigureAwait(true))
+                scannedPages.Add(new ScannedPageInfo(page.FilePath, page.Width, page.Height, page.Dpi));
+
+            IsScanning = false;
+
+            if (scannedPages.Count == 0)
+            {
+                StatusText = "Scan produced no pages";
+                return;
+            }
+
+            // A multi-page ADF/feeder scan becomes one multi-page document (or several, if the
+            // profile/batch profile splits on separator pages) — the same way a multi-page PDF or
+            // TIFF import already does — rather than one document per physical page.
+            await ImportScannedPagesAsync(scannedPages, DocumentSource.Scan).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Scan cancelled";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Scan failed: {ex.Message}";
+        }
+        finally
+        {
+            foreach (var page in scannedPages)
+            {
+                try { File.Delete(page.ImagePath); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                { /* best-effort cleanup of our own temp file */ }
+            }
+            _scanCancellation.Dispose();
+            _scanCancellation = null;
+            IsScanning = false;
+            IsBusy = false;
+        }
     }
 
-    [RelayCommand(CanExecute = nameof(CanExport))]
-    private void Export()
+    [RelayCommand(CanExecute = nameof(CanCancelScan))]
+    private void CancelScan() => _scanCancellation?.Cancel();
+
+    private bool CanCancelScan() => IsScanning && _scanCancellation is not null;
+
+    private enum ExportOutcome { Exported, ExportedAndRemoved, Skipped, Failed }
+
+    [RelayCommand(CanExecute = nameof(CanActOnSelected))]
+    private async Task ExportSelectedAsync() => await RunExportAsync(GetActingRows()).ConfigureAwait(true);
+
+    [RelayCommand(CanExecute = nameof(CanExportAll))]
+    private async Task ExportAllAsync() => await RunExportAsync(Documents.ToList()).ConfigureAwait(true);
+
+    private bool CanExportAll() => !IsBusy && Documents.Count > 0;
+
+    private async Task RunExportAsync(IReadOnlyList<DocumentRow> rows)
     {
+        if (rows.Count == 0)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var exported = 0;
+            var removed = 0;
+            var failed = 0;
+            var skipped = 0;
+            foreach (var row in rows)
+            {
+                switch (await ExportDocumentAsync(row).ConfigureAwait(true))
+                {
+                    case ExportOutcome.Exported:
+                        exported++;
+                        break;
+                    case ExportOutcome.ExportedAndRemoved:
+                        removed++;
+                        break;
+                    case ExportOutcome.Failed:
+                        failed++;
+                        break;
+                    case ExportOutcome.Skipped:
+                        skipped++;
+                        break;
+                }
+            }
+
+            RefreshBatchAccents();
+            RefreshDocumentGroups();
+
+            // A removed row can leave SelectedDocument dangling on a document that's no longer in
+            // Documents — same DataGrid-deferred-clear race RemoveSelectedAsync already guards against.
+            if (removed > 0 && IsPreviewMode && SelectedDocument is not null && !Documents.Contains(SelectedDocument))
+            {
+                var expected = SelectedDocument;
+                var next = Documents.FirstOrDefault();
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(SelectedDocument, expected))
+                        SelectedDocument = next;
+                }, DispatcherPriority.Loaded);
+            }
+
+            var parts = new List<string>();
+            if (exported > 0)
+                parts.Add($"exported {exported}");
+            if (removed > 0)
+                parts.Add($"exported and removed {removed}");
+            if (failed > 0)
+                parts.Add($"{failed} failed");
+            if (skipped > 0)
+                parts.Add($"{skipped} skipped (not ready, or no export configured)");
+            StatusText = parts.Count == 0 ? "Nothing to export" : string.Join(", ", parts);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    // Only a Ready document is eligible — one that's still NeedsReview, Queued, Processing, or Error
+    // is skipped rather than exported with incomplete/unvalidated data. An already-Exported document is
+    // also skipped: re-running export is available per-document via re-selecting and using Export
+    // Selected, not implicitly folded into a bulk Export All pass.
+    private async Task<ExportOutcome> ExportDocumentAsync(DocumentRow row)
+    {
+        var document = row.Document;
+        if (document.Status != DocumentStatus.Ready)
+            return ExportOutcome.Skipped;
+
+        var profile = document.ProfileId is { } profileId ? Profiles.FirstOrDefault(item => item.Id == profileId) : null;
+        if (profile is null || profile.Exports.Count(item => item.Enabled) == 0)
+            return ExportOutcome.Skipped;
+
+        var results = await _exportRunner.RunAsync(profile, document, row.Indexes).ConfigureAwait(true);
+        if (results.Any(result => !result.Success))
+            return ExportOutcome.Failed;
+
+        if (profile.RemoveAfterExport)
+        {
+            await _store.DeleteAsync(document.Id).ConfigureAwait(true);
+            Documents.Remove(row);
+            SelectedDocuments.Remove(row);
+            return ExportOutcome.ExportedAndRemoved;
+        }
+
+        document.Status = DocumentStatus.Exported;
+        await _store.UpdateAsync(document).ConfigureAwait(true);
+        row.NotifyIndexes();
+        return ExportOutcome.Exported;
     }
 
     [RelayCommand]
@@ -506,7 +892,17 @@ public partial class MainViewModel : ViewModelBase
         var row = ReviewBatchIndexes.Concat(ReviewDocumentIndexes)
             .FirstOrDefault(item => item.Value.FieldId == id);
         if (row is not null)
+        {
             SelectedIndex = row;
+            return;
+        }
+
+        var candidateRow = RedactionCandidates.FirstOrDefault(item => item.Id == id);
+        if (candidateRow is not null)
+        {
+            SelectedRedactionCandidate = candidateRow;
+            RefreshIndexHighlights();
+        }
     }
 
     private bool CanImport() => !IsBusy;
@@ -514,8 +910,8 @@ public partial class MainViewModel : ViewModelBase
     private bool CanMarkReady() =>
         !IsBusy
         && SelectedDocument is not null
-        && SelectedDocument.Indexes.Any(index => !index.HideFromIndexing)
-        && SelectedDocument.Indexes.Where(index => !index.HideFromIndexing).All(index => !index.IsMissing);
+        && SelectedDocument.Indexes.Any(index => !index.HideFromIndexing && !index.IsReadOnly)
+        && SelectedDocument.Indexes.Where(index => !index.HideFromIndexing && !index.IsReadOnly).All(index => !index.IsMissing);
 
     private bool CanGoPrevious() => !IsBusy && CurrentPageNumber > 1;
 
@@ -523,11 +919,11 @@ public partial class MainViewModel : ViewModelBase
 
     private bool CanScan() => _scanSource.IsAvailable && !IsBusy;
 
-    private bool CanExport() => _exportAdapter.IsConfigured && !IsBusy;
-
     async partial void OnSelectedDocumentChanged(DocumentRow? value)
     {
         LoadReviewIndexes(value);
+        await LoadRedactionCandidatesAsync(value);
+        ApplyRedactionsCommand.NotifyCanExecuteChanged();
         await LoadSelectedDocumentAsync(value);
     }
 
@@ -540,10 +936,18 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedDocumentsSummary));
         ApplySelectedProfileCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
+        RedactSelectedCommand.NotifyCanExecuteChanged();
+        ExportSelectedCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedIndexChanged(IndexValueRow? value)
     {
+        // Selecting an index field (via a click on its row or on its highlight in the preview) and a
+        // redaction candidate are mutually exclusive — only one thing is ever "the selected thing".
+        if (value is not null)
+            SelectedRedactionCandidate = null;
+        RefreshRowSelectionFlags();
+
         if (value is not null && value.Value.PageNumber >= 1 && value.Value.PageNumber != CurrentPageNumber)
         {
             CurrentPageNumber = value.Value.PageNumber;
@@ -554,14 +958,41 @@ public partial class MainViewModel : ViewModelBase
         RefreshIndexHighlights();
     }
 
+    partial void OnSelectedRedactionCandidateChanged(RedactionCandidateRow? value)
+    {
+        if (value is not null)
+            SelectedIndex = null;
+        RefreshRowSelectionFlags();
+
+        if (value is not null && value.PageNumber >= 1 && value.PageNumber != CurrentPageNumber)
+        {
+            CurrentPageNumber = value.PageNumber;
+            _ = ShowPageAsync();
+            return;
+        }
+
+        RefreshIndexHighlights();
+    }
+
+    private void RefreshRowSelectionFlags()
+    {
+        foreach (var row in ReviewBatchIndexes.Concat(ReviewDocumentIndexes))
+            row.IsSelected = ReferenceEquals(row, SelectedIndex);
+        foreach (var row in RedactionCandidates)
+            row.IsSelected = ReferenceEquals(row, SelectedRedactionCandidate);
+    }
+
     private async Task ImportPathsAsync(
         IReadOnlyList<string> paths,
         DocumentSource source = DocumentSource.Import,
         IndexingProfile? profile = null,
         string? watchRoot = null,
-        WatchFolderEntry? watchFolderEntry = null)
+        WatchFolderEntry? watchFolderEntry = null,
+        IReadOnlyDictionary<string, int>? imageDpiByPath = null,
+        bool manageBusy = true)
     {
-        IsBusy = true;
+        if (manageBusy)
+            IsBusy = true;
         try
         {
             profile ??= SelectedImportProfile;
@@ -588,30 +1019,15 @@ public partial class MainViewModel : ViewModelBase
                 StatusText = $"Importing {index} of {paths.Count}: {Path.GetFileName(path)}";
                 try
                 {
-                    var imported = await _importer.ImportAsync(path, source, profile, batchProfile).ConfigureAwait(true);
-                    var failed = false;
-                    var isFirstOfFile = true;
-                    foreach (var item in imported)
-                    {
-                        var document = item.Document;
-                        var batch = await allocator.NextAsync(isFirstOfFile, item.StartsNewBatch, document.PageCount)
-                            .ConfigureAwait(true);
-                        isFirstOfFile = false;
-
-                        document.BatchId = batch.Id;
-                        await _store.UpdateAsync(document).ConfigureAwait(true);
-                        await ApplyDocumentFieldsAsync(document, profile, item.SeparatorValues, item.BatchSeparatorValue)
-                            .ConfigureAwait(true);
-                        if (!batchSources.ContainsKey(batch.Id) && document.Status != DocumentStatus.Error)
-                        {
-                            batchSources[batch.Id] = document;
-                            batchSeparatorValues[batch.Id] = item.BatchSeparatorValue;
-                        }
-                        last = await CreateRowAsync(document).ConfigureAwait(true);
-                        Documents.Add(last);
-                        if (document.Status == DocumentStatus.Error)
-                            failed = true;
-                    }
+                    var dpi = imageDpiByPath?.GetValueOrDefault(path);
+                    var imported = await _importer.ImportAsync(
+                            path, source, profile, batchProfile, imageDpiOverride: dpi)
+                        .ConfigureAwait(true);
+                    var (fileLast, failed) = await MaterializeImportedAsync(
+                            imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true)
+                        .ConfigureAwait(true);
+                    if (fileLast is not null)
+                        last = fileLast;
 
                     if (imported.Count == 0 || failed)
                         failedFiles++;
@@ -663,7 +1079,111 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            if (manageBusy)
+                IsBusy = false;
+            if (manageBusy && !_watchProcessing && _watchQueue.Count > 0)
+                _ = ProcessWatchQueueAsync();
+        }
+    }
+
+    /// <summary>Batch-allocates, applies profile fields to, and creates a row for each document produced
+    /// by one import call — shared by <see cref="ImportPathsAsync"/>'s per-file loop and
+    /// <see cref="ImportScannedPagesAsync"/>'s single scan-job import, so the two entry points can't
+    /// drift apart on how a resulting <see cref="ImportedDocument"/> gets surfaced.</summary>
+    private async Task<(DocumentRow? Last, bool Failed)> MaterializeImportedAsync(
+        IReadOnlyList<ImportedDocument> imported,
+        IndexingProfile? profile,
+        BatchAllocator allocator,
+        Dictionary<Guid, CaptureDocument> batchSources,
+        Dictionary<Guid, string?> batchSeparatorValues,
+        bool isFirstOfFile)
+    {
+        DocumentRow? last = null;
+        var failed = false;
+        foreach (var item in imported)
+        {
+            var document = item.Document;
+            var batch = await allocator.NextAsync(isFirstOfFile, item.StartsNewBatch, document.PageCount)
+                .ConfigureAwait(true);
+            isFirstOfFile = false;
+
+            document.BatchId = batch.Id;
+            await _store.UpdateAsync(document).ConfigureAwait(true);
+            await ApplyDocumentFieldsAsync(document, profile, item.SeparatorValues, item.BatchSeparatorValue)
+                .ConfigureAwait(true);
+            if (!batchSources.ContainsKey(batch.Id) && document.Status != DocumentStatus.Error)
+            {
+                batchSources[batch.Id] = document;
+                batchSeparatorValues[batch.Id] = item.BatchSeparatorValue;
+            }
+            last = await CreateRowAsync(document).ConfigureAwait(true);
+            Documents.Add(last);
+            if (document.Status == DocumentStatus.Error)
+                failed = true;
+        }
+
+        return (last, failed);
+    }
+
+    private async Task ImportScannedPagesAsync(IReadOnlyList<ScannedPageInfo> pages, DocumentSource source)
+    {
+        try
+        {
+            var profile = SelectedImportProfile;
+            var batchProfile = SelectedBatchProfile;
+            var resumeBatch = batchProfile?.Trigger == BatchTrigger.Manual ? _lastManualBatch : null;
+            var allocator = await BatchAllocator.CreateAsync(_store, batchProfile, watchFolderEntryId: null, resumeBatch)
+                .ConfigureAwait(true);
+
+            var batchSources = new Dictionary<Guid, CaptureDocument>();
+            var batchSeparatorValues = new Dictionary<Guid, string?>();
+            StatusText = "Importing scanned pages…";
+
+            IReadOnlyList<ImportedDocument> imported;
+            try
+            {
+                imported = await _importer.ImportScannedPagesAsync(pages, source, profile, batchProfile)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Scan import failed: {ex.Message}";
+                return;
+            }
+
+            var (last, failed) = await MaterializeImportedAsync(
+                    imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true)
+                .ConfigureAwait(true);
+
+            if (profile is not null)
+            {
+                foreach (var (batchId, batchSource) in batchSources)
+                {
+                    await ApplyBatchFieldsAsync(batchSource, profile, batchSeparatorValues.GetValueOrDefault(batchId))
+                        .ConfigureAwait(true);
+                    await RefreshBatchRowsAsync(batchId).ConfigureAwait(true);
+                }
+            }
+
+            if (batchProfile?.Trigger == BatchTrigger.Manual)
+                _lastManualBatch = allocator.Current;
+
+            RefreshBatchAccents();
+            RefreshDocumentGroups();
+            if (last is not null)
+            {
+                SelectedDocument = last;
+                await LoadSelectedDocumentAsync(last).ConfigureAwait(true);
+            }
+
+            StatusText = imported.Count == 0
+                ? "Scan produced no pages"
+                : failed
+                    ? "Scan imported with errors"
+                    : $"Imported {imported.Count} document(s) from scan";
+        }
+        finally
+        {
             if (!_watchProcessing && _watchQueue.Count > 0)
                 _ = ProcessWatchQueueAsync();
         }
@@ -746,6 +1266,7 @@ public partial class MainViewModel : ViewModelBase
             _ => $"Watching {active.Count} folders"
         };
         ApplyTheme(_watchSettings.Theme);
+        _debugLog.SetEnabled(_watchSettings.DebugMode);
     }
 
     private static void ApplyTheme(AppTheme theme)
@@ -825,10 +1346,10 @@ public partial class MainViewModel : ViewModelBase
             : [];
         document.Status = IndexFormat.StatusFor(batchValues.Concat(documentValues), profile.AutoReadyThreshold);
         await _store.UpdateAsync(document).ConfigureAwait(true);
-        await RunPostIndexStepsAsync(document, documentValues).ConfigureAwait(true);
+        await RunPostIndexStepsAsync(document, batchValues.Concat(documentValues).ToList(), profile).ConfigureAwait(true);
     }
 
-    private async Task RunPostIndexStepsAsync(CaptureDocument document, IReadOnlyList<IndexValue> indexValues)
+    private async Task RunPostIndexStepsAsync(CaptureDocument document, IReadOnlyList<IndexValue> indexValues, IndexingProfile profile)
     {
         if (_postIndexSteps.Count == 0)
             return;
@@ -838,7 +1359,8 @@ public partial class MainViewModel : ViewModelBase
         {
             Document = document,
             Pages = pages,
-            IndexValues = indexValues
+            IndexValues = indexValues,
+            Profile = profile
         };
 
         foreach (var step in _postIndexSteps)
@@ -903,19 +1425,22 @@ public partial class MainViewModel : ViewModelBase
                 lattices.Add(lattice);
         }
 
-        MacroContext? macro = null;
+        DefaultValueContext? context = null;
+        var existingValues = new List<IndexValue>(await _indexes.GetAsync(document.Id).ConfigureAwait(true));
         if (document.BatchId is { } batchId)
         {
-            macro = new MacroContext
+            context = new DefaultValueContext
             {
                 BatchNumber = await _store.GetBatchNumberAsync(batchId).ConfigureAwait(true),
                 DocumentNumber = await _store.GetDocumentNumberInBatchAsync(batchId, document.Id).ConfigureAwait(true),
                 Timestamp = DateTimeOffset.Now
             };
+            existingValues.AddRange(await _indexes.GetBatchAsync(batchId).ConfigureAwait(true));
         }
 
         var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
-        return await _applicator.ApplyAsync(profile, lattices, macro, pages, batchSeparatorValue).ConfigureAwait(true);
+        return await _applicator.ApplyAsync(profile, lattices, context, pages, batchSeparatorValue, existingValues)
+            .ConfigureAwait(true);
     }
 
     public async Task MoveDocumentToBatchAsync(Guid documentId, Guid batchId)
@@ -1071,12 +1596,109 @@ public partial class MainViewModel : ViewModelBase
         MarkReadyCommand.NotifyCanExecuteChanged();
     }
 
+    private async Task LoadRedactionCandidatesAsync(DocumentRow? row)
+    {
+        RedactionCandidates.Clear();
+        SelectedRedactionCandidate = null;
+
+        if (row is not null)
+        {
+            var candidates = await _redactionCandidates.GetAsync(row.Id).ConfigureAwait(true);
+            foreach (var candidate in candidates)
+            {
+                var candidateRow = new RedactionCandidateRow(candidate);
+                candidateRow.Selected = () => SelectedRedactionCandidate = candidateRow;
+                candidateRow.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName != nameof(RedactionCandidateRow.IsConfirmed))
+                        return;
+                    RefreshIndexHighlights();
+                    ApplyRedactionsCommand.NotifyCanExecuteChanged();
+                };
+                RedactionCandidates.Add(candidateRow);
+            }
+        }
+
+        OnPropertyChanged(nameof(HasRedactionCandidates));
+        OnPropertyChanged(nameof(HasRedactedFile));
+        OnPropertyChanged(nameof(ApplyRedactionsButtonLabel));
+    }
+
+    [RelayCommand]
+    private void OpenRedactedFile()
+    {
+        var path = SelectedDocument?.Document.RedactedPath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            StatusText = "Redacted file not found on disk";
+            return;
+        }
+
+        try
+        {
+            var psi = OperatingSystem.IsWindows()
+                ? new ProcessStartInfo("explorer.exe", $"\"{path}\"")
+                : OperatingSystem.IsMacOS()
+                    ? new ProcessStartInfo("open", $"\"{path}\"")
+                    : new ProcessStartInfo("xdg-open", $"\"{path}\"");
+            psi.UseShellExecute = false;
+            Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't open the redacted file: {ex.Message}";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanApplyRedactions))]
+    private async Task ApplyRedactionsAsync()
+    {
+        if (SelectedDocument is null || RedactionCandidates.Count == 0)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var document = SelectedDocument.Document;
+            var candidates = RedactionCandidates.Select(row => row.Candidate).ToList();
+            await _redactionCandidates.SaveAsync(document.Id, candidates).ConfigureAwait(true);
+
+            var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
+            await _redactionApplier.ApplyAsync(document, pages, candidates).ConfigureAwait(true);
+
+            // The checklist stays populated (and editable) after this — applying doesn't "use up" the
+            // candidates, it just regenerates the redacted file from whatever's currently confirmed, so
+            // rejecting a false positive and clicking the button again is exactly how you fix one.
+            SelectedDocument.NotifyIndexes();
+            RefreshIndexHighlights();
+            OnPropertyChanged(nameof(HasRedactedFile));
+            OnPropertyChanged(nameof(ApplyRedactionsButtonLabel));
+            ApplyRedactionsCommand.NotifyCanExecuteChanged();
+            StatusText = document.RedactionStatus == RedactionStatus.Applied
+                ? $"Redacted PDF saved to {document.RedactedPath}"
+                : $"Redaction failed: {document.RedactionError}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanApplyRedactions() =>
+        !IsBusy && SelectedDocument is not null && RedactionCandidates.Count > 0;
+
     private IndexValueRow CreateReviewRow(DocumentRow document, IndexValue value)
     {
-        return new IndexValueRow(value, document.ConfidenceThreshold, document.Locale)
+        var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale)
         {
             Changed = () => _ = PersistReviewAsync(document)
         };
+        row.Selected = () => SelectedIndex = row;
+        return row;
     }
 
     private static void ClearReview(ObservableCollection<IndexValueRow> rows)
@@ -1214,7 +1836,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void RefreshIndexHighlights()
     {
-        IndexHighlights = ReviewBatchIndexes.Concat(ReviewDocumentIndexes)
+        var indexHighlights = ReviewBatchIndexes.Concat(ReviewDocumentIndexes)
             .Where(item => item.Value.Bounds is not null && item.Value.PageNumber == CurrentPageNumber)
             .Select(item => new IndexHighlight
             {
@@ -1226,8 +1848,25 @@ public partial class MainViewModel : ViewModelBase
                 Height = item.Value.Bounds.Height,
                 IsSelected = SelectedIndex?.Value.FieldId == item.Value.FieldId,
                 CanEdit = false
-            })
-            .ToList();
+            });
+
+        var redactionHighlights = RedactionCandidates
+            .Where(row => row.PageNumber == CurrentPageNumber)
+            .Select(row => new IndexHighlight
+            {
+                FieldId = row.Id,
+                FieldName = row.Label,
+                X = row.Candidate.X,
+                Y = row.Candidate.Y,
+                Width = row.Candidate.Width,
+                Height = row.Candidate.Height,
+                IsSelected = SelectedRedactionCandidate?.Id == row.Id,
+                CanEdit = false,
+                IsRedaction = true,
+                IsRejected = !row.IsConfirmed
+            });
+
+        IndexHighlights = indexHighlights.Concat(redactionHighlights).ToList();
     }
 
     private void SetPageImage(Bitmap? bitmap)
@@ -1348,6 +1987,7 @@ public partial class MainViewModel : ViewModelBase
     private void OnDocumentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasNoDocuments));
+        ExportAllCommand.NotifyCanExecuteChanged();
     }
 
     private void OnSelectedDocumentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1356,5 +1996,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedDocumentsSummary));
         ApplySelectedProfileCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
+        RedactSelectedCommand.NotifyCanExecuteChanged();
+        ExportSelectedCommand.NotifyCanExecuteChanged();
     }
 }

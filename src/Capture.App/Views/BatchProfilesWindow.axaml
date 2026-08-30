@@ -41,6 +41,23 @@
                                 <TextBlock Text="Delete" Foreground="{DynamicResource CriticalBrush}" />
                             </StackPanel>
                         </Button>
+                        <Button Command="{Binding ImportProfileCommand}" Classes="ghost">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconImportFile}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round" />
+                                <TextBlock Text="Import…" />
+                            </StackPanel>
+                        </Button>
+                        <SplitButton Command="{Binding ExportProfileCommand}" Classes="ghost">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconExport}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round" />
+                                <TextBlock Text="Export…" />
+                            </StackPanel>
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="Export all…" Command="{Binding ExportAllProfilesCommand}" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                     </StackPanel>
                 </Grid>
             </Border>

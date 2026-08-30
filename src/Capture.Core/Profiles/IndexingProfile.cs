@@ -5,30 +5,22 @@ public enum FieldKind
     Zonal = 0,
     KeyValue = 1,
     Regex = 2,
-    Macro = 3,
+
+    // 3 (Macro) retired — a Text field's DefaultValueTemplate now covers the same ground (computed
+    // {Token} defaults) without needing a separate field kind.
     Barcode = 4,
     Ai = 5,
 
     /// <summary>Mirrors whatever value the batch profile's trigger (barcode/regex) captured for this
     /// document, if any — supplied ambiently at import time, no zone/pattern configured on the field itself.</summary>
-    BatchSeparatorValue = 6
-}
+    BatchSeparatorValue = 6,
 
-public enum MacroSegmentKind
-{
-    Literal = 0,
-    DocumentCounter = 1,
-    BatchCounter = 2,
-    DateTime = 3,
-    Field = 4,
-    ProfileName = 5
-}
+    /// <summary>A value entered manually in the indexing panel — optionally seeded from
+    /// <see cref="IndexField.DefaultValueTemplate"/>.</summary>
+    Text = 7,
 
-public sealed class MacroSegment
-{
-    public MacroSegmentKind Kind { get; set; }
-    public string? Text { get; set; }
-    public int CounterWidth { get; set; }
+    /// <summary>A value chosen manually from the field's configured list of display/export pairs.</summary>
+    Lookup = 8
 }
 
 public enum IndexLevel
@@ -96,6 +88,15 @@ public sealed class ZoneRect
     public float Height { get; set; }
 }
 
+public sealed class LookupOption
+{
+    /// <summary>The human-readable label shown in the indexing panel.</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>The underlying value stored on the index and supplied to exporters.</summary>
+    public string Value { get; set; } = string.Empty;
+}
+
 public sealed class IndexField
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -118,7 +119,12 @@ public sealed class IndexField
     public bool PageScopeConfigured { get; set; }
 
     public ZoneRect? SearchZone { get; set; }
-    public List<MacroSegment> Macro { get; set; } = [];
+
+    /// <summary>Only meaningful for <see cref="FieldKind.Text"/>. A template evaluated once per
+    /// document/batch by <c>DefaultValueTemplateEvaluator</c> — plain text passes through unchanged,
+    /// and <c>{Doc#}</c>/<c>{Batch#}</c>/<c>{Date}</c>/<c>{Time}</c>/<c>{ProfileName}</c>/<c>{OtherField}</c>
+    /// tokens are resolved. Null/empty means no default — the field starts blank exactly as before.</summary>
+    public string? DefaultValueTemplate { get; set; }
 
     // Legacy per-field document-separation flags. Kept only so JsonProfileStore can migrate profiles
     // saved before separation moved to IndexingProfile.Separation — new code should read/write that
@@ -127,9 +133,130 @@ public sealed class IndexField
     public bool DiscardPage { get; set; }
 
     public bool HideFromIndexing { get; set; }
+
+    /// <summary>When true, this field can't be hand-edited in the review panel, and (like
+    /// <see cref="HideFromIndexing"/>) is excluded from Mandatory/Ready checks.</summary>
+    public bool IsReadOnly { get; set; }
+
+    /// <summary>When true, this field's extracted value (its Zone/pattern-matched Bounds) is a redaction
+    /// candidate on documents whose profile has <see cref="IndexingProfile.Redaction"/> enabled.</summary>
+    public bool Sensitive { get; set; }
+
     public string? BarcodeFormat { get; set; }
     public string? AiTypeId { get; set; }
     public string? AiPrompt { get; set; }
+    public List<LookupOption> LookupOptions { get; set; } = [];
+
+    /// <summary>The export value of the lookup option selected by default, or null for no default.</summary>
+    public string? LookupDefaultValue { get; set; }
+}
+
+/// <summary>Profile-level redaction configuration — PII detected by the bundled Presidio sidecar and/or
+/// any field marked <see cref="IndexField.Sensitive"/> is offered for redaction once a document reaches
+/// <see cref="Capture.Core.Models.DocumentStatus.Ready"/>. See <c>RedactionDetectionStep</c>.</summary>
+public sealed class RedactionSettings
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Which redaction set (see Capture.Core.Redaction.RedactionEntitySet /
+    /// BuiltInRedactionSets) the profile designer's UI has selected — the source of truth for what to
+    /// show as "currently chosen" when the profile is reopened. Null for profiles saved before this
+    /// existed, or if a custom set the profile referenced was since deleted.</summary>
+    public Guid? EntitySetId { get; set; }
+
+    /// <summary>The actual Presidio entity type codes to detect — a snapshot of the chosen set's
+    /// entities at the time it was selected/saved, so detection never needs to resolve
+    /// <see cref="EntitySetId"/> back through the sets store. Empty/null means Presidio's full default
+    /// set for <see cref="Language"/>.</summary>
+    public List<string> Entities { get; set; } = [];
+
+    /// <summary>A Presidio match scoring below this is discarded entirely — never becomes a candidate.</summary>
+    public int ScoreThresholdPercent { get; set; } = 50;
+
+    /// <summary>A candidate (from either source) scoring at or above this skips manual review and is
+    /// redacted automatically. 0 bypasses review unconditionally; the default 100 means only
+    /// Sensitive-field candidates (hardcoded score 100) bypass, since real Presidio matches essentially
+    /// never score a clean 100.</summary>
+    public int BypassReviewScoreThresholdPercent { get; set; } = 100;
+
+    public string Language { get; set; } = "en";
+}
+
+public enum ExportType
+{
+    /// <summary>No type chosen yet — a freshly-added export starts here so the designer doesn't
+    /// pre-select a type (and therefore a whole settings panel) the user hasn't picked.</summary>
+    None = -1,
+    Csv = 0,
+    Therefore = 1
+    // Xml, etc. added later — new IExportWriter + ExportType value, no data-model change.
+}
+
+public enum ExportOutputMode
+{
+    OneFilePerDocument = 0,
+    AppendToSharedFile = 1
+}
+
+public enum ExportFileMode
+{
+    None = 0,
+    Original = 1,
+    Redacted = 2
+}
+
+/// <summary>One configured export destination on a profile — a profile can have several (e.g. a CSV to
+/// an accounts folder and another CSV elsewhere). Run by <c>Capture.Export.ProfileExportRunner</c>.</summary>
+public sealed class ExportDefinition
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "New export";
+    public bool Enabled { get; set; } = true;
+    public ExportType Type { get; set; } = ExportType.None;
+    public string OutputFolder { get; set; } = string.Empty;
+    public ExportOutputMode OutputMode { get; set; } = ExportOutputMode.OneFilePerDocument;
+
+    /// <summary>Used when <see cref="OutputMode"/> is AppendToSharedFile — the one file every document
+    /// appends a row to.</summary>
+    public string SharedFileName { get; set; } = "export.csv";
+
+    /// <summary>Used when <see cref="OutputMode"/> is OneFilePerDocument — supports {FieldName} tokens
+    /// (any profile field), plus {OriginalFileName}, {DocumentId}, {Date}, and {Time}. Date/time tokens
+    /// accept an optional .NET format after a pipe, e.g. {Date|yyyy-MM-dd}.</summary>
+    public string FileNamePattern { get; set; } = "{OriginalFileName}";
+
+    /// <summary>Which fields to include, in this order. Empty means "all fields not marked
+    /// HideFromIndexing", in the profile's own field order.</summary>
+    public List<Guid> FieldIds { get; set; } = [];
+
+    public ExportFileMode FileMode { get; set; } = ExportFileMode.None;
+    public bool IncludeHeader { get; set; } = true;
+
+    // Therefore-specific — unused when Type is Csv. FieldIds above is unused for Therefore; mapping
+    // (below) replaces it. FileMode still applies (attaches the original/redacted file to the
+    // created document's Streams, same fallback as the CSV writer's file copy).
+    public int? ThereforeCategoryNo { get; set; }
+
+    /// <summary>Display only — avoids refetching the category just to show the current selection.</summary>
+    public string? ThereforeCategoryName { get; set; }
+    public List<ThereforeFieldMapping> ThereforeFieldMappings { get; set; } = [];
+}
+
+/// <summary>One Therefore category field discovered via the category picker, optionally mapped to one
+/// of this profile's own index fields. <see cref="FieldType"/> mirrors
+/// <c>Capture.Therefore.ThereforeFieldType</c>'s int values — duplicated as a plain int here rather
+/// than referencing that project, since <c>Capture.Core</c> stays dependency-free.</summary>
+public sealed class ThereforeFieldMapping
+{
+    public int FieldNo { get; set; }
+    public string Caption { get; set; } = string.Empty;
+
+    /// <summary>The machine identifier used as "FieldName" when writing — distinct from
+    /// <see cref="Caption"/> (the human label). See Capture.Therefore.ThereforeCategoryField.</summary>
+    public string IndexDataFieldName { get; set; } = string.Empty;
+    public int FieldType { get; set; }
+    public bool Mandatory { get; set; }
+    public Guid? IndexFieldId { get; set; }
 }
 
 public sealed class IndexingProfile
@@ -146,6 +273,13 @@ public sealed class IndexingProfile
 
     public float BlankInkPercent { get; set; } = 1;
     public DocumentSeparation Separation { get; set; } = new();
+    public RedactionSettings Redaction { get; set; } = new();
+    public List<ExportDefinition> Exports { get; set; } = [];
+
+    /// <summary>When true, a document that exports successfully (every enabled export definition
+    /// succeeded) is deleted from the inbox immediately afterward instead of being marked
+    /// <see cref="Capture.Core.Models.DocumentStatus.Exported"/> and kept around.</summary>
+    public bool RemoveAfterExport { get; set; }
     public List<IndexField> Fields { get; set; } = [];
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;

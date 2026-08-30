@@ -70,10 +70,53 @@ public partial class MainWindow : Window
         _pressRow = RowAt(grid, e.Source, e.GetPosition(grid));
         _pressPoint = e.GetPosition(grid);
         _dragging = false;
+
+        // A left-click that lands on neither a row nor a column header is empty space below/around
+        // the rows — Avalonia's DataGrid has no built-in "click empty space to deselect" behavior,
+        // so without this a selection (the single Preview-mode document, or the whole Table-mode
+        // multi-selection) could never be cleared once made.
+        if (_pressRow is null && !IsOnColumnHeader(e.Source) && DataContext is MainViewModel viewModel)
+        {
+            // DataGridSelectedItemsCollection.Clear() throws in Single selection mode (the Preview
+            // InboxGrid) — SelectedItem is the only mutable surface there; Table-mode group grids are
+            // Extended and go through SelectedItems instead.
+            if (grid.SelectionMode == DataGridSelectionMode.Single)
+                grid.SelectedItem = null;
+            else
+                grid.SelectedItems.Clear();
+            viewModel.SelectedDocument = null;
+            viewModel.SelectedDocuments.Clear();
+        }
     }
 
     private static bool IsOnScrollBar(object? source) =>
         (source as Visual)?.FindAncestorOfType<ScrollBar>(includeSelf: true) is not null;
+
+    private static bool IsOnColumnHeader(object? source) =>
+        (source as Visual)?.FindAncestorOfType<DataGridColumnHeader>(includeSelf: true) is not null;
+
+    // Table mode's group DataGrids each auto-size to their own rows (no filler space inside their own
+    // bounds), so a click in the gaps between group cards or below the last one never reaches any
+    // DataGrid at all — OnGridPointerPressed's own empty-space handling can't see it. This handler,
+    // wired to the ScrollViewer that hosts every group card, catches exactly that remaining case.
+    private void OnGroupsAreaPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel || sender is not Visual root)
+            return;
+        if (!e.GetCurrentPoint(root).Properties.IsLeftButtonPressed)
+            return;
+        if (IsOnScrollBar(e.Source) || IsOnColumnHeader(e.Source))
+            return;
+        // A click that did land inside some group's DataGrid (on a row or its own internal empty
+        // space) is that grid's own concern — OnGridPointerPressed already handles both cases.
+        if ((e.Source as Visual)?.FindAncestorOfType<DataGrid>(includeSelf: true) is not null)
+            return;
+
+        foreach (var grid in _groupGrids)
+            grid.SelectedItems.Clear();
+        viewModel.SelectedDocument = null;
+        viewModel.SelectedDocuments.Clear();
+    }
 
     private async void OnGridPointerMoved(object? sender, PointerEventArgs e)
     {
@@ -298,8 +341,10 @@ public partial class MainWindow : Window
                 viewModel.SelectedDocuments.Add(row);
         }
 
-        if (grid.SelectedItem is DocumentRow current)
-            viewModel.SelectedDocument = current;
+        // Always assign, including null — grid.SelectedItem going empty (e.g. an empty-space click
+        // clearing the selection) must clear SelectedDocument too, not leave it pointing at whatever
+        // was selected before.
+        viewModel.SelectedDocument = grid.SelectedItem as DocumentRow;
     }
 
     private void OnGroupTableDoubleTapped(object? sender, TappedEventArgs e)

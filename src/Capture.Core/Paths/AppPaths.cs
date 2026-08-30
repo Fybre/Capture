@@ -13,6 +13,8 @@ public interface IAppPaths
     string DocumentLatticePath(Guid documentId, int pageNumber);
     string DocumentOcrDirectory(Guid documentId);
     string DocumentIndexesPath(Guid documentId);
+    string DocumentRedactionCandidatesPath(Guid documentId);
+    string DocumentRedactedPath(Guid documentId);
     string BatchIndexesPath(Guid batchId);
     string ProfileDirectory(Guid profileId);
     string ProfileJsonPath(Guid profileId);
@@ -23,8 +25,12 @@ public interface IAppPaths
     string BatchProfilesDirectory { get; }
     string BatchProfileDirectory(Guid batchProfileId);
     string BatchProfileJsonPath(Guid batchProfileId);
+    string RedactionSetsDirectory { get; }
+    string RedactionSetDirectory(Guid redactionSetId);
+    string RedactionSetJsonPath(Guid redactionSetId);
     string SettingsPath { get; }
     string AiFieldCatalogPath { get; }
+    string DebugLogPath { get; }
     void EnsureCreated();
 }
 
@@ -35,18 +41,22 @@ public sealed class AppPaths : IAppPaths
         Root = root ?? Path.Combine(DefaultBaseDirectory, "Capture");
         ProfilesDirectory = Path.Combine(Root, "profiles");
         BatchProfilesDirectory = Path.Combine(Root, "batch-profiles");
+        RedactionSetsDirectory = Path.Combine(Root, "redaction-sets");
         WorkDirectory = Path.Combine(Root, "work");
         DatabasePath = Path.Combine(Root, "capture.db");
         SettingsPath = Path.Combine(Root, "settings.json");
         AiFieldCatalogPath = Path.Combine(Root, "ai-field-catalog.json");
+        DebugLogPath = Path.Combine(Root, "logs", "activity.log");
     }
 
     public string Root { get; }
     public string DatabasePath { get; }
     public string SettingsPath { get; }
     public string AiFieldCatalogPath { get; }
+    public string DebugLogPath { get; }
     public string ProfilesDirectory { get; }
     public string BatchProfilesDirectory { get; }
+    public string RedactionSetsDirectory { get; }
     public string WorkDirectory { get; }
 
     public string DocumentDirectory(Guid documentId) =>
@@ -74,6 +84,12 @@ public sealed class AppPaths : IAppPaths
 
     public string DocumentIndexesPath(Guid documentId) =>
         Path.Combine(DocumentDirectory(documentId), "indexes.json");
+
+    public string DocumentRedactionCandidatesPath(Guid documentId) =>
+        Path.Combine(DocumentDirectory(documentId), "redactions.json");
+
+    public string DocumentRedactedPath(Guid documentId) =>
+        Path.Combine(DocumentDirectory(documentId), "redacted.pdf");
 
     public string BatchIndexesPath(Guid batchId) =>
         Path.Combine(WorkDirectory, "batches", batchId.ToString("N"), "indexes.json");
@@ -107,11 +123,18 @@ public sealed class AppPaths : IAppPaths
     public string BatchProfileJsonPath(Guid batchProfileId) =>
         Path.Combine(BatchProfileDirectory(batchProfileId), "batch-profile.json");
 
+    public string RedactionSetDirectory(Guid redactionSetId) =>
+        Path.Combine(RedactionSetsDirectory, redactionSetId.ToString("N"));
+
+    public string RedactionSetJsonPath(Guid redactionSetId) =>
+        Path.Combine(RedactionSetDirectory(redactionSetId), "redaction-set.json");
+
     public void EnsureCreated()
     {
         Directory.CreateDirectory(Root);
         Directory.CreateDirectory(ProfilesDirectory);
         Directory.CreateDirectory(BatchProfilesDirectory);
+        Directory.CreateDirectory(RedactionSetsDirectory);
         Directory.CreateDirectory(WorkDirectory);
     }
 

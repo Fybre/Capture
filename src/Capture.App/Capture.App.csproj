@@ -2,9 +2,22 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <!-- Capture.Presidio.Binaries ships RID-specific native assets (runtimes/{rid}/native/...), which
+         NuGet only resolves and copies to the output directory for a build that has a concrete
+         RuntimeIdentifier. A portable build (plain "dotnet build"/"dotnet run", no explicit runtime
+         flag) silently gets none of it, so the sidecar looks "unavailable" with no error at all, not
+         "not yet configured". Defaulting to the SDK's own RID makes every local build/run/debug pick
+         it up automatically, without anyone needing to remember a command line flag. Pass an explicit
+         runtime identifier to override this for a genuine cross-platform publish. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationTitle>Capture</ApplicationTitle>
+    <!-- Windows-only: embeds the icon into the built .exe (Explorer/taskbar/Alt-Tab before the window
+         paints its own icon). Ignored on macOS/Linux — those need actual app-bundle/desktop-file
+         packaging, which doesn't exist yet for this app. -->
+    <ApplicationIcon>Assets\capture.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
@@ -19,6 +32,7 @@
     <ProjectReference Include="..\Capture.Ocr\Capture.Ocr.csproj" />
     <ProjectReference Include="..\Capture.Scanner\Capture.Scanner.csproj" />
     <ProjectReference Include="..\Capture.Export\Capture.Export.csproj" />
+    <ProjectReference Include="..\Capture.Therefore\Capture.Therefore.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,5 +47,15 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.1" />
   </ItemGroup>
+
+  <!-- CaptureScanHelperMac is a small native Swift helper that talks to Apple's ImageCaptureCore
+       framework on behalf of MacScanSource — there is no public .NET binding for it, so this mirrors
+       the bundled-native-helper pattern already used for the Presidio sidecar. It must run as a signed
+       .app bundle (see native/CaptureScanHelperMac/main.swift for why), so it's built here rather than
+       shipped as a prebuilt binary. macOS-only: skipped entirely on other build platforms. -->
+  <Target Name="BuildCaptureScanHelperMac" AfterTargets="Build" Condition="'$([MSBuild]::IsOSPlatform(`OSX`))' == 'true'">
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\..\native\CaptureScanHelperMac\build.sh&quot; &quot;$(OutDir.TrimEnd('\/'))&quot;" />
+  </Target>
 </Project>

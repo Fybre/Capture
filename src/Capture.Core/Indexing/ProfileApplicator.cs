@@ -18,37 +18,39 @@ public sealed class ProfileApplicator : IProfileApplicator
     public IReadOnlyList<IndexValue> Apply(
         IndexingProfile profile,
         IReadOnlyList<PageLattice> lattices,
-        MacroContext? macro = null,
+        DefaultValueContext? context = null,
         IReadOnlyList<DocumentPage>? pages = null,
-        string? batchSeparatorValue = null)
+        string? batchSeparatorValue = null,
+        IReadOnlyList<IndexValue>? existingValues = null)
     {
-        var results = ExtractNonMacros(profile, lattices, pages, batchSeparatorValue);
-        AppendMacros(profile, results, macro);
+        var results = ExtractAll(profile, lattices, pages, batchSeparatorValue);
+        ApplyDefaults(profile, results, context, existingValues);
         return results;
     }
 
     public async Task<IReadOnlyList<IndexValue>> ApplyAsync(
         IndexingProfile profile,
         IReadOnlyList<PageLattice> lattices,
-        MacroContext? macro = null,
+        DefaultValueContext? context = null,
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
+        IReadOnlyList<IndexValue>? existingValues = null,
         CancellationToken cancellationToken = default)
     {
-        var results = ExtractNonMacros(profile, lattices, pages, batchSeparatorValue);
+        var results = ExtractAll(profile, lattices, pages, batchSeparatorValue);
         await FillAiAsync(profile, lattices, results, cancellationToken).ConfigureAwait(false);
-        AppendMacros(profile, results, macro);
+        ApplyDefaults(profile, results, context, existingValues);
         return results;
     }
 
-    private List<IndexValue> ExtractNonMacros(
+    private List<IndexValue> ExtractAll(
         IndexingProfile profile,
         IReadOnlyList<PageLattice> lattices,
         IReadOnlyList<DocumentPage>? pages,
         string? batchSeparatorValue)
     {
         var results = new List<IndexValue>(profile.Fields.Count);
-        foreach (var field in profile.Fields.Where(item => item.Kind != FieldKind.Macro))
+        foreach (var field in profile.Fields)
         {
             var extracted = Extract(field, lattices, pages, batchSeparatorValue);
             extracted.ValidationError = IndexFormat.Validate(extracted.Value, field.Format, profile.Locale);
@@ -83,48 +85,82 @@ public sealed class ProfileApplicator : IProfileApplicator
         }
     }
 
-    private static void AppendMacros(
+    private static void ApplyDefaults(
         IndexingProfile profile,
         List<IndexValue> results,
-        MacroContext? macro)
+        DefaultValueContext? context,
+        IReadOnlyList<IndexValue>? existingValues)
     {
+        // A profile re-application re-extracts generated fields, but Text fields are entered by the
+        // indexer. Preserve those edits whether or not the field also has a default template.
+        foreach (var field in profile.Fields.Where(field => field.Kind == FieldKind.Text))
+        {
+            var existing = existingValues?.FirstOrDefault(item => item.FieldId == field.Id);
+            if (existing is not { IsManual: true })
+                continue;
+
+            var value = results.FirstOrDefault(item => item.FieldId == field.Id);
+            if (value is null)
+                continue;
+
+            value.Value = existing.Value;
+            value.IsManual = true;
+            value.Confidence = existing.Confidence;
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+        }
+
+        var defaultFieldIds = profile.Fields
+            .Where(field => field.Kind == FieldKind.Text && !string.IsNullOrEmpty(field.DefaultValueTemplate))
+            .Select(field => field.Id)
+            .ToHashSet();
+        if (defaultFieldIds.Count == 0)
+            return;
+
+        // A default can't reference another field that itself has a default (no chaining, no cycle
+        // detection needed) — simply never offer those fields' values for lookup.
         var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in results)
-            fields[item.FieldName] = item.Value ?? string.Empty;
-        var context = new MacroContext
         {
-            DocumentNumber = macro?.DocumentNumber ?? 1,
-            BatchNumber = macro?.BatchNumber ?? 1,
-            Timestamp = macro?.Timestamp ?? DateTimeOffset.Now,
+            if (!defaultFieldIds.Contains(item.FieldId))
+                fields[item.FieldName] = item.Value ?? string.Empty;
+        }
+
+        var evalContext = new DefaultValueContext
+        {
+            DocumentNumber = context?.DocumentNumber ?? 1,
+            BatchNumber = context?.BatchNumber ?? 1,
+            Timestamp = context?.Timestamp ?? DateTimeOffset.Now,
             ProfileName = profile.Name,
             Fields = fields
         };
 
-        foreach (var field in profile.Fields.Where(item => item.Kind == FieldKind.Macro))
+        foreach (var field in profile.Fields)
         {
-            var value = MacroEvaluator.Evaluate(field.Macro ?? [], context);
-            fields[field.Name] = value;
-            var extracted = new IndexValue
+            if (!defaultFieldIds.Contains(field.Id))
+                continue;
+
+            var value = results.FirstOrDefault(item => item.FieldId == field.Id);
+            if (value is null)
+                continue;
+
+            if (value.IsManual)
+                continue;
+
+            if (!DefaultValueTemplateEvaluator.TryEvaluate(
+                    field.DefaultValueTemplate,
+                    evalContext,
+                    out var evaluated,
+                    out var templateError))
             {
-                FieldId = field.Id,
-                FieldName = field.Name,
-                Format = field.Format,
-                Level = field.Level,
-                Mandatory = field.Mandatory,
-                HideFromIndexing = field.HideFromIndexing,
-                Value = value,
-                Confidence = 100
-            };
-            extracted.ValidationError = IndexFormat.Validate(extracted.Value, field.Format, profile.Locale);
-            results.Add(extracted);
-            context = new MacroContext
-            {
-                DocumentNumber = context.DocumentNumber,
-                BatchNumber = context.BatchNumber,
-                Timestamp = context.Timestamp,
-                ProfileName = context.ProfileName,
-                Fields = fields
-            };
+                value.Value = string.Empty;
+                value.Confidence = 0;
+                value.ValidationError = templateError;
+                continue;
+            }
+
+            value.Value = evaluated;
+            value.Confidence = 100;
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
         }
     }
 
@@ -142,6 +178,10 @@ public sealed class ProfileApplicator : IProfileApplicator
             Level = field.Level,
             Mandatory = field.Mandatory,
             HideFromIndexing = field.HideFromIndexing,
+            IsReadOnly = field.IsReadOnly,
+            Sensitive = field.Sensitive,
+            Kind = field.Kind,
+            LookupOptions = field.LookupOptions.Select(CloneLookupOption).ToList(),
             PageNumber = field.PageNumber
         };
 
@@ -153,6 +193,15 @@ public sealed class ProfileApplicator : IProfileApplicator
                 value.Confidence = 100;
             }
 
+            return value;
+        }
+
+        if (field.Kind == FieldKind.Lookup
+            && field.LookupDefaultValue is { } defaultValue
+            && field.LookupOptions.Any(option => string.Equals(option.Value, defaultValue, StringComparison.Ordinal)))
+        {
+            value.Value = defaultValue;
+            value.Confidence = 100;
             return value;
         }
 
@@ -187,6 +236,12 @@ public sealed class ProfileApplicator : IProfileApplicator
 
         return value;
     }
+
+    private static LookupOption CloneLookupOption(LookupOption option) => new()
+    {
+        Key = option.Key,
+        Value = option.Value
+    };
 
     private IndexValue ExtractBarcode(
         IndexField field,

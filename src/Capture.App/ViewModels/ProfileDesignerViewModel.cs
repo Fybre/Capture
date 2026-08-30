@@ -2,9 +2,12 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
 using Avalonia.Media.Imaging;
+using Capture.App.Services;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Profiles;
+using Capture.Core.Redaction;
+using Capture.Therefore;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -14,6 +17,9 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 {
     private readonly IProfileSampleService _samples;
     private readonly IProfileStore _store;
+    private readonly IRedactionEntitySetStore _redactionSets;
+    private readonly IFileDialogService _dialogs;
+    private readonly IThereforeCategoryPickerDialogService _thereforeCategoryPicker;
     private readonly List<string> _pageImages = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
@@ -26,6 +32,9 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         bool isNew,
         IProfileSampleService samples,
         IProfileStore store,
+        IRedactionEntitySetStore redactionSets,
+        IFileDialogService dialogs,
+        IThereforeCategoryPickerDialogService thereforeCategoryPicker,
         IBarcodeDecoder? barcodes = null,
         IAiExtractor? ai = null)
     {
@@ -33,17 +42,33 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         IsNew = isNew;
         _samples = samples;
         _store = store;
+        _redactionSets = redactionSets;
+        _dialogs = dialogs;
+        _thereforeCategoryPicker = thereforeCategoryPicker;
         _barcodes = barcodes;
         _ai = ai;
         _name = profile.Name;
         _separationTrigger = profile.Separation.Trigger;
         _separationPageCount = Math.Max(1, profile.Separation.PageCount);
         _separationDiscardPage = profile.Separation.DiscardSeparatorPage;
+        _redactionEnabled = profile.Redaction.Enabled;
+        _redactionScoreThreshold = profile.Redaction.ScoreThresholdPercent;
+        _redactionBypassScoreThreshold = profile.Redaction.BypassReviewScoreThresholdPercent;
+        _removeAfterExport = profile.RemoveAfterExport;
+        _sampleFileName = profile.SampleFileName;
         foreach (var field in profile.Fields)
             Fields.Add(Wrap(field));
         RefreshBarcodeFieldOptions();
         _separationBarcodeField = BarcodeFieldOptions.FirstOrDefault(field => field.Id == profile.Separation.BarcodeFieldId);
-        Fields.CollectionChanged += (_, _) => RefreshBarcodeFieldOptions();
+        foreach (var export in profile.Exports)
+            Exports.Add(new ExportDefinitionRow(export, Fields));
+        Exports.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoExports));
+        Fields.CollectionChanged += (_, _) =>
+        {
+            RefreshBarcodeFieldOptions();
+            foreach (var export in Exports)
+                export.RefreshFieldOptions(Fields);
+        };
     }
 
     private void RefreshBarcodeFieldOptions()
@@ -68,6 +93,13 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     public bool Saved { get; private set; }
 
     public ObservableCollection<FieldRow> Fields { get; } = [];
+
+    public ObservableCollection<ExportDefinitionRow> Exports { get; } = [];
+
+    public bool HasNoExports => Exports.Count == 0;
+
+    [ObservableProperty]
+    private bool _removeAfterExport;
 
     public FieldFormat[] Formats { get; } = Enum.GetValues<FieldFormat>();
 
@@ -111,6 +143,20 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
     public bool IsSeparationEveryNPages => SeparationTrigger == DocumentSeparationTrigger.EveryNPages;
 
+    public ObservableCollection<RedactionEntitySet> RedactionSetOptions { get; } = [];
+
+    [ObservableProperty]
+    private RedactionEntitySet? _selectedRedactionSet;
+
+    [ObservableProperty]
+    private bool _redactionEnabled;
+
+    [ObservableProperty]
+    private int _redactionScoreThreshold = 50;
+
+    [ObservableProperty]
+    private int _redactionBypassScoreThreshold = 100;
+
     [ObservableProperty]
     private string _name;
 
@@ -140,25 +186,76 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExtractAiCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
     private bool _isBusy;
+
+    [ObservableProperty]
+    private string? _sampleFileName;
 
     public async Task InitializeAsync()
     {
+        RedactionSetOptions.Clear();
+        foreach (var set in BuiltInRedactionSets.All)
+            RedactionSetOptions.Add(set);
+        foreach (var set in await _redactionSets.GetAllAsync().ConfigureAwait(true))
+            RedactionSetOptions.Add(set);
+
+        SelectedRedactionSet = (Profile.Redaction.EntitySetId is { } setId
+            ? RedactionSetOptions.FirstOrDefault(set => set.Id == setId)
+            : null) ?? RedactionSetOptions.FirstOrDefault(set => set.Id == BuiltInRedactionSets.CoreId);
+
+        await LoadSampleAsync().ConfigureAwait(true);
+        StatusText = PageCount == 0 ? "No sample pages" : Hint;
+    }
+
+    // Shared by InitializeAsync (first load) and ChangeSampleAsync (swapping in a different sample
+    // file for an existing profile) — reloads the on-disk page images/lattices for Profile.Id from
+    // scratch, since ProfileSampleService.PrepareAsync may have just replaced them entirely.
+    private async Task LoadSampleAsync()
+    {
         _pageImages.Clear();
         _pageImages.AddRange(_samples.GetPageImagePaths(Profile.Id));
+        _lattices.Clear();
         PageCount = _pageImages.Count;
-        CurrentPageNumber = PageCount == 0 ? 1 : 1;
+        CurrentPageNumber = 1;
         for (var page = 1; page <= PageCount; page++)
         {
-            var lattice = await _samples.GetLatticeAsync(Profile.Id, page);
+            var lattice = await _samples.GetLatticeAsync(Profile.Id, page).ConfigureAwait(true);
             if (lattice is not null)
                 _lattices[page] = lattice;
         }
 
-        await ShowPageAsync();
+        await ShowPageAsync().ConfigureAwait(true);
         RefreshAllExtracts();
-        StatusText = PageCount == 0 ? "No sample pages" : Hint;
     }
+
+    [RelayCommand(CanExecute = nameof(CanChangeSample))]
+    private async Task ChangeSampleAsync()
+    {
+        var path = await _dialogs.PickFileAsync("Choose a sample document").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        IsBusy = true;
+        try
+        {
+            StatusText = "Preparing sample…";
+            await _samples.PrepareAsync(Profile, path).ConfigureAwait(true);
+            SampleFileName = Profile.SampleFileName;
+            await LoadSampleAsync().ConfigureAwait(true);
+            StatusText = PageCount == 0 ? "No sample pages" : "Sample updated";
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanChangeSample() => !IsBusy;
 
     [RelayCommand]
     private void CompleteZone(NormalizedRect rect)
@@ -207,15 +304,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         RefreshHighlights();
     }
 
-    private void RefreshMacroChoices(FieldRow row)
-    {
-        var names = Fields
-            .Where(item => item.Id != row.Id && !string.IsNullOrWhiteSpace(item.Name))
-            .Select(item => item.Name)
-            .ToList();
-        row.SetFieldChoices(names);
-    }
-
     [RelayCommand]
     private void AddZone()
     {
@@ -231,6 +319,36 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Fields.Add(row);
         SelectedField = row;
         StatusText = "Draw on the page to set the zone";
+    }
+
+    [RelayCommand]
+    private void AddText()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Text,
+            Format = FieldFormat.String
+        };
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Value entered manually in the indexing panel";
+    }
+
+    [RelayCommand]
+    private void AddLookup()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Lookup,
+            Format = FieldFormat.String
+        };
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Add display labels and their exported values";
     }
 
     [RelayCommand]
@@ -291,23 +409,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Fields.Add(row);
         SelectedField = row;
         StatusText = @"Enter a regex, e.g. PO[-\s]?(\d+) — group 1 is the value if present.";
-    }
-
-    [RelayCommand]
-    private void AddMacro()
-    {
-        var field = new IndexField
-        {
-            Name = NextFieldName(),
-            Kind = FieldKind.Macro,
-            Format = FieldFormat.String,
-            PageNumber = CurrentPageNumber
-        };
-        var row = Wrap(field);
-        Fields.Add(row);
-        SelectedField = row;
-        RefreshMacroChoices(row);
-        StatusText = "Add text, counters, date/time, or other fields";
     }
 
     [RelayCommand]
@@ -392,45 +493,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void AddMacroText() => AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.Literal, Text = "-" });
-
-    [RelayCommand]
-    private void AddMacroDocumentCounter() =>
-        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.DocumentCounter, CounterWidth = 3 });
-
-    [RelayCommand]
-    private void AddMacroBatchCounter() =>
-        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.BatchCounter, CounterWidth = 3 });
-
-    [RelayCommand]
-    private void AddMacroDate() =>
-        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.DateTime, Text = "yyyy-MM-dd" });
-
-    [RelayCommand]
-    private void AddMacroTime() =>
-        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.DateTime, Text = "HH:mm:ss" });
-
-    [RelayCommand]
-    private void AddMacroField()
-    {
-        var name = Fields.FirstOrDefault(item => item.Id != SelectedField?.Id)?.Name ?? string.Empty;
-        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.Field, Text = name });
-    }
-
-    [RelayCommand]
-    private void AddMacroProfileName() =>
-        AddMacroSegment(new MacroSegment { Kind = MacroSegmentKind.ProfileName });
-
-    private void AddMacroSegment(MacroSegment segment)
-    {
-        if (SelectedField is not { IsMacro: true } row)
-            return;
-        row.AddSegment(segment);
-        Extract(row);
-        StatusText = $"Added {segment.Kind}";
-    }
-
-    [RelayCommand]
     private void ClearSearchZone()
     {
         if (SelectedField is not { IsPatternField: true })
@@ -502,6 +564,55 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void AddExportDefinition()
+    {
+        // Expanded by default — a newly added export has nothing configured yet, so its settings
+        // should be immediately visible rather than needing an extra click to reveal them.
+        var row = new ExportDefinitionRow(new ExportDefinition(), Fields) { IsExpanded = true };
+        Exports.Add(row);
+    }
+
+    [RelayCommand]
+    private void RemoveExportDefinition(ExportDefinitionRow row) => Exports.Remove(row);
+
+    [RelayCommand]
+    private void ToggleExportExpanded(ExportDefinitionRow row) => row.IsExpanded = !row.IsExpanded;
+
+    [RelayCommand]
+    private async Task BrowseExportFolderAsync(ExportDefinitionRow row)
+    {
+        var folder = await _dialogs.PickFolderAsync();
+        if (!string.IsNullOrWhiteSpace(folder))
+            row.OutputFolder = folder;
+    }
+
+    [RelayCommand]
+    private async Task BrowseThereforeCategoryAsync(ExportDefinitionRow row)
+    {
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var selection = await _thereforeCategoryPicker.ShowAsync(host).ConfigureAwait(true);
+        if (selection is null)
+            return;
+
+        row.Definition.ThereforeCategoryNo = selection.CategoryNo;
+        row.Definition.ThereforeCategoryName = selection.CategoryName;
+        // Fresh IndexFieldId = null every time — re-browsing a category resets mappings, since the
+        // field set may have changed.
+        row.Definition.ThereforeFieldMappings = selection.Fields.Select(field => new ThereforeFieldMapping
+        {
+            FieldNo = field.FieldNo,
+            Caption = field.Caption,
+            IndexDataFieldName = field.IndexDataFieldName,
+            FieldType = (int)field.FieldType,
+            Mandatory = field.Mandatory,
+            IndexFieldId = null
+        }).ToList();
+        row.RefreshThereforeMappings();
+    }
+
+    [RelayCommand]
     private async Task SaveAsync()
     {
         Profile.Name = string.IsNullOrWhiteSpace(Name) ? "Untitled profile" : Name.Trim();
@@ -512,7 +623,18 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             PageCount = Math.Max(1, SeparationPageCount),
             DiscardSeparatorPage = SeparationDiscardPage
         };
+        Profile.Redaction = new RedactionSettings
+        {
+            Enabled = RedactionEnabled,
+            EntitySetId = SelectedRedactionSet?.Id,
+            Entities = SelectedRedactionSet?.Entities.ToList() ?? [],
+            ScoreThresholdPercent = Math.Clamp(RedactionScoreThreshold, 0, 100),
+            BypassReviewScoreThresholdPercent = Math.Clamp(RedactionBypassScoreThreshold, 0, 100),
+            Language = "en"
+        };
         Profile.Fields = Fields.Select(row => row.Field).ToList();
+        Profile.Exports = Exports.Select(row => row.Definition).ToList();
+        Profile.RemoveAfterExport = RemoveAfterExport;
         await _store.SaveAsync(Profile);
         Saved = true;
         IsNew = false;
@@ -532,10 +654,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
         RefreshHighlights();
         if (value is not null)
-        {
-            RefreshMacroChoices(value);
             Extract(value);
-        }
     }
 
     /// <summary>Lets the user see and correct which page a Zonal/Barcode field's zone targets, instead of
@@ -683,25 +802,41 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             return;
         }
 
-        if (row.IsMacro)
+        if (row.IsText && !string.IsNullOrEmpty(row.DefaultValueTemplate))
         {
+            // Mirrors ProfileApplicator.ApplyDefaults's anti-chaining rule: a field that itself has a
+            // default is never offered as a {FieldName} reference for another default's preview.
             var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in Fields)
             {
-                if (item.Id == row.Id)
+                if (item.Id == row.Id || (item.IsText && !string.IsNullOrEmpty(item.DefaultValueTemplate)))
                     continue;
                 fields[item.Name] = item.LiveValue ?? string.Empty;
             }
 
-            row.LiveValue = MacroEvaluator.Evaluate(row.Field.Macro ?? [], new MacroContext
+            var previewContext = new DefaultValueContext
             {
                 DocumentNumber = 1,
                 BatchNumber = 1,
                 Timestamp = DateTimeOffset.Now,
                 ProfileName = Name,
                 Fields = fields
-            });
-            row.LiveConfidence = 100;
+            };
+            if (DefaultValueTemplateEvaluator.TryEvaluate(
+                    row.DefaultValueTemplate,
+                    previewContext,
+                    out var preview,
+                    out var templateError))
+            {
+                row.LiveValue = preview;
+                row.LiveConfidence = 100;
+            }
+            else
+            {
+                row.LiveValue = string.Empty;
+                row.LiveConfidence = 0;
+                StatusText = templateError ?? "Invalid default value";
+            }
             return;
         }
 
@@ -912,7 +1047,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             or nameof(FieldRow.HasSearchZone)
             or nameof(FieldRow.KindDisplay)
             or nameof(FieldRow.Level)
-            or nameof(FieldRow.FieldChoices)
             or nameof(FieldRow.SelectedClassification)
             or nameof(FieldRow.SelectedAiType)
             or nameof(FieldRow.AiPrompt)

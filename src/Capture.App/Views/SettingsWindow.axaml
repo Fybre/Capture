@@ -3,6 +3,8 @@
         xmlns:vm="using:Capture.App.ViewModels"
         xmlns:profiles="using:Capture.Core.Profiles"
         xmlns:batches="using:Capture.Core.Batches"
+        xmlns:redaction="using:Capture.Core.Redaction"
+        xmlns:scanner="using:Capture.Scanner"
         x:Class="Capture.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
@@ -20,7 +22,7 @@
                     Margin="24,18,24,4" />
 
         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
+            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
 
                 <Border Grid.Row="0" Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
@@ -145,7 +147,188 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="3" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
+                <Border Grid.Row="3" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Therefore" Classes="section-title" />
+                        <TextBlock Text="Server" Classes="field-label" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding ThereforeConnectionDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1" Content="Configure…" Click="OnConfigureThereforeClick" Margin="6,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="Shared by every Therefore export across all profiles — configured once here."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="4" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Redaction sets" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="New set"
+                                    Command="{Binding NewRedactionSetCommand}"
+                                    Classes="ghost"
+                                    DockPanel.Dock="Right"
+                                    FontSize="12.5"
+                                    Padding="9,5" />
+                        </DockPanel>
+                        <TextBlock Text="A redaction set is a named list of PII types. Profiles and the ad-hoc Redact button pick from these instead of a raw checklist of every type."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+
+                        <ItemsControl ItemsSource="{Binding RedactionSets}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RedactionEntitySetRow">
+                                    <Border Background="{DynamicResource Surface2Brush}"
+                                            CornerRadius="8"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                                                    <TextBlock Text="Built-in"
+                                                               Classes="hint"
+                                                               FontSize="10.5"
+                                                               VerticalAlignment="Center"
+                                                               IsVisible="{Binding IsBuiltIn}" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding EntitiesSummary}"
+                                                           Classes="hint"
+                                                           TextWrapping="Wrap"
+                                                           FontSize="11" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1"
+                                                        Orientation="Horizontal"
+                                                        Spacing="6"
+                                                        IsVisible="{Binding IsCustom}">
+                                                <Button Content="Edit"
+                                                        Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).EditRedactionSetCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        Classes="ghost"
+                                                        FontSize="12"
+                                                        Padding="8,4" />
+                                                <Button Content="Delete"
+                                                        Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteRedactionSetCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        Classes="ghost"
+                                                        Foreground="{DynamicResource CriticalBrush}"
+                                                        FontSize="12"
+                                                        Padding="8,4" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border IsVisible="{Binding IsEditingRedactionSet}"
+                                Background="{DynamicResource Surface3Brush}"
+                                BorderBrush="{DynamicResource BorderBrush1}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Name" Classes="field-label" />
+                                <TextBox Text="{Binding RedactionSetName}" Watermark="e.g. Core + NZ" />
+
+                                <ItemsControl ItemsSource="{Binding RedactionSetGroups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:RedactionEntityGroupRow">
+                                            <StackPanel Spacing="4" Margin="0,8,0,0">
+                                                <DockPanel LastChildFill="False">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Classes="field-label"
+                                                               DockPanel.Dock="Left"
+                                                               VerticalAlignment="Center" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="4" DockPanel.Dock="Right">
+                                                        <Button Content="All"
+                                                                Command="{Binding SelectAllCommand}"
+                                                                Classes="ghost"
+                                                                FontSize="11"
+                                                                Padding="6,2" />
+                                                        <Button Content="None"
+                                                                Command="{Binding SelectNoneCommand}"
+                                                                Classes="ghost"
+                                                                FontSize="11"
+                                                                Padding="6,2" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                                <ItemsControl ItemsSource="{Binding Entities}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:RedactionEntityRow">
+                                                            <CheckBox Content="{Binding DisplayName}"
+                                                                      IsChecked="{Binding IsSelected}"
+                                                                      Margin="0,0,16,4" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                    <Button Content="Save set" Command="{Binding SaveRedactionSetCommand}" />
+                                    <Button Content="Cancel" Classes="ghost" Command="{Binding CancelRedactionSetEditCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="5"
+                        Classes="card"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,14,0,0"
+                        IsVisible="{Binding IsScanningAvailable}">
+                    <StackPanel Spacing="10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Scanning" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="Refresh"
+                                    Command="{Binding RefreshScanDevicesCommand}"
+                                    Classes="ghost"
+                                    DockPanel.Dock="Right"
+                                    FontSize="12.5"
+                                    Padding="9,5" />
+                        </DockPanel>
+                        <TextBlock Text="Scanner" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ScanDevices}"
+                                  SelectedItem="{Binding SelectedScanDevice}"
+                                  PlaceholderText="No scanner detected"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="scanner:ScanDevice">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Resolution (DPI)" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ScanDpiOptions}"
+                                  SelectedItem="{Binding ScanDpi}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="Higher DPI captures more detail but scans slower and produces a larger file — 200 is a good default for text documents."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Source" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ScanSourceOptions}"
+                                  SelectedItem="{Binding SelectedScanSource}"
+                                  HorizontalAlignment="Stretch" />
+                        <CheckBox Content="Scan both sides (duplex)"
+                                  IsChecked="{Binding ScanDuplex}"
+                                  IsEnabled="{Binding CanScanDuplex}" />
+                        <CheckBox Content="Scan in grayscale"
+                                  IsChecked="{Binding ScanGrayscale}"
+                                  IsEnabled="{Binding CanScanGrayscale}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="6" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
                     <StackPanel Spacing="10">
                         <TextBlock Text="AI field catalog" Classes="section-title" />
                         <TextBlock Text="The list of AI field types (Invoice No, Supplier Name, etc.) is a JSON file you can edit directly to add your own."
@@ -161,7 +344,21 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Grid.Row="4"
+                <Border Grid.Row="7" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Debug logging" Classes="section-title" />
+                        <CheckBox Content="Write a detailed activity log to disk" IsChecked="{Binding DebugMode}" />
+                        <TextBlock Text="Records imports, exports, watch-folder activity, and errors — useful when troubleshooting, but left off by default since it writes continuously."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="{Binding DebugLogPath}"
+                                   Classes="mono field-label"
+                                   TextWrapping="Wrap" />
+                        <Button Content="Open folder" Command="{Binding OpenDebugLogFolderCommand}" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Grid.Row="8"
                            Text="{Binding StatusText}"
                            Foreground="{DynamicResource InkSoftBrush}"
                            Classes.critical="{Binding StatusIsError}"
@@ -176,10 +373,17 @@
                 BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource BorderBrush1}"
                 Background="{DynamicResource Surface2Brush}">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <Button Content="Cancel" Command="{Binding CancelCommand}" />
-                <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
-            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8"
+                            ToolTip.Tip="Exported settings include your AI API key in plain text — share the file only with people you trust.">
+                    <Button Content="Import settings…" Command="{Binding ImportSettingsCommand}" />
+                    <Button Content="Export settings…" Command="{Binding ExportSettingsCommand}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

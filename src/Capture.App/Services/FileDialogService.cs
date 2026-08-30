@@ -71,6 +71,39 @@ public sealed class FileDialogService : IFileDialogService
         return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
+    public async Task<string?> PickJsonFileAsync(string title)
+    {
+        var provider = GetStorageProvider();
+        if (provider is null)
+            return null;
+
+        var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("JSON") { Patterns = ["*.json"] }]
+        });
+
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> PickSaveJsonFileAsync(string title, string suggestedFileName)
+    {
+        var provider = GetStorageProvider();
+        if (provider is null)
+            return null;
+
+        var file = await provider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "json",
+            FileTypeChoices = [new FilePickerFileType("JSON") { Patterns = ["*.json"] }]
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
     private IStorageProvider? GetStorageProvider()
     {
         return Host as TopLevel is { } topLevel

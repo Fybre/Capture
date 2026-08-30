@@ -1,12 +1,14 @@
 using Capture.App.Services;
 using Capture.App.ViewModels;
 using Capture.Core.Batches;
+using Capture.Core.Diagnostics;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Paths;
 using Capture.Core.Pipeline;
 using Capture.Core.Profiles;
+using Capture.Core.Redaction;
 using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.Export;
@@ -14,6 +16,7 @@ using Capture.Ocr;
 using Capture.Pdf;
 using Capture.Scanner;
 using Capture.Storage;
+using Capture.Therefore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Capture.App.Hosting;
@@ -23,6 +26,7 @@ public static class ServiceConfiguration
     public static IServiceCollection AddCapture(this IServiceCollection services)
     {
         services.AddSingleton<IAppPaths, AppPaths>();
+        services.AddSingleton<IDebugLogService, DebugLogService>();
         services.AddSingleton<IDocumentStore, SqliteDocumentStore>();
         services.AddSingleton<ILatticeStore, JsonLatticeStore>();
         services.AddSingleton<IPdfRasterizer, PdfiumRasterizer>();
@@ -36,8 +40,17 @@ public static class ServiceConfiguration
         services.AddSingleton<IBarcodeDecoder, ZxingBarcodeDecoder>();
         services.AddSingleton<IBlankPageDetector, InkCoverageBlankPageDetector>();
         services.AddSingleton<IPreIndexStep, ClassicSeparatorStep>();
-        // IPostIndexStep has no implementations registered yet — DI resolves IEnumerable<IPostIndexStep>
-        // to an empty collection, so the pipeline hook in MainViewModel is a no-op until Phase 4 adds one.
+        services.AddSingleton<PresidioSidecarLauncher>();
+        services.AddSingleton<IPiiDetector, PresidioAnalyzerClient>();
+        services.AddSingleton<IRedactionCandidateStore, JsonRedactionCandidateStore>();
+        services.AddSingleton<IRedactionEntitySetStore, JsonRedactionEntitySetStore>();
+        services.AddSingleton<IRedactedDocumentWriter, SkiaPdfRedactor>();
+        services.AddSingleton<RedactionApplier>();
+        // Registered as its own concrete type (not just via IPostIndexStep) so MainViewModel can call
+        // its DetectAsync directly for a manual "redact this document now" action, independent of the
+        // profile-driven post-index pipeline — both resolve to the same singleton instance.
+        services.AddSingleton<RedactionDetectionStep>();
+        services.AddSingleton<IPostIndexStep>(sp => sp.GetRequiredService<RedactionDetectionStep>());
         services.AddSingleton<IDocumentImporter, DocumentImporter>();
         services.AddSingleton<IIndexValueStore, JsonIndexValueStore>();
         services.AddSingleton<IProfileApplicator, ProfileApplicator>();
@@ -47,16 +60,25 @@ public static class ServiceConfiguration
         services.AddSingleton<IWatchSettingsStore, JsonWatchSettingsStore>();
         services.AddSingleton<IAiFieldCatalogStore, JsonAiFieldCatalogStore>();
         services.AddSingleton<IWatchFolderService, WatchFolderService>();
-        services.AddSingleton<IScanSource, UnavailableScanSource>();
-        services.AddSingleton<IExportAdapter, ThereforeExportAdapter>();
+        services.AddSingleton<IScanSource>(_ =>
+            OperatingSystem.IsMacOS() ? new MacScanSource()
+            : OperatingSystem.IsWindows() ? new WiaScanSource()
+            : new UnavailableScanSource());
+        services.AddSingleton<IExportWriter, CsvExportWriter>();
+        services.AddSingleton<IExportWriter, ThereforeExportWriter>();
+        services.AddSingleton<ProfileExportRunner>();
+        services.AddSingleton<IThereforeClient, ThereforeClient>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IProfileDialogService, ProfileDialogService>();
         services.AddSingleton<IBatchProfileDialogService, BatchProfileDialogService>();
         services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
+        services.AddSingleton<IAboutDialogService, AboutDialogService>();
+        services.AddSingleton<IThereforeCategoryPickerDialogService, ThereforeCategoryPickerDialogService>();
         services.AddTransient<MainViewModel>();
         services.AddTransient<ProfilesViewModel>();
         services.AddTransient<BatchProfilesViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<ThereforeCategoryPickerViewModel>();
         return services;
     }
 }

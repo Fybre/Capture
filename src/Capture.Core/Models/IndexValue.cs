@@ -16,6 +16,10 @@ public sealed class IndexValue
     public ZoneRect? Bounds { get; set; }
     public string? ValidationError { get; set; }
     public bool HideFromIndexing { get; set; }
+    public bool IsReadOnly { get; set; }
+    public bool Sensitive { get; set; }
+    public FieldKind Kind { get; set; }
+    public List<LookupOption> LookupOptions { get; set; } = [];
 
     public bool IsMissing => Mandatory && string.IsNullOrWhiteSpace(Value);
 

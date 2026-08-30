@@ -27,6 +27,10 @@ public partial class App : Application
             {
                 DataContext = services.GetRequiredService<MainViewModel>()
             };
+
+            // Cascades to every singleton IDisposable DI resolved, including PresidioSidecarLauncher —
+            // without this, the sidecar child process (once bundled) would be orphaned on app exit.
+            desktop.Exit += (_, _) => services.Dispose();
         }
 
         base.OnFrameworkInitializationCompleted();

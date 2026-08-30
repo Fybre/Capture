@@ -27,7 +27,12 @@ public class JsonWatchSettingsStoreTests
             AiEndpoint = "https://api.openai.com/v1",
             AiApiKey = "sk-test",
             AiModel = "gpt-4o-mini",
-            AiMaxDocumentChars = 50_000
+            AiMaxDocumentChars = 50_000,
+            ScanDpi = 300,
+            ScanGrayscale = true,
+            ScanSource = ScanInputSource.Feeder,
+            ScanDuplex = true,
+            ScanPreferredDeviceId = "scanner-42"
         });
 
         var loaded = await store.LoadAsync();
@@ -46,6 +51,11 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal("gpt-4o-mini", loaded.AiModel);
         Assert.Equal(50_000, loaded.AiMaxDocumentChars);
         Assert.True(loaded.AiConfigured);
+        Assert.Equal(300, loaded.ScanDpi);
+        Assert.True(loaded.ScanGrayscale);
+        Assert.Equal(ScanInputSource.Feeder, loaded.ScanSource);
+        Assert.True(loaded.ScanDuplex);
+        Assert.Equal("scanner-42", loaded.ScanPreferredDeviceId);
         Assert.Equal(Path.Combine(paths.Root, "settings.json"), paths.SettingsPath);
     }
 
@@ -88,10 +98,48 @@ public class JsonWatchSettingsStoreTests
         // The plaintext key never lands in settings.json — only a sentinel does.
         var raw = await File.ReadAllTextAsync(paths.SettingsPath);
         Assert.DoesNotContain("sk-real-secret", raw);
-        Assert.Equal("sk-real-secret", credentialStore.Stored);
+        Assert.Equal("sk-real-secret", credentialStore.TryRead("AiApiKey"));
 
         var loaded = await store.LoadAsync();
         Assert.Equal("sk-real-secret", loaded.AiApiKey);
+    }
+
+    [Fact]
+    public async Task Stores_the_therefore_password_and_bearer_token_independently_of_the_ai_key()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        var credentialStore = new FakeCredentialStore();
+        var store = new JsonWatchSettingsStore(paths, credentialStore);
+
+        await store.SaveAsync(new WatchSettings
+        {
+            AiApiKey = "sk-ai-secret",
+            ThereforeBaseUrl = "https://craigdemo.thereforeonline.com",
+            ThereforeTenantName = "craigdemo",
+            ThereforeAuthMethod = ThereforeAuthMethod.Basic,
+            ThereforeUsername = "craig.mewett",
+            ThereforePassword = "th-password-secret",
+            ThereforeBearerToken = "th-bearer-secret"
+        });
+
+        var raw = await File.ReadAllTextAsync(paths.SettingsPath);
+        Assert.DoesNotContain("sk-ai-secret", raw);
+        Assert.DoesNotContain("th-password-secret", raw);
+        Assert.DoesNotContain("th-bearer-secret", raw);
+
+        // Each secret lands under its own account name — no collision between the three.
+        Assert.Equal("sk-ai-secret", credentialStore.TryRead("AiApiKey"));
+        Assert.Equal("th-password-secret", credentialStore.TryRead("ThereforePassword"));
+        Assert.Equal("th-bearer-secret", credentialStore.TryRead("ThereforeBearerToken"));
+
+        var loaded = await store.LoadAsync();
+        Assert.Equal("sk-ai-secret", loaded.AiApiKey);
+        Assert.Equal("th-password-secret", loaded.ThereforePassword);
+        Assert.Equal("th-bearer-secret", loaded.ThereforeBearerToken);
+        Assert.Equal("https://craigdemo.thereforeonline.com", loaded.ThereforeBaseUrl);
+        Assert.Equal("craigdemo", loaded.ThereforeTenantName);
+        Assert.Equal("craig.mewett", loaded.ThereforeUsername);
+        Assert.True(loaded.ThereforeConfigured);
     }
 
     [Fact]
@@ -108,14 +156,14 @@ public class JsonWatchSettingsStoreTests
 
     private sealed class FakeCredentialStore : IOsCredentialStore
     {
-        public string? Stored { get; private set; }
+        private readonly Dictionary<string, string> _stored = new();
 
-        public bool TryStore(string value)
+        public bool TryStore(string account, string value)
         {
-            Stored = value;
+            _stored[account] = value;
             return true;
         }
 
-        public string? TryRead() => Stored;
+        public string? TryRead(string account) => _stored.GetValueOrDefault(account);
     }
 }

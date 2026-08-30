@@ -99,6 +99,46 @@ public class JsonProfileStoreTests
     }
 
     [Fact]
+    public async Task Roundtrips_text_and_lookup_fields()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-manual-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        var store = new JsonProfileStore(paths);
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField { Name = "Due date", Kind = FieldKind.Text, Format = FieldFormat.Date },
+                new IndexField
+                {
+                    Name = "Decision",
+                    Kind = FieldKind.Lookup,
+                    Format = FieldFormat.String,
+                    LookupOptions =
+                    [
+                        new LookupOption { Key = "Approved", Value = "A" },
+                        new LookupOption { Key = "Rejected", Value = "R" }
+                    ],
+                    LookupDefaultValue = "A"
+                }
+            ]
+        };
+
+        await store.SaveAsync(profile);
+        var loaded = await store.GetAsync(profile.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(FieldKind.Text, loaded!.Fields[0].Kind);
+        Assert.Equal(FieldFormat.Date, loaded.Fields[0].Format);
+        Assert.Equal(FieldKind.Lookup, loaded.Fields[1].Kind);
+        Assert.Collection(
+            loaded.Fields[1].LookupOptions,
+            option => { Assert.Equal("Approved", option.Key); Assert.Equal("A", option.Value); },
+            option => { Assert.Equal("Rejected", option.Key); Assert.Equal("R", option.Value); });
+        Assert.Equal("A", loaded.Fields[1].LookupDefaultValue);
+    }
+
+    [Fact]
     public async Task Migrates_legacy_split_on_blank_pages_into_separation()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-blank-" + Guid.NewGuid().ToString("N")));

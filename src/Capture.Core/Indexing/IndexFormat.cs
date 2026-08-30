@@ -39,7 +39,13 @@ public static class IndexFormat
         {
             if (value.HideFromIndexing)
                 continue;
-            if (value.IsMissing || value.ValidationError is not null || value.IsLowConfidence(threshold))
+            // A read-only value cannot be corrected in the review editor, but a format/configuration
+            // error must still surface as NeedsReview instead of silently marking the document Ready.
+            if (value.ValidationError is not null)
+                return DocumentStatus.NeedsReview;
+            if (value.IsReadOnly)
+                continue;
+            if (value.IsMissing || value.IsLowConfidence(threshold))
                 return DocumentStatus.NeedsReview;
         }
 

@@ -92,6 +92,12 @@ public sealed class SqliteDocumentStore : IDocumentStore
             .ConfigureAwait(false);
         await TryAddColumnAsync(connection, "pages", "source_page_number", "INTEGER", cancellationToken)
             .ConfigureAwait(false);
+        await TryAddColumnAsync(connection, "documents", "redaction_status", "INTEGER NOT NULL DEFAULT 0", cancellationToken)
+            .ConfigureAwait(false);
+        await TryAddColumnAsync(connection, "documents", "redacted_path", "TEXT", cancellationToken)
+            .ConfigureAwait(false);
+        await TryAddColumnAsync(connection, "documents", "redaction_error", "TEXT", cancellationToken)
+            .ConfigureAwait(false);
         await BackfillBatchesAsync(connection, cancellationToken).ConfigureAwait(false);
         await BackfillBatchNumbersAsync(connection, cancellationToken).ConfigureAwait(false);
     }
@@ -199,8 +205,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
         {
             upsert.Transaction = (SqliteTransaction)transaction;
             upsert.CommandText = """
-                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message)
-                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error)
+                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error)
+                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError)
                 ON CONFLICT(id) DO UPDATE SET
                   original_file_name = excluded.original_file_name,
                   stored_path = excluded.stored_path,
@@ -209,7 +215,10 @@ public sealed class SqliteDocumentStore : IDocumentStore
                   batch_id = excluded.batch_id,
                   status = excluded.status,
                   page_count = excluded.page_count,
-                  error_message = excluded.error_message;
+                  error_message = excluded.error_message,
+                  redaction_status = excluded.redaction_status,
+                  redacted_path = excluded.redacted_path,
+                  redaction_error = excluded.redaction_error;
                 """;
             AddDocumentParameters(upsert, document);
             await upsert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -248,7 +257,10 @@ public sealed class SqliteDocumentStore : IDocumentStore
               batch_id = $batch,
               status = $status,
               page_count = $pages,
-              error_message = $error
+              error_message = $error,
+              redaction_status = $redactionStatus,
+              redacted_path = $redactedPath,
+              redaction_error = $redactionError
             WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", document.Id.ToString("D"));
@@ -258,6 +270,9 @@ public sealed class SqliteDocumentStore : IDocumentStore
         command.Parameters.AddWithValue("$status", (int)document.Status);
         command.Parameters.AddWithValue("$pages", document.PageCount);
         command.Parameters.AddWithValue("$error", (object?)document.ErrorMessage ?? DBNull.Value);
+        command.Parameters.AddWithValue("$redactionStatus", (int)document.RedactionStatus);
+        command.Parameters.AddWithValue("$redactedPath", (object?)document.RedactedPath ?? DBNull.Value);
+        command.Parameters.AddWithValue("$redactionError", (object?)document.RedactionError ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -266,7 +281,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id
+            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error
             FROM documents d
             LEFT JOIN batches b ON b.id = d.batch_id
             ORDER BY IFNULL(b.created_utc, d.created_utc), d.created_utc, d.id;
@@ -484,6 +499,9 @@ public sealed class SqliteDocumentStore : IDocumentStore
         command.Parameters.AddWithValue("$pages", document.PageCount);
         command.Parameters.AddWithValue("$created", document.CreatedUtc.ToString("O", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$error", (object?)document.ErrorMessage ?? DBNull.Value);
+        command.Parameters.AddWithValue("$redactionStatus", (int)document.RedactionStatus);
+        command.Parameters.AddWithValue("$redactedPath", (object?)document.RedactedPath ?? DBNull.Value);
+        command.Parameters.AddWithValue("$redactionError", (object?)document.RedactionError ?? DBNull.Value);
     }
 
     private static CaptureDocument ReadDocument(SqliteDataReader reader)
@@ -500,7 +518,12 @@ public sealed class SqliteDocumentStore : IDocumentStore
             PageCount = reader.GetInt32(6),
             CreatedUtc = DateTimeOffset.Parse(reader.GetString(7), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             ErrorMessage = reader.IsDBNull(8) ? null : reader.GetString(8),
-            BatchId = reader.FieldCount > 9 && !reader.IsDBNull(9) ? Guid.Parse(reader.GetString(9)) : null
+            BatchId = reader.FieldCount > 9 && !reader.IsDBNull(9) ? Guid.Parse(reader.GetString(9)) : null,
+            RedactionStatus = reader.FieldCount > 10 && !reader.IsDBNull(10)
+                ? (RedactionStatus)reader.GetInt32(10)
+                : RedactionStatus.None,
+            RedactedPath = reader.FieldCount > 11 && !reader.IsDBNull(11) ? reader.GetString(11) : null,
+            RedactionError = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : null
         };
     }
 }

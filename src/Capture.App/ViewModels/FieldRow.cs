@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Capture.Core.Indexing;
 using Capture.Core.Profiles;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Capture.App.ViewModels;
 
@@ -13,6 +14,10 @@ public sealed partial class FieldRow : ObservableObject
         _name = field.Name;
         _format = field.Format;
         _mandatory = field.Mandatory;
+        _sensitive = field.Sensitive;
+        _hidden = field.HideFromIndexing;
+        _isReadOnly = field.IsReadOnly;
+        _defaultValueTemplate = field.DefaultValueTemplate ?? string.Empty;
         _level = field.Level;
         _keyPattern = field.KeyPattern ?? string.Empty;
         _valuePattern = field.ValuePattern ?? string.Empty;
@@ -24,8 +29,10 @@ public sealed partial class FieldRow : ObservableObject
         _selectedClassification = type?.Classification ?? AiFieldCatalog.Classifications[0];
         RefreshAiTypes();
         _selectedAiType = type ?? AiTypes.FirstOrDefault();
-        foreach (var segment in field.Macro ?? [])
-            Segments.Add(WrapSegment(segment));
+        foreach (var option in field.LookupOptions ?? [])
+            LookupOptions.Add(WrapLookupOption(option));
+        _selectedDefaultLookupOption = LookupOptions.FirstOrDefault(option =>
+            string.Equals(option.Value, field.LookupDefaultValue, StringComparison.Ordinal));
     }
 
     public IndexField Field { get; }
@@ -42,11 +49,13 @@ public sealed partial class FieldRow : ObservableObject
 
     public bool IsRegex => Field.Kind == FieldKind.Regex;
 
-    public bool IsMacro => Field.Kind == FieldKind.Macro;
-
     public bool IsAi => Field.Kind == FieldKind.Ai;
 
     public bool IsBatchSeparatorValue => Field.Kind == FieldKind.BatchSeparatorValue;
+
+    public bool IsText => Field.Kind == FieldKind.Text;
+
+    public bool IsLookup => Field.Kind == FieldKind.Lookup;
 
     public bool IsPatternField => IsKeyValue || IsRegex;
 
@@ -57,20 +66,17 @@ public sealed partial class FieldRow : ObservableObject
 
     public bool IsPageNumberScope => Field.PageScope == PageScope.Number;
 
-    public ObservableCollection<MacroSegmentRow> Segments { get; } = [];
-
-    public IReadOnlyList<string> FieldChoices { get; set; } = [];
-
     public bool HasSearchZone => Field.SearchZone is not null;
 
     public string KindDisplay => Field.Kind switch
     {
         FieldKind.KeyValue => "Key/value",
         FieldKind.Regex => "Regex",
-        FieldKind.Macro => "Macro",
         FieldKind.Barcode => "Barcode",
         FieldKind.Ai => "AI",
         FieldKind.BatchSeparatorValue => "Batch separator value",
+        FieldKind.Text => "Text",
+        FieldKind.Lookup => "Lookup",
         _ => "Zone"
     };
 
@@ -88,6 +94,19 @@ public sealed partial class FieldRow : ObservableObject
 
     [ObservableProperty]
     private bool _mandatory;
+
+    [ObservableProperty]
+    private bool _sensitive;
+
+    [ObservableProperty]
+    private bool _hidden;
+
+    [ObservableProperty]
+    private bool _isReadOnly;
+
+    /// <summary>Only meaningful when <see cref="IsText"/> — see <see cref="IndexField.DefaultValueTemplate"/>.</summary>
+    [ObservableProperty]
+    private string _defaultValueTemplate;
 
     [ObservableProperty]
     private IndexLevel _level;
@@ -116,6 +135,11 @@ public sealed partial class FieldRow : ObservableObject
     public IReadOnlyList<string> Classifications { get; } = AiFieldCatalog.Classifications;
 
     public ObservableCollection<AiFieldType> AiTypes { get; } = [];
+
+    public ObservableCollection<LookupOptionRow> LookupOptions { get; } = [];
+
+    [ObservableProperty]
+    private LookupOptionRow? _selectedDefaultLookupOption;
 
     [ObservableProperty]
     private string _liveValue;
@@ -156,10 +180,10 @@ public sealed partial class FieldRow : ObservableObject
 
             return Field.Kind switch
             {
-                FieldKind.Macro => "computed",
                 FieldKind.Zonal => $"page {Field.Zone?.PageNumber ?? Field.PageNumber}",
                 FieldKind.Ai => "all pages",
                 FieldKind.BatchSeparatorValue => "from batch trigger",
+                FieldKind.Text or FieldKind.Lookup => "manual entry",
                 _ => $"page {Field.PageNumber}"
             };
         }
@@ -180,6 +204,15 @@ public sealed partial class FieldRow : ObservableObject
     partial void OnFormatChanged(FieldFormat value) => Field.Format = value;
 
     partial void OnMandatoryChanged(bool value) => Field.Mandatory = value;
+
+    partial void OnSensitiveChanged(bool value) => Field.Sensitive = value;
+
+    partial void OnHiddenChanged(bool value) => Field.HideFromIndexing = value;
+
+    partial void OnIsReadOnlyChanged(bool value) => Field.IsReadOnly = value;
+
+    partial void OnDefaultValueTemplateChanged(string value) =>
+        Field.DefaultValueTemplate = string.IsNullOrWhiteSpace(value) ? null : value;
 
     partial void OnLevelChanged(IndexLevel value)
     {
@@ -258,42 +291,73 @@ public sealed partial class FieldRow : ObservableObject
         OnPropertyChanged(nameof(HasLiveFormat));
     }
 
-    public void AddSegment(MacroSegment segment)
+    [RelayCommand]
+    private void AddLookupOption()
     {
-        Segments.Add(WrapSegment(segment));
-        SyncMacro();
+        LookupOptions.Add(WrapLookupOption(new LookupOption()));
+        SyncLookupOptions();
     }
 
-    public void RemoveSegment(MacroSegmentRow row)
+    private LookupOptionRow WrapLookupOption(LookupOption option) => new(option)
     {
-        Segments.Remove(row);
-        SyncMacro();
+        Changed = SyncLookupOptions,
+        RemoveRequested = RemoveLookupOption
+    };
+
+    private void RemoveLookupOption(LookupOptionRow row)
+    {
+        LookupOptions.Remove(row);
+        SyncLookupOptions();
     }
 
-    public void SetFieldChoices(IReadOnlyList<string> names)
+    private void SyncLookupOptions()
     {
-        FieldChoices = names;
-        OnPropertyChanged(nameof(FieldChoices));
-        foreach (var segment in Segments)
-        {
-            segment.FieldChoices = names;
-            segment.NotifyChoices();
-        }
+        if (SelectedDefaultLookupOption is not null && !LookupOptions.Contains(SelectedDefaultLookupOption))
+            SelectedDefaultLookupOption = null;
+
+        Field.LookupOptions = LookupOptions.Select(item => item.Option).ToList();
+        Field.LookupDefaultValue = SelectedDefaultLookupOption?.Value;
+        OnPropertyChanged(nameof(LookupOptions));
     }
 
-    private MacroSegmentRow WrapSegment(MacroSegment segment)
+    partial void OnSelectedDefaultLookupOptionChanged(LookupOptionRow? value) =>
+        Field.LookupDefaultValue = value?.Value;
+
+    [RelayCommand]
+    private void ClearLookupDefault() => SelectedDefaultLookupOption = null;
+}
+
+public sealed partial class LookupOptionRow : ObservableObject
+{
+    public LookupOptionRow(LookupOption option)
     {
-        var row = new MacroSegmentRow(segment)
-        {
-            Changed = SyncMacro,
-            RemoveRequested = RemoveSegment
-        };
-        return row;
+        Option = option;
+        _key = option.Key;
+        _value = option.Value;
     }
 
-    private void SyncMacro()
+    public LookupOption Option { get; }
+    public Action? Changed { get; set; }
+    public Action<LookupOptionRow>? RemoveRequested { get; set; }
+
+    [ObservableProperty]
+    private string _key;
+
+    [ObservableProperty]
+    private string _value;
+
+    partial void OnKeyChanged(string value)
     {
-        Field.Macro = Segments.Select(item => item.Segment).ToList();
-        OnPropertyChanged(nameof(FieldRow.Segments));
+        Option.Key = value;
+        Changed?.Invoke();
     }
+
+    partial void OnValueChanged(string value)
+    {
+        Option.Value = value;
+        Changed?.Invoke();
+    }
+
+    [RelayCommand]
+    private void Remove() => RemoveRequested?.Invoke(this);
 }

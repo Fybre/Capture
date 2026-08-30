@@ -72,6 +72,216 @@ public class ProfileApplicatorTests
     }
 
     [Fact]
+    public void Manual_fields_are_empty_and_carry_lookup_configuration_to_review()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField { Name = "Comment", Kind = FieldKind.Text, Format = FieldFormat.Integer },
+                new IndexField
+                {
+                    Name = "Decision",
+                    Kind = FieldKind.Lookup,
+                    LookupOptions = [new LookupOption { Key = "Approved", Value = "A" }],
+                    LookupDefaultValue = "A"
+                }
+            ]
+        };
+
+        var values = new ProfileApplicator().Apply(profile, []);
+
+        Assert.Equal(FieldKind.Text, values[0].Kind);
+        Assert.Equal(FieldFormat.Integer, values[0].Format);
+        Assert.Equal(string.Empty, values[0].Value);
+        Assert.Equal(FieldKind.Lookup, values[1].Kind);
+        Assert.Equal("A", values[1].Value);
+        Assert.Equal(100, values[1].Confidence);
+        var option = Assert.Single(values[1].LookupOptions);
+        Assert.Equal("Approved", option.Key);
+        Assert.Equal("A", option.Value);
+
+        // Applicator results are snapshots, not aliases into the editable profile.
+        profile.Fields[1].LookupOptions[0].Value = "CHANGED";
+        Assert.Equal("A", option.Value);
+    }
+
+    [Fact]
+    public void Text_default_value_template_resolves_against_another_fields_extracted_value()
+    {
+        var lattice = new PageLattice
+        {
+            PageNumber = 1,
+            Words = [Word("Invoice", 0.10f, 0.10f), Word("No", 0.22f, 0.10f), Word("12345", 0.40f, 0.10f)]
+        };
+        var profile = new IndexingProfile
+        {
+            Name = "Invoice",
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "InvoiceNo",
+                    Kind = FieldKind.KeyValue,
+                    KeyPattern = @"Invoice\s*No",
+                    ValuePattern = @"\d+",
+                    PageScope = PageScope.First
+                },
+                new IndexField
+                {
+                    Name = "Combined",
+                    Kind = FieldKind.Text,
+                    DefaultValueTemplate = "{Doc#|000}-{InvoiceNo}"
+                }
+            ]
+        };
+
+        var context = new DefaultValueContext { DocumentNumber = 7 };
+        var values = new ProfileApplicator().Apply(profile, [lattice], context);
+
+        var combined = values.Single(v => v.FieldName == "Combined");
+        Assert.Equal("007-12345", combined.Value);
+        Assert.Equal(100, combined.Confidence);
+    }
+
+    [Fact]
+    public void Text_default_referencing_a_field_that_itself_has_a_default_resolves_blank()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField { Name = "A", Kind = FieldKind.Text, DefaultValueTemplate = "AAA" },
+                new IndexField { Name = "B", Kind = FieldKind.Text, DefaultValueTemplate = "{A}" }
+            ]
+        };
+
+        var values = new ProfileApplicator().Apply(profile, []);
+
+        Assert.Equal("AAA", values.Single(v => v.FieldName == "A").Value);
+        Assert.Equal(string.Empty, values.Single(v => v.FieldName == "B").Value);
+    }
+
+    [Fact]
+    public void Text_default_that_fails_the_fields_format_is_stored_and_flagged()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields = [new IndexField { Name = "Amount", Kind = FieldKind.Text, Format = FieldFormat.Integer, DefaultValueTemplate = "{Date}" }]
+        };
+
+        var values = new ProfileApplicator().Apply(profile, []);
+
+        var value = Assert.Single(values);
+        Assert.NotEmpty(value.Value);
+        Assert.NotNull(value.ValidationError);
+        Assert.Equal(DocumentStatus.NeedsReview, IndexFormat.StatusFor(values, 80));
+    }
+
+    [Fact]
+    public void Re_applying_does_not_overwrite_a_manually_edited_default()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields = [new IndexField { Name = "Combined", Kind = FieldKind.Text, DefaultValueTemplate = "{Doc#}" }]
+        };
+
+        var first = new ProfileApplicator().Apply(profile, [], new DefaultValueContext { DocumentNumber = 1 });
+        var value = Assert.Single(first);
+        Assert.Equal("1", value.Value);
+
+        value.Value = "hand-typed";
+        value.IsManual = true;
+
+        var second = new ProfileApplicator().Apply(
+            profile, [], new DefaultValueContext { DocumentNumber = 2 }, existingValues: first);
+
+        Assert.Equal("hand-typed", Assert.Single(second).Value);
+    }
+
+    [Fact]
+    public void Re_applying_preserves_manually_entered_text_without_a_default()
+    {
+        var field = new IndexField { Name = "Comment", Kind = FieldKind.Text };
+        var profile = new IndexingProfile { Fields = [field] };
+        var existing = new[]
+        {
+            new IndexValue
+            {
+                FieldId = field.Id,
+                FieldName = field.Name,
+                Kind = FieldKind.Text,
+                Value = "keep this",
+                Confidence = 100,
+                IsManual = true
+            }
+        };
+
+        var reapplied = new ProfileApplicator().Apply(profile, [], existingValues: existing);
+
+        var value = Assert.Single(reapplied);
+        Assert.Equal("keep this", value.Value);
+        Assert.True(value.IsManual);
+    }
+
+    [Fact]
+    public void Invalid_default_template_format_sends_a_read_only_field_to_review()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "Computed",
+                    Kind = FieldKind.Text,
+                    DefaultValueTemplate = "{Doc#|Z}",
+                    IsReadOnly = true
+                }
+            ]
+        };
+
+        var values = new ProfileApplicator().Apply(profile, []);
+
+        var value = Assert.Single(values);
+        Assert.Equal("Invalid default value format", value.ValidationError);
+        Assert.Equal(DocumentStatus.NeedsReview, IndexFormat.StatusFor(values, 80));
+    }
+
+    [Fact]
+    public void Mandatory_read_only_field_does_not_block_ready()
+    {
+        var values = new[]
+        {
+            new IndexValue { FieldName = "Computed", Mandatory = true, IsReadOnly = true },
+            new IndexValue { FieldName = "Invoice", Value = "1", Confidence = 99 }
+        };
+        Assert.Equal(DocumentStatus.Ready, IndexFormat.StatusFor(values, 80));
+    }
+
+    [Fact]
+    public void Lookup_ignores_a_default_that_is_not_a_configured_option()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Kind = FieldKind.Lookup,
+                    LookupOptions = [new LookupOption { Key = "Approved", Value = "A" }],
+                    LookupDefaultValue = "REMOVED"
+                }
+            ]
+        };
+
+        var value = Assert.Single(new ProfileApplicator().Apply(profile, []));
+
+        Assert.Equal(string.Empty, value.Value);
+        Assert.Equal(0, value.Confidence);
+    }
+
+    [Fact]
     public void Barcode_field_with_number_scope_only_reads_its_configured_page()
     {
         var field = new IndexField { Kind = FieldKind.Barcode, PageScope = PageScope.Number, PageNumber = 2 };

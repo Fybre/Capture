@@ -17,6 +17,18 @@ public enum DocumentStatus
     Exported = 5
 }
 
+/// <summary>Where a document stands relative to its profile's redaction settings (see
+/// <c>RedactionSettings</c>/<c>RedactionDetectionStep</c>). Independent of <see cref="DocumentStatus"/> —
+/// a document can be Ready for indexing purposes while still awaiting redaction review.</summary>
+public enum RedactionStatus
+{
+    /// <summary>Redaction isn't enabled for this document's profile, or it hasn't reached Ready yet.</summary>
+    None = 0,
+    PendingReview = 1,
+    Applied = 2,
+    Failed = 3
+}
+
 public sealed class CaptureDocument
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -29,6 +41,9 @@ public sealed class CaptureDocument
     public int PageCount { get; set; }
     public DateTimeOffset CreatedUtc { get; init; } = DateTimeOffset.UtcNow;
     public string? ErrorMessage { get; set; }
+    public RedactionStatus RedactionStatus { get; set; } = RedactionStatus.None;
+    public string? RedactedPath { get; set; }
+    public string? RedactionError { get; set; }
 }
 
 public sealed class DocumentPage

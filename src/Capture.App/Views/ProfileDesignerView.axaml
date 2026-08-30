@@ -3,6 +3,7 @@
              xmlns:vm="using:Capture.App.ViewModels"
               xmlns:controls="using:Capture.App.Controls"
               xmlns:indexing="using:Capture.Core.Indexing"
+              xmlns:redaction="using:Capture.Core.Redaction"
              x:Class="Capture.App.Views.ProfileDesignerView"
              x:DataType="vm:ProfileDesignerViewModel">
     <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
@@ -35,59 +36,78 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="240,1,*,1,260">
-            <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
-                <TextBlock Text="Fields"
-                           Classes="eyebrow"
-                           Margin="16,14,16,8" />
-                <ListBox Grid.Row="1"
-                         ItemsSource="{Binding Fields}"
-                         SelectedItem="{Binding SelectedField}"
-                         BorderThickness="0"
-                         Margin="8,0">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:FieldRow">
-                            <StackPanel Spacing="2" Margin="4,6">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
-                                <TextBlock Text="{Binding PageDisplay}" Classes="field-label" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <StackPanel Grid.Row="2" Margin="12" Spacing="8">
-                    <Button Content="Add zone"
-                            Command="{Binding AddZoneCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Add barcode"
-                            Command="{Binding AddBarcodeCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Add key/value"
-                            Command="{Binding AddKeyValueCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Add regex"
-                            Command="{Binding AddRegexCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Add macro"
-                            Command="{Binding AddMacroCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Add AI"
-                            Command="{Binding AddAiCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Add batch separator value"
-                            Command="{Binding AddBatchSeparatorValueCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center" />
-                    <Button Content="Delete field"
-                            Command="{Binding DeleteFieldCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center"
-                            Foreground="{DynamicResource CriticalBrush}" />
+        <Grid Grid.Row="1" RowDefinitions="*,5,*">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" MinWidth="180" MaxWidth="560" />
+                <ColumnDefinition Width="9" />
+                <ColumnDefinition Width="*" MinWidth="280" />
+                <ColumnDefinition Width="9" />
+                <ColumnDefinition Width="300" MinWidth="220" MaxWidth="560" />
+            </Grid.ColumnDefinitions>
+            <ScrollViewer Grid.Column="0"
+                          Grid.RowSpan="3"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="12" Spacing="8">
+                        <TextBlock Text="Add field"
+                                   Classes="eyebrow"
+                                   Margin="4,2,4,4" />
+                        <Button Content="Text"
+                                Command="{Binding AddTextCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Content="Lookup"
+                                Command="{Binding AddLookupCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Content="Zone"
+                                Command="{Binding AddZoneCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Content="Barcode"
+                                Command="{Binding AddBarcodeCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Content="Key/value"
+                                Command="{Binding AddKeyValueCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Content="Regex"
+                                Command="{Binding AddRegexCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Content="AI"
+                                Command="{Binding AddAiCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Command="{Binding AddBatchSeparatorValueCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center">
+                            <TextBlock Text="Batch separator value"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center" />
+                        </Button>
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <TextBlock Text="Profile settings" Classes="eyebrow" Margin="4,2,4,4" />
+                    <TextBlock Text="Sample" Classes="field-label" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding SampleFileName, TargetNullValue='No sample — blank profile'}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   Classes="mono"
+                                   FontSize="12" />
+                        <Button Grid.Column="1"
+                                Content="Change…"
+                                Command="{Binding ChangeSampleCommand}"
+                                Classes="ghost"
+                                FontSize="12"
+                                Padding="8,3"
+                                Margin="6,0,0,0" />
+                    </Grid>
+                    <TextBlock Text="Loading a different sample replaces every page image/preview for this profile — zones you've drawn will need to be re-checked against the new pages."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+
                     <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                     <TextBlock Text="Page separation" Classes="field-label" />
                     <ComboBox ItemsSource="{Binding SeparationTriggerOptions}"
@@ -106,7 +126,7 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <TextBlock Text="Add a barcode field first (see above), then pick it here."
+                        <TextBlock Text="Add a barcode field first, then pick it here."
                                    TextWrapping="Wrap"
                                    Classes="hint"
                                    IsVisible="{Binding !HasBarcodeFieldOptions}" />
@@ -121,12 +141,233 @@
                         <TextBlock Text="Pages per document" Classes="field-label" />
                         <NumericUpDown Value="{Binding SeparationPageCount}" Minimum="1" Maximum="500" />
                     </StackPanel>
+
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <CheckBox Content="Redaction" IsChecked="{Binding RedactionEnabled}" />
+                    <StackPanel Spacing="6" IsVisible="{Binding RedactionEnabled}">
+                        <TextBlock Text="Redaction set" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding RedactionSetOptions}"
+                                  SelectedItem="{Binding SelectedRedactionSet}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="redaction:RedactionEntitySet">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Which PII types this set detects. Manage sets from Settings."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Minimum confidence" Classes="field-label" />
+                        <NumericUpDown Value="{Binding RedactionScoreThreshold}" Minimum="0" Maximum="100" />
+                        <TextBlock Text="Matches below this confidence are ignored entirely."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Skip review at/above" Classes="field-label" />
+                        <NumericUpDown Value="{Binding RedactionBypassScoreThreshold}" Minimum="0" Maximum="100" />
+                        <TextBlock Text="Matches at or above this confidence are redacted automatically, no manual review. 0 always skips review; 100 (default) only skips it for fields explicitly marked Sensitive."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <DockPanel LastChildFill="False">
+                        <TextBlock Text="Exports" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                        <Button Content="+ Add" Command="{Binding AddExportDefinitionCommand}" Classes="ghost" DockPanel.Dock="Right" FontSize="12" Padding="8,3" />
+                    </DockPanel>
+                    <TextBlock Text="Each document's Export button runs every enabled export below. Click a row's arrow to show its settings."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <ItemsControl ItemsSource="{Binding Exports}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ExportDefinitionRow">
+                                <Border Classes="card" Padding="0" Margin="0,4">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="Auto,Auto,*" Margin="8,6">
+                                            <Button Grid.Column="0"
+                                                    Classes="ghost"
+                                                    Width="26" Height="26" Padding="0" CornerRadius="6"
+                                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                    ToolTip.Tip="Show/hide this export's settings"
+                                                    Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).ToggleExportExpandedCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Panel>
+                                                    <TextBlock Text="▾" FontSize="11" IsVisible="{Binding IsExpanded}" />
+                                                    <TextBlock Text="▸" FontSize="11" IsVisible="{Binding !IsExpanded}" />
+                                                </Panel>
+                                            </Button>
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}" Margin="4,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Enabled" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontWeight="Medium" />
+                                        </Grid>
+
+                                        <StackPanel Spacing="6" Margin="12,0,12,12" IsVisible="{Binding IsExpanded}">
+                                            <TextBlock Text="Name" Classes="field-label" />
+                                            <TextBox Text="{Binding Name}" Watermark="Export name" />
+
+                                            <TextBlock Text="Type" Classes="field-label" />
+                                            <ComboBox ItemsSource="{Binding TypeOptions}" SelectedItem="{Binding Type}" HorizontalAlignment="Stretch" />
+
+                                            <StackPanel Spacing="6" IsVisible="{Binding IsCsv}">
+                                                <TextBlock Text="Output folder" Classes="field-label" />
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBox Text="{Binding OutputFolder}" Watermark="Choose a folder…" IsReadOnly="True" />
+                                                    <Button Grid.Column="1"
+                                                            Content="Browse…"
+                                                            Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).BrowseExportFolderCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            Margin="6,0,0,0" />
+                                                </Grid>
+
+                                                <TextBlock Text="Output mode" Classes="field-label" />
+                                                <ComboBox ItemsSource="{Binding OutputModeOptions}" SelectedItem="{Binding OutputMode}" HorizontalAlignment="Stretch" />
+
+                                                <StackPanel Spacing="6" IsVisible="{Binding IsAppendMode}">
+                                                    <TextBlock Text="Shared file name" Classes="field-label" />
+                                                    <TextBox Text="{Binding SharedFileName}" Watermark="export.csv" />
+                                                    <TextBlock Text="Every document appends a row to this one file." TextWrapping="Wrap" Classes="hint" />
+                                                </StackPanel>
+
+                                                <StackPanel Spacing="6" IsVisible="{Binding !IsAppendMode}">
+                                                    <TextBlock Text="File name pattern" Classes="field-label" />
+                                                    <TextBox Text="{Binding FileNamePattern}" Watermark="{}{OriginalFileName}" />
+                                                    <Expander IsExpanded="False"
+                                                              MinHeight="24"
+                                                              Padding="0"
+                                                              BorderThickness="0"
+                                                              Background="Transparent"
+                                                              HorizontalAlignment="Stretch">
+                                                        <Expander.Resources>
+                                                            <x:Double x:Key="ExpanderChevronButtonSize">20</x:Double>
+                                                            <Thickness x:Key="ExpanderHeaderPadding">2,0,0,0</Thickness>
+                                                            <Thickness x:Key="ExpanderHeaderBorderThickness">0</Thickness>
+                                                            <Thickness x:Key="ExpanderChevronMargin">4,0,2,0</Thickness>
+                                                            <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+                                                            <Thickness x:Key="ExpanderContentDownBorderThickness">0</Thickness>
+                                                            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" />
+                                                            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="Transparent" />
+                                                            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="Transparent" />
+                                                        </Expander.Resources>
+                                                        <Expander.Header>
+                                                            <TextBlock Text="File name syntax"
+                                                                       FontSize="12"
+                                                                       Foreground="{DynamicResource MutedBrush}" />
+                                                        </Expander.Header>
+                                                        <TextBlock Text="Each document gets its own file. Use {OriginalFileName}, {DocumentId}, {Date}, {Time}, or any profile field name such as {InvoiceNo}. Add a .NET format after |, for example {Date|yyyy-MM-dd} or {Time|HH-mm-ss}. Invalid filename characters are replaced with _, trailing periods/spaces are removed, and an empty result falls back to the document ID."
+                                                                   TextWrapping="Wrap"
+                                                                   Classes="hint"
+                                                                   Margin="2,4,2,2" />
+                                                    </Expander>
+                                                </StackPanel>
+
+                                                <CheckBox Content="Include header row" IsChecked="{Binding IncludeHeader}" />
+
+                                                <TextBlock Text="Fields to include" Classes="field-label" />
+                                                <TextBlock Text="All fields are included when none are checked."
+                                                           TextWrapping="Wrap"
+                                                           Classes="hint" />
+                                                <ItemsControl ItemsSource="{Binding FieldOptions}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:FieldSelectionRow">
+                                                            <CheckBox Content="{Binding Field.Name}" IsChecked="{Binding IsSelected}" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="6" IsVisible="{Binding IsTherefore}">
+                                                <TextBlock Text="Category" Classes="field-label" />
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Text="{Binding ThereforeCategoryDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                    <Button Grid.Column="1"
+                                                            Content="Browse…"
+                                                            Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).BrowseThereforeCategoryCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            Margin="6,0,0,0" />
+                                                </Grid>
+
+                                                <TextBlock Text="Field mapping" Classes="field-label" Margin="0,4,0,0" />
+                                                <TextBlock Text="Choose a profile field for each Therefore field, or leave it unmapped."
+                                                           TextWrapping="Wrap"
+                                                           Classes="hint" />
+                                                <ItemsControl ItemsSource="{Binding ThereforeMappings}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ThereforeFieldMappingRow">
+                                                            <Grid ColumnDefinitions="*,*" Margin="0,3">
+                                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Text="•"
+                                                                               Foreground="{DynamicResource WarnBrush}"
+                                                                               ToolTip.Tip="Mandatory in Therefore"
+                                                                               IsVisible="{Binding Mandatory}" />
+                                                                </StackPanel>
+                                                                <ComboBox Grid.Column="1"
+                                                                          ItemsSource="{Binding ProfileFields}"
+                                                                          SelectedItem="{Binding SelectedField}"
+                                                                          PlaceholderText="— none —"
+                                                                          HorizontalAlignment="Stretch">
+                                                                    <ComboBox.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:FieldRow">
+                                                                            <TextBlock Text="{Binding Name}" />
+                                                                        </DataTemplate>
+                                                                    </ComboBox.ItemTemplate>
+                                                                </ComboBox>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+
+                                            <TextBlock Text="Attach file" Classes="field-label" Margin="0,4,0,0" />
+                                            <ComboBox ItemsSource="{Binding FileModeOptions}" SelectedItem="{Binding FileMode}" HorizontalAlignment="Stretch" />
+                                            <TextBlock Text="Redacted falls back to the original if the document hasn't been redacted yet."
+                                                       TextWrapping="Wrap"
+                                                       Classes="hint"
+                                                       IsVisible="{Binding HasFileMode}" />
+
+                                            <Button Content="Remove this export"
+                                                    Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).RemoveExportDefinitionCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Center"
+                                                    Margin="0,6,0,0" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="No exports configured yet."
+                               IsVisible="{Binding HasNoExports}"
+                               Classes="hint" />
+
+                    <CheckBox Content="Remove from inbox after export" IsChecked="{Binding RemoveAfterExport}" />
+                    <TextBlock Text="Once every enabled export succeeds, the document is deleted instead of being marked Exported."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
                 </StackPanel>
-            </Grid>
+            </ScrollViewer>
 
-            <Border Grid.Column="1" Background="{DynamicResource BorderBrush1}" />
+            <GridSplitter Grid.Column="1"
+                          Grid.RowSpan="3"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="False"
+                          DragIncrement="1"
+                          Background="Transparent"
+                          Cursor="SizeWestEast"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch" />
+            <Border Grid.Column="1"
+                    Grid.RowSpan="3"
+                    Width="1"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource BorderBrush1}"
+                    IsHitTestVisible="False" />
 
-            <Grid Grid.Column="2" RowDefinitions="Auto,*" Background="{DynamicResource SurfaceBrush}">
+            <Grid Grid.Column="2"
+                  Grid.RowSpan="3"
+                  RowDefinitions="Auto,*"
+                  Background="{DynamicResource SurfaceBrush}">
                 <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="12,10">
                     <Button Classes="ghost nav" Command="{Binding PreviousPageCommand}">
                         <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
@@ -201,24 +442,69 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Column="3" Background="{DynamicResource BorderBrush1}" />
+            <GridSplitter Grid.Column="3"
+                          Grid.RowSpan="3"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="False"
+                          DragIncrement="1"
+                          Background="Transparent"
+                          Cursor="SizeWestEast"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch" />
+            <Border Grid.Column="3"
+                    Grid.RowSpan="3"
+                    Width="1"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource BorderBrush1}"
+                    IsHitTestVisible="False" />
 
-             <ScrollViewer Grid.Column="4">
+            <Grid Grid.Row="0" Grid.Column="4" RowDefinitions="Auto,*">
+                <TextBlock Text="Fields"
+                           Classes="eyebrow"
+                           Margin="16,14,16,8" />
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Fields}"
+                         SelectedItem="{Binding SelectedField}"
+                         BorderThickness="0"
+                         Margin="8,0,8,8">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FieldRow">
+                            <StackPanel Spacing="2" Margin="4,6">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                <TextBlock Text="{Binding PageDisplay}" Classes="field-label" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+
+            <GridSplitter Grid.Row="1"
+                          Grid.Column="4"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="True"
+                          Background="{DynamicResource BorderStrongBrush}"
+                          Cursor="SizeNorthSouth"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+             <ScrollViewer Grid.Row="2"
+                           Grid.Column="4"
+                           IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}">
              <Panel Margin="16,12">
              <StackPanel Spacing="10"
-                         IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNull}}">
-                <TextBlock Text="Field" Classes="section-title" />
-                <TextBlock Text="Add a field or select one from the list."
-                           TextWrapping="Wrap"
-                           Classes="hint" />
-                <TextBlock Text="{Binding Hint}"
-                           TextWrapping="Wrap"
-                           Classes="hint"
-                           Margin="0,8,0,0" />
-             </StackPanel>
-             <StackPanel Spacing="10"
                          IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <TextBlock Text="Field" Classes="section-title" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Field properties" Classes="section-title" VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="Delete"
+                            Command="{Binding DeleteFieldCommand}"
+                            Classes="ghost"
+                            Foreground="{DynamicResource CriticalBrush}"
+                            Padding="8,4" />
+                </Grid>
                 <TextBlock Text="Name" Classes="field-label" />
                 <TextBox Text="{Binding SelectedField.Name}"
                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -230,6 +516,18 @@
                 <CheckBox Content="Mandatory"
                           IsChecked="{Binding SelectedField.Mandatory}"
                           IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <CheckBox Content="Sensitive"
+                          IsChecked="{Binding SelectedField.Sensitive}"
+                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          ToolTip.Tip="Offers this field's extracted value for redaction when the profile's Redaction setting is enabled." />
+                <CheckBox Content="Hidden"
+                          IsChecked="{Binding SelectedField.Hidden}"
+                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          ToolTip.Tip="Excludes this field from the index grid and Ready/NeedsReview status checks." />
+                <CheckBox Content="Read only"
+                          IsChecked="{Binding SelectedField.IsReadOnly}"
+                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          ToolTip.Tip="Can't be hand-edited in the review panel and is excluded from missing/low-confidence checks. Invalid values still require review." />
                 <TextBlock Text="Level" Classes="field-label" />
                 <ComboBox ItemsSource="{Binding SelectedField.Levels}"
                           SelectedItem="{Binding SelectedField.Level}"
@@ -317,44 +615,82 @@
                             Command="{Binding ClearSearchZoneCommand}"
                             IsVisible="{Binding SelectedField.HasSearchZone}" />
                 </StackPanel>
-                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsMacro}">
-                    <TextBlock Text="Parts" Classes="field-label" Margin="0,8,0,0" />
-                    <ItemsControl ItemsSource="{Binding SelectedField.Segments}">
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsText}">
+                    <TextBlock Text="This field is entered manually in the indexing panel. Its format controls validation; Date fields provide a calendar picker."
+                               TextWrapping="Wrap"
+                               Classes="hint"
+                               Margin="0,8,0,0" />
+                    <TextBlock Text="Default value" Classes="field-label" Margin="0,4,0,0" />
+                    <TextBox Text="{Binding SelectedField.DefaultValueTemplate}"
+                              Watermark="e.g. {Doc#|000}-{InvoiceNo}"
+                              AcceptsReturn="False" />
+                    <Expander IsExpanded="False"
+                              MinHeight="24"
+                              Padding="0"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              HorizontalAlignment="Stretch">
+                        <Expander.Resources>
+                            <x:Double x:Key="ExpanderChevronButtonSize">20</x:Double>
+                            <Thickness x:Key="ExpanderHeaderPadding">2,0,0,0</Thickness>
+                            <Thickness x:Key="ExpanderHeaderBorderThickness">0</Thickness>
+                            <Thickness x:Key="ExpanderChevronMargin">4,0,2,0</Thickness>
+                            <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+                            <Thickness x:Key="ExpanderContentDownBorderThickness">0</Thickness>
+                            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="Transparent" />
+                            <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="Transparent" />
+                        </Expander.Resources>
+                        <Expander.Header>
+                            <TextBlock Text="Default value syntax"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource MutedBrush}" />
+                        </Expander.Header>
+                        <TextBlock Text="Plain text is used as-is. {Doc#|000} / {Batch#|000} insert a zero-padded document/batch counter, {Date|yyyy-MM-dd} / {Time|HH:mm:ss} insert a formatted timestamp (the part after | is a .NET format string — omit it for the defaults shown), {ProfileName} inserts the profile's name, and {AnyFieldName} inserts another field's value. Referencing a field that itself has a default value resolves to blank — defaults can't chain. Use {{ / }} for a literal brace."
+                                   TextWrapping="Wrap"
+                                   Classes="hint"
+                                   Margin="2,4,2,2" />
+                    </Expander>
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsLookup}">
+                    <TextBlock Text="Options" Classes="field-label" Margin="0,8,0,0" />
+                    <TextBlock Text="The display text is shown to the indexer; the export value is stored and sent to exporters."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <ItemsControl ItemsSource="{Binding SelectedField.LookupOptions}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:MacroSegmentRow">
+                            <DataTemplate x:DataType="vm:LookupOptionRow">
                                 <Border Margin="0,0,0,8" Padding="8" BorderBrush="{DynamicResource BorderBrush1}" BorderThickness="1">
                                     <StackPanel Spacing="6">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="{Binding KindLabel}" FontWeight="SemiBold" />
-                                            <Button Grid.Column="1" Content="✕" Command="{Binding RemoveCommand}" Padding="6,2" />
-                                        </Grid>
-                                        <TextBox Text="{Binding Text}"
-                                                 IsVisible="{Binding IsLiteral}"
-                                                 Watermark="Literal text" />
-                                        <TextBox Text="{Binding Text}"
-                                                 IsVisible="{Binding IsDateTime}"
-                                                 Watermark="yyyy-MM-dd" />
-                                        <ComboBox ItemsSource="{Binding FieldChoices}"
-                                                  SelectedItem="{Binding Text}"
-                                                  IsVisible="{Binding IsField}" />
-                                        <StackPanel IsVisible="{Binding IsCounter}" Spacing="4">
-                                            <TextBlock Text="Zero-pad width (0 = none)" Classes="field-label" FontSize="12" />
-                                            <NumericUpDown Value="{Binding CounterWidth}" Minimum="0" Maximum="8" />
-                                        </StackPanel>
+                                        <TextBlock Text="Display text (key)" Classes="field-label" />
+                                        <TextBox Text="{Binding Key}" Watermark="e.g. Approved" />
+                                        <TextBlock Text="Export value" Classes="field-label" />
+                                        <TextBox Text="{Binding Value}" Watermark="e.g. A" />
+                                        <Button Content="Remove option"
+                                                Command="{Binding RemoveCommand}"
+                                                HorizontalAlignment="Right" />
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <WrapPanel>
-                        <Button Content="Text" Command="{Binding AddMacroTextCommand}" Margin="0,0,6,6" />
-                        <Button Content="Doc #" Command="{Binding AddMacroDocumentCounterCommand}" Margin="0,0,6,6" />
-                        <Button Content="Batch #" Command="{Binding AddMacroBatchCounterCommand}" Margin="0,0,6,6" />
-                        <Button Content="Date" Command="{Binding AddMacroDateCommand}" Margin="0,0,6,6" />
-                        <Button Content="Time" Command="{Binding AddMacroTimeCommand}" Margin="0,0,6,6" />
-                        <Button Content="Field" Command="{Binding AddMacroFieldCommand}" Margin="0,0,6,6" />
-                        <Button Content="Profile name" Command="{Binding AddMacroProfileNameCommand}" Margin="0,0,6,6" />
-                    </WrapPanel>
+                    <Button Content="Add option"
+                            Command="{Binding SelectedField.AddLookupOptionCommand}"
+                            HorizontalAlignment="Stretch" />
+                    <TextBlock Text="Default value (optional)" Classes="field-label" Margin="0,6,0,0" />
+                    <ComboBox ItemsSource="{Binding SelectedField.LookupOptions}"
+                              SelectedItem="{Binding SelectedField.SelectedDefaultLookupOption}"
+                              PlaceholderText="No default"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LookupOptionRow">
+                                <TextBlock Text="{Binding Key}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Content="Clear default"
+                            Command="{Binding SelectedField.ClearLookupDefaultCommand}"
+                            HorizontalAlignment="Right" />
                 </StackPanel>
                 <TextBlock Text="Extracted value" Classes="field-label" Margin="0,12,0,0" />
                 <TextBlock Text="{Binding SelectedField.LiveFormat}"

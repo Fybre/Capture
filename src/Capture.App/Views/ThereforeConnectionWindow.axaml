@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        x:Class="Capture.App.Views.ThereforeConnectionWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Therefore connection"
+        Width="440"
+        MinWidth="380"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <Grid RowDefinitions="*,Auto" Background="{DynamicResource GroundBrush}">
+        <StackPanel Grid.Row="0" Margin="20" Spacing="10">
+            <TextBlock Text="Tenant name" Classes="field-label" />
+            <TextBox Text="{Binding ThereforeTenantName}" Watermark="craigdemo (leave blank for on-premise)" />
+            <TextBlock Text="Prefills the base URL below as https://{tenant}.thereforeonline.com — leave blank for an on-premise server."
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+
+            <TextBlock Text="Base URL" Classes="field-label" />
+            <TextBox Text="{Binding ThereforeBaseUrl}" Watermark="https://craigdemo.thereforeonline.com" />
+
+            <TextBlock Text="Authentication" Classes="field-label" />
+            <ComboBox ItemsSource="{Binding ThereforeAuthMethodOptions}" SelectedItem="{Binding ThereforeAuthMethod}" HorizontalAlignment="Stretch" />
+
+            <StackPanel Spacing="10" IsVisible="{Binding IsThereforeBasic}">
+                <TextBlock Text="Username" Classes="field-label" />
+                <TextBox Text="{Binding ThereforeUsername}" />
+                <TextBlock Text="Password" Classes="field-label" />
+                <TextBox Text="{Binding ThereforePassword}" PasswordChar="•" />
+            </StackPanel>
+
+            <StackPanel Spacing="10" IsVisible="{Binding IsThereforeBearer}">
+                <TextBlock Text="Bearer token" Classes="field-label" />
+                <TextBox Text="{Binding ThereforeBearerToken}" PasswordChar="•" />
+            </StackPanel>
+
+            <Button Content="Test connection" Command="{Binding TestThereforeConnectionCommand}" HorizontalAlignment="Left" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding StatusText}"
+                       Classes.critical="{Binding StatusIsError}"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding HasStatusText}" />
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Padding="20,14"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                Background="{DynamicResource Surface2Brush}">
+            <Button Content="Done" Click="OnDoneClick" Classes="accent" HorizontalAlignment="Right" />
+        </Border>
+    </Grid>
+</Window>

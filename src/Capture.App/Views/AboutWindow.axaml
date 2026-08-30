@@ -1,0 +1,123 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Capture.App.Views.AboutWindow"
+        Title="About Capture"
+        Icon="/Assets/capture.ico"
+        Width="620"
+        Height="690"
+        MinWidth="520"
+        MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+        <Border Grid.Row="0"
+                Background="{DynamicResource Surface2Brush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="28,22,28,18">
+            <StackPanel HorizontalAlignment="Center" Spacing="7">
+                <!-- The wordmark is intentionally presented on a light plaque: its navy lettering is
+                     part of the supplied artwork, so this keeps it legible in both app themes. -->
+                <Border Background="#F6FAFA"
+                        BorderBrush="#D5E2E1"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Padding="18,10">
+                    <Image Source="/Assets/Brand/Logo/capture-logo-512.png"
+                           Width="290"
+                           Height="80"
+                           Stretch="Uniform" />
+                </Border>
+                <TextBlock x:Name="VersionText"
+                           Classes="hint"
+                           FontSize="12.5"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,22,28,22" Spacing="16">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Document capture and indexing"
+                               FontSize="17"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Capture is a desktop workspace for importing, scanning, indexing, reviewing, redacting, batching, and exporting documents."
+                               TextWrapping="Wrap"
+                               LineHeight="20"
+                               Foreground="{DynamicResource MutedBrush}" />
+                    <TextBlock x:Name="RuntimeText"
+                               Classes="hint"
+                               FontSize="11.5"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Border Classes="card" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Third-party acknowledgements"
+                                   Classes="section-title" />
+                        <TextBlock Text="Capture is built with the following open-source software. Copyright remains with the respective authors."
+                                   Classes="hint"
+                                   TextWrapping="Wrap" />
+
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                            <TextBlock Grid.Row="0" Text="Avalonia UI 11.3.6" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="MIT" Classes="hint" />
+
+                            <TextBlock Grid.Row="1" Text="CommunityToolkit.Mvvm 8.4.2" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="MIT" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="2" Text="Microsoft .NET extensions and data libraries" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="MIT" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="3" Text="PdfPig 0.1.16" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Apache 2.0" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="4" Text="PDFtoImage 5.1.1" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="MIT" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="5" Text="SkiaSharp 3.119.1" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="5" Grid.Column="1" Text="MIT" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="6" Text="ZXing.Net 0.16.9" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="6" Grid.Column="1" Text="Apache 2.0" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="7" Text="Microsoft Presidio and packaged sidecar" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="7" Grid.Column="1" Text="MIT + notices" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="8" Text="Tesseract OCR" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="8" Grid.Column="1" Text="Apache 2.0" Classes="hint" Margin="18,7,0,0" />
+
+                            <TextBlock Grid.Row="9" Text="IBM Plex and Inter typefaces" Margin="0,7,0,0" />
+                            <TextBlock Grid.Row="9" Grid.Column="1" Text="SIL OFL 1.1" Classes="hint" Margin="18,7,0,0" />
+                        </Grid>
+
+                        <TextBlock Text="Some components include additional transitive dependencies and notices in their distributions."
+                                   Classes="hint"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="CopyrightText"
+                           Classes="hint"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12"
+                Background="{DynamicResource Surface2Brush}">
+            <Button Content="Close"
+                    HorizontalAlignment="Right"
+                    MinWidth="88"
+                    IsDefault="True"
+                    IsCancel="True"
+                    Click="OnCloseClick" />
+        </Border>
+    </Grid>
+</Window>

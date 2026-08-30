@@ -7,31 +7,33 @@ using Capture.Core.Watch;
 
 namespace Capture.Storage;
 
-/// <summary>Hands the AI API key off to an OS-level secret store instead of writing it to settings.json.
-/// Swappable so tests don't touch the real macOS Keychain / Linux Secret Service — see <see cref="NullOsCredentialStore"/>.</summary>
+/// <summary>Hands a secret (AI API key, Therefore password/bearer token, ...) off to an OS-level
+/// secret store instead of writing it to settings.json, keyed by a caller-chosen account name so one
+/// store instance can hold several independent secrets. Swappable so tests don't touch the real
+/// macOS Keychain / Linux Secret Service — see <see cref="NullOsCredentialStore"/>.</summary>
 public interface IOsCredentialStore
 {
-    bool TryStore(string value);
+    bool TryStore(string account, string value);
 
-    string? TryRead();
+    string? TryRead(string account);
 }
 
 /// <summary>No-op store: never claims a value was stored, so callers keep the plaintext fallback.
 /// Used on platforms with no supported store, and by tests.</summary>
 public sealed class NullOsCredentialStore : IOsCredentialStore
 {
-    public bool TryStore(string value) => false;
+    public bool TryStore(string account, string value) => false;
 
-    public string? TryRead() => null;
+    public string? TryRead(string account) => null;
 }
 
 public sealed class JsonWatchSettingsStore : IWatchSettingsStore
 {
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("Capture.WatchSettings.AiApiKey");
-
-    // Written to settings.json in place of the actual key once it's been handed off to the OS
+    // Written to settings.json in place of the actual value once it's been handed off to the OS
     // credential store (macOS Keychain / Linux Secret Service) — tells LoadAsync to fetch the real
-    // value from there instead of trusting the file to hold it.
+    // value from there instead of trusting the file to hold it. Shared across every secret field:
+    // each Protect/Unprotect call already knows which account it's operating on, so there's no
+    // collision risk in reusing one sentinel string.
     private const string KeychainSentinel = "::keychain::";
 
     private readonly IAppPaths _paths;
@@ -66,7 +68,9 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         var settings = await JsonSerializer.DeserializeAsync<WatchSettings>(stream, LatticeJson.Options, cancellationToken)
             .ConfigureAwait(false);
         settings ??= new WatchSettings();
-        settings.AiApiKey = Unprotect(settings.AiApiKey);
+        settings.AiApiKey = Unprotect("AiApiKey", settings.AiApiKey);
+        settings.ThereforePassword = Unprotect("ThereforePassword", settings.ThereforePassword);
+        settings.ThereforeBearerToken = Unprotect("ThereforeBearerToken", settings.ThereforeBearerToken);
         MigrateLegacyWatchFolder(settings);
         return settings;
     }
@@ -96,34 +100,47 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             WatchFolders = settings.WatchFolders,
             StartView = settings.StartView,
             Theme = settings.Theme,
+            DebugMode = settings.DebugMode,
             AiEndpoint = settings.AiEndpoint,
-            AiApiKey = Protect(settings.AiApiKey),
+            AiApiKey = Protect("AiApiKey", settings.AiApiKey),
             AiModel = settings.AiModel,
             AiMaxDocumentChars = settings.AiMaxDocumentChars,
             LastImportProfileId = settings.LastImportProfileId,
-            LastBatchProfileId = settings.LastBatchProfileId
+            LastBatchProfileId = settings.LastBatchProfileId,
+            ThereforeBaseUrl = settings.ThereforeBaseUrl,
+            ThereforeTenantName = settings.ThereforeTenantName,
+            ThereforeAuthMethod = settings.ThereforeAuthMethod,
+            ThereforeUsername = settings.ThereforeUsername,
+            ThereforePassword = Protect("ThereforePassword", settings.ThereforePassword),
+            ThereforeBearerToken = Protect("ThereforeBearerToken", settings.ThereforeBearerToken),
+            ScanDpi = settings.ScanDpi,
+            ScanGrayscale = settings.ScanGrayscale,
+            ScanSource = settings.ScanSource,
+            ScanDuplex = settings.ScanDuplex,
+            ScanPreferredDeviceId = settings.ScanPreferredDeviceId
         };
         return LatticeJson.WriteJsonAsync(_paths.SettingsPath, toSave, LatticeJson.Options, cancellationToken);
     }
 
-    private string? Protect(string? plainText)
+    private string? Protect(string account, string? plainText)
     {
         if (string.IsNullOrEmpty(plainText))
             return plainText;
 
         if (OperatingSystem.IsWindows())
         {
-            var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(plainText), Entropy, DataProtectionScope.CurrentUser);
+            var entropy = Encoding.UTF8.GetBytes("Capture.WatchSettings." + account);
+            var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(plainText), entropy, DataProtectionScope.CurrentUser);
             return Convert.ToBase64String(bytes);
         }
 
         // macOS/Linux: hand the real value to the OS credential store and leave only a sentinel in
         // the settings file. If that store isn't available (headless box, tool not installed, etc.),
         // fall back to writing the plaintext value as before rather than losing the key entirely.
-        return _credentialStore.TryStore(plainText) ? KeychainSentinel : plainText;
+        return _credentialStore.TryStore(account, plainText) ? KeychainSentinel : plainText;
     }
 
-    private string? Unprotect(string? storedValue)
+    private string? Unprotect(string account, string? storedValue)
     {
         if (string.IsNullOrEmpty(storedValue))
             return storedValue;
@@ -132,7 +149,8 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         {
             try
             {
-                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(storedValue), Entropy, DataProtectionScope.CurrentUser);
+                var entropy = Encoding.UTF8.GetBytes("Capture.WatchSettings." + account);
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(storedValue), entropy, DataProtectionScope.CurrentUser);
                 return Encoding.UTF8.GetString(bytes);
             }
             catch (FormatException)
@@ -150,9 +168,9 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         if (storedValue != KeychainSentinel)
             return storedValue; // pre-existing plaintext value from before this was introduced
 
-        var fromStore = _credentialStore.TryRead();
+        var fromStore = _credentialStore.TryRead(account);
         if (fromStore is null)
-            Trace.TraceWarning("Could not read the AI API key back from the OS credential store.");
+            Trace.TraceWarning($"Could not read \"{account}\" back from the OS credential store.");
 
         return fromStore;
     }
@@ -161,16 +179,15 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
 public sealed class MacKeychainCredentialStore : IOsCredentialStore
 {
     private const string Service = "Capture.WatchSettings";
-    private const string Account = "AiApiKey";
 
-    public bool TryStore(string value)
+    public bool TryStore(string account, string value)
     {
         try
         {
             // -U updates the item in place if one already exists, instead of erroring.
             using var process = Process.Start(new ProcessStartInfo("/usr/bin/security")
             {
-                ArgumentList = { "add-generic-password", "-U", "-a", Account, "-s", Service, "-w", value },
+                ArgumentList = { "add-generic-password", "-U", "-a", account, "-s", Service, "-w", value },
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
@@ -182,18 +199,18 @@ public sealed class MacKeychainCredentialStore : IOsCredentialStore
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            Trace.TraceWarning($"Could not store the AI API key in the macOS Keychain: {ex.Message}");
+            Trace.TraceWarning($"Could not store \"{account}\" in the macOS Keychain: {ex.Message}");
             return false;
         }
     }
 
-    public string? TryRead()
+    public string? TryRead(string account)
     {
         try
         {
             using var process = Process.Start(new ProcessStartInfo("/usr/bin/security")
             {
-                ArgumentList = { "find-generic-password", "-a", Account, "-s", Service, "-w" },
+                ArgumentList = { "find-generic-password", "-a", account, "-s", Service, "-w" },
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -219,15 +236,14 @@ public sealed class MacKeychainCredentialStore : IOsCredentialStore
 public sealed class LinuxSecretServiceCredentialStore : IOsCredentialStore
 {
     private const string Service = "Capture.WatchSettings";
-    private const string Account = "AiApiKey";
 
-    public bool TryStore(string value)
+    public bool TryStore(string account, string value)
     {
         try
         {
             using var process = Process.Start(new ProcessStartInfo("secret-tool")
             {
-                ArgumentList = { "store", "--label=Capture AI API key", "service", Service, "account", Account },
+                ArgumentList = { "store", $"--label=Capture {account}", "service", Service, "account", account },
                 RedirectStandardInput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -242,18 +258,18 @@ public sealed class LinuxSecretServiceCredentialStore : IOsCredentialStore
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            Trace.TraceWarning($"Could not store the AI API key in the Linux Secret Service: {ex.Message}");
+            Trace.TraceWarning($"Could not store \"{account}\" in the Linux Secret Service: {ex.Message}");
             return false;
         }
     }
 
-    public string? TryRead()
+    public string? TryRead(string account)
     {
         try
         {
             using var process = Process.Start(new ProcessStartInfo("secret-tool")
             {
-                ArgumentList = { "lookup", "service", Service, "account", Account },
+                ArgumentList = { "lookup", "service", Service, "account", account },
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

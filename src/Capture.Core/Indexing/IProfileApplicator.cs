@@ -9,15 +9,17 @@ public interface IProfileApplicator
     IReadOnlyList<IndexValue> Apply(
         IndexingProfile profile,
         IReadOnlyList<PageLattice> lattices,
-        MacroContext? macro = null,
+        DefaultValueContext? context = null,
         IReadOnlyList<DocumentPage>? pages = null,
-        string? batchSeparatorValue = null);
+        string? batchSeparatorValue = null,
+        IReadOnlyList<IndexValue>? existingValues = null);
 
     Task<IReadOnlyList<IndexValue>> ApplyAsync(
         IndexingProfile profile,
         IReadOnlyList<PageLattice> lattices,
-        MacroContext? macro = null,
+        DefaultValueContext? context = null,
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
+        IReadOnlyList<IndexValue>? existingValues = null,
         CancellationToken cancellationToken = default);
 }

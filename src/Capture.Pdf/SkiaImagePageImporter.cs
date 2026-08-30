@@ -9,7 +9,8 @@ public sealed class SkiaImagePageImporter : IImagePageImporter
     public Task<IReadOnlyList<RasterPage>> ImportAsync(
         string imagePath,
         string outputDirectory,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? dpiOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
@@ -44,7 +45,7 @@ public sealed class SkiaImagePageImporter : IImagePageImporter
                         throw new InvalidOperationException($"Unable to write page image '{outPath}'.");
                 }
 
-                pages.Add(new RasterPage(i + 1, outPath, bitmap.Width, bitmap.Height, 96));
+                pages.Add(new RasterPage(i + 1, outPath, bitmap.Width, bitmap.Height, dpiOverride is > 0 ? dpiOverride.Value : 96));
             }
 
             return (IReadOnlyList<RasterPage>)pages;

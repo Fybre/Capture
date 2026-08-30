@@ -1,4 +1,5 @@
 using Capture.Core.Models;
+using Capture.Core.Profiles;
 
 namespace Capture.Core.Pipeline;
 
@@ -9,6 +10,8 @@ public sealed class PostIndexContext
     public required IReadOnlyList<DocumentPage> Pages { get; init; }
 
     public required IReadOnlyList<IndexValue> IndexValues { get; init; }
+
+    public required IndexingProfile Profile { get; init; }
 }
 
 /// <summary>

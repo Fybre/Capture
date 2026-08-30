@@ -9,7 +9,7 @@
           <Color x:Key="ThemeGround">#EEF2F1</Color>
           <Color x:Key="ThemeSurface">#FFFFFF</Color>
           <Color x:Key="ThemeSurface2">#F6F9F8</Color>
-          <Color x:Key="ThemeSurface3">#EEF4F3</Color>
+          <Color x:Key="ThemeSurface3">#DDE8E5</Color>
           <Color x:Key="ThemeBorder">#D8E1DF</Color>
           <Color x:Key="ThemeBorderStrong">#C2CECB</Color>
           <Color x:Key="ThemeInk">#16201F</Color>
@@ -96,6 +96,7 @@
       <StreamGeometry x:Key="IconScan">M2.5 6h11v6h-11zM4.5 6V3.5h7V6</StreamGeometry>
       <StreamGeometry x:Key="IconExport">M8 10.5V2m0 0L5 5m3-3l3 3M2.5 12v1.5A1.5 1.5 0 004 15h8a1.5 1.5 0 001.5-1.5V12</StreamGeometry>
       <StreamGeometry x:Key="IconRemove">M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M4.5 4.5V13a1 1 0 001 1h5a1 1 0 001-1V4.5</StreamGeometry>
+      <StreamGeometry x:Key="IconRedact">M2.5 5h11M2.5 8h11M2.5 11h6.5</StreamGeometry>
       <StreamGeometry x:Key="IconChevronLeft">M10 3L5 8l5 5</StreamGeometry>
       <StreamGeometry x:Key="IconChevronRight">M6 3l5 5-5 5</StreamGeometry>
       <StreamGeometry x:Key="IconNew">M8 3v10M3 8h10</StreamGeometry>
@@ -200,7 +201,7 @@
     <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="Padding" Value="12,7" />
+    <Setter Property="Padding" Value="12,5" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
@@ -228,8 +229,76 @@
     <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
   </Style>
 
+  <!-- SplitButton doesn't inherit the plain Button style above (it's a distinct control type), so it
+       otherwise falls back to Fluent's own default (accent-tinted) chrome — mirror the same look here. -->
+  <Style Selector="SplitButton">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Padding" Value="12,5" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="SplitButton.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="SplitButton.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush1}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush1}" />
+  </Style>
+
+  <!-- SplitButton's template splits into two clickable parts (PART_PrimaryButton/PART_SecondaryButton),
+       each with its own :pointerover state — the outer SplitButton:pointerover selector never fires,
+       so the hover fill has to target these parts directly instead. -->
+  <Style Selector="SplitButton /template/ Button#PART_PrimaryButton:pointerover,
+                   SplitButton /template/ ToggleButton#PART_SecondaryButton:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+  </Style>
+  <Style Selector="SplitButton.accent /template/ Button#PART_PrimaryButton:pointerover,
+                   SplitButton.accent /template/ ToggleButton#PART_SecondaryButton:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentStrongBrush}" />
+  </Style>
+
   <Style Selector="Button.soon">
     <Setter Property="Opacity" Value="0.55" />
+  </Style>
+
+  <!-- Clickable review-list rows (index fields, redaction candidates) — a plain Background setter on
+       the Button itself (not a templated part) toggled by a bound Classes.selected, deliberately
+       avoiding the :pointerover /template/ ContentPresenter pattern used above, which doesn't reliably
+       repaint on a VM-driven class change without an intervening pointer event. -->
+  <Style Selector="Button.review-row">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.review-row.selected">
+    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+  </Style>
+
+  <!-- Redaction candidate cards: same clickable-row mechanics as review-row above, but with their own
+       "card" look (background/border) since they sit outside the plain review list. -->
+  <Style Selector="Button.redaction-row">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.redaction-row.selected">
+    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
   </Style>
 
   <Style Selector="Border.segment">

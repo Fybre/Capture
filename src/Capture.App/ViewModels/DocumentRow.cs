@@ -46,6 +46,14 @@ public sealed partial class DocumentRow : ObservableObject
         _ => Document.Status.ToString()
     };
 
+    public string RedactionStatusDisplay => Document.RedactionStatus switch
+    {
+        RedactionStatus.PendingReview => "Redaction pending",
+        RedactionStatus.Applied => "Redacted",
+        RedactionStatus.Failed => "Redaction failed",
+        _ => string.Empty
+    };
+
     public string IndexesSummary
     {
         get
@@ -105,6 +113,7 @@ public sealed partial class DocumentRow : ObservableObject
         OnPropertyChanged(nameof(StatusDisplay));
         OnPropertyChanged(nameof(IndexesSummary));
         OnPropertyChanged(nameof(IssueDisplay));
+        OnPropertyChanged(nameof(RedactionStatusDisplay));
         OnPropertyChanged(nameof(Indexes));
     }
 }

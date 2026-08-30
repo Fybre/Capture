@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Capture.Core\Capture.Core.csproj" />
+    <ProjectReference Include="..\Capture.Therefore\Capture.Therefore.csproj" />
   </ItemGroup>
 </Project>

@@ -139,7 +139,10 @@ public sealed class WatchFolderService : IWatchFolderService
         }
 
         if (ready.Count > 0)
+        {
+            Trace.TraceInformation($"Watch folder '{active.Folder}': {ready.Count} file(s) ready ({string.Join(", ", ready.Select(Path.GetFileName))})");
             FilesReady?.Invoke(active.Entry, ready);
+        }
     }
 
     private static bool IsUnlocked(string path)

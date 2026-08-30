@@ -36,8 +36,25 @@ public sealed class ProfileSampleService : IProfileSampleService
 
         _paths.EnsureCreated();
         var pagesDirectory = _paths.ProfilePagesDirectory(profile.Id);
+        var latticeDirectory = _paths.ProfileLatticeDirectory(profile.Id);
+
+        // Replacing an existing sample with a different file (possibly fewer pages, or a different
+        // extension) must not leave the previous sample's stray page images/lattices/original file
+        // behind — GetPageImagePaths just enumerates whatever's in pagesDirectory, so a leftover file
+        // from the old sample would silently reappear as an extra page.
+        if (Directory.Exists(pagesDirectory))
+            Directory.Delete(pagesDirectory, recursive: true);
+        if (Directory.Exists(latticeDirectory))
+            Directory.Delete(latticeDirectory, recursive: true);
+        var profileDirectory = _paths.ProfileDirectory(profile.Id);
+        if (Directory.Exists(profileDirectory))
+        {
+            foreach (var stale in Directory.EnumerateFiles(profileDirectory, "sample.*"))
+                File.Delete(stale);
+        }
+
         Directory.CreateDirectory(pagesDirectory);
-        Directory.CreateDirectory(_paths.ProfileLatticeDirectory(profile.Id));
+        Directory.CreateDirectory(latticeDirectory);
 
         var originalName = Path.GetFileName(sourcePath);
         var samplePath = _paths.ProfileSamplePath(profile.Id, originalName);

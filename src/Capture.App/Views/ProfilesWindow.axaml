@@ -23,12 +23,19 @@
                                FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                        <Button Command="{Binding NewProfileCommand}" Classes="accent">
+                        <SplitButton Command="{Binding NewProfileCommand}" Classes="accent">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Path Data="{StaticResource IconNew}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" />
+                                <Path Data="{StaticResource IconNew}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.6" />
                                 <TextBlock Text="New from sample" />
                             </StackPanel>
-                        </Button>
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                    <MenuItem Header="New (blank)"
+                                              Command="{Binding NewBlankProfileCommand}"
+                                              ToolTip.Tip="Create a profile with no sample document — useful for a default profile or one whose fields are entirely AI-extracted" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                         <Button Command="{Binding EditProfileCommand}" Classes="ghost">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Path Data="{StaticResource IconEdit}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round" />
@@ -41,6 +48,23 @@
                                 <TextBlock Text="Delete" Foreground="{DynamicResource CriticalBrush}" />
                             </StackPanel>
                         </Button>
+                        <Button Command="{Binding ImportProfileCommand}" Classes="ghost">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconImportFile}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round" />
+                                <TextBlock Text="Import…" />
+                            </StackPanel>
+                        </Button>
+                        <SplitButton Command="{Binding ExportProfileCommand}" Classes="ghost">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconExport}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round" />
+                                <TextBlock Text="Export…" />
+                            </StackPanel>
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="Export all…" Command="{Binding ExportAllProfilesCommand}" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -61,7 +85,7 @@
                         <DataGridTextColumn Header="Sample" Binding="{Binding SampleFileName}" Width="240" />
                     </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Text="Create a profile from a sample document, then draw zones on the page."
+                <TextBlock Text="Create a profile from a sample document, then draw zones on the page — or start blank via the arrow next to New."
                            IsVisible="{Binding HasNoProfiles}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"

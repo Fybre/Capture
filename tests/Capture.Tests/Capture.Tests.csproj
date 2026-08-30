@@ -15,5 +15,7 @@
     <ProjectReference Include="..\..\src\Capture.Storage\Capture.Storage.csproj" />
     <ProjectReference Include="..\..\src\Capture.Pdf\Capture.Pdf.csproj" />
     <ProjectReference Include="..\..\src\Capture.Ocr\Capture.Ocr.csproj" />
+    <ProjectReference Include="..\..\src\Capture.Export\Capture.Export.csproj" />
+    <ProjectReference Include="..\..\src\Capture.Therefore\Capture.Therefore.csproj" />
   </ItemGroup>
 </Project>
