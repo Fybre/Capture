@@ -45,6 +45,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IWatchSettingsStore _watchStore;
     private readonly IAiFieldCatalogStore _aiCatalogStore;
     private readonly ISettingsDialogService _settings;
+    private readonly IHelpWindowService _help;
     private readonly IAboutDialogService _about;
     private readonly IRedactionCandidateStore _redactionCandidates;
     private readonly IRedactionEntitySetStore _redactionSets;
@@ -52,6 +53,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly RedactionDetectionStep _redactionDetection;
     private readonly PresidioSidecarLauncher _presidioLauncher;
     private readonly IDebugLogService _debugLog;
+    private readonly IToastService _toasts;
     private readonly IReadOnlyList<IPostIndexStep> _postIndexSteps;
     private readonly Queue<(string Path, WatchFolderEntry Entry)> _watchQueue = new();
     private readonly HashSet<string> _watchQueued = new(StringComparer.OrdinalIgnoreCase);
@@ -61,6 +63,7 @@ public partial class MainViewModel : ViewModelBase
     private bool _restoringProfileSelection;
     private bool _watchProcessing;
     private CaptureBatch? _lastManualBatch;
+    private readonly Dictionary<Guid, int> _redactionPersistGenerations = [];
 
     public ObservableCollection<BatchProfile> BatchProfiles { get; } = [];
 
@@ -88,6 +91,7 @@ public partial class MainViewModel : ViewModelBase
         IWatchSettingsStore watchStore,
         IAiFieldCatalogStore aiCatalogStore,
         ISettingsDialogService settings,
+        IHelpWindowService help,
         IAboutDialogService about,
         IRedactionCandidateStore redactionCandidates,
         IRedactionEntitySetStore redactionSets,
@@ -95,6 +99,7 @@ public partial class MainViewModel : ViewModelBase
         RedactionDetectionStep redactionDetection,
         PresidioSidecarLauncher presidioLauncher,
         IDebugLogService debugLog,
+        IToastService toasts,
         IEnumerable<IPostIndexStep>? postIndexSteps = null)
     {
         _paths = paths;
@@ -115,6 +120,7 @@ public partial class MainViewModel : ViewModelBase
         _watchStore = watchStore;
         _aiCatalogStore = aiCatalogStore;
         _settings = settings;
+        _help = help;
         _about = about;
         _redactionCandidates = redactionCandidates;
         _redactionSets = redactionSets;
@@ -122,11 +128,17 @@ public partial class MainViewModel : ViewModelBase
         _redactionDetection = redactionDetection;
         _presidioLauncher = presidioLauncher;
         _debugLog = debugLog;
+        _toasts = toasts;
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
         SelectedDocuments.CollectionChanged += OnSelectedDocumentsChanged;
         Profiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProfiles));
-        RedactionCandidates.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ApplyRedactionsButtonLabel));
+        RedactionCandidates.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasRedactionCandidates));
+            OnPropertyChanged(nameof(ApplyRedactionsButtonLabel));
+            ApplyRedactionsCommand.NotifyCanExecuteChanged();
+        };
         _watch.FilesReady += OnWatchFilesReady;
         // A cold sidecar start can take well over a minute — without this, the only feedback during
         // that time would be the generic busy spinner, indistinguishable from a hang. May fire on a
@@ -165,6 +177,12 @@ public partial class MainViewModel : ViewModelBase
     public string ApplyRedactionsButtonLabel => HasRedactedFile
         ? $"Re-apply redactions ({RedactionCandidates.Count})"
         : $"Apply redactions ({RedactionCandidates.Count})";
+
+    public string ManualRedactionButtonLabel => IsAddingManualRedaction
+        ? "Done adding redactions"
+        : "Add manual redaction";
+
+    public bool HasSelectedManualRedaction => SelectedRedactionCandidate?.IsManual == true;
 
     public ObservableCollection<DocumentGroupViewModel> DocumentGroups { get; } = [];
 
@@ -246,6 +264,14 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ManualRedactionButtonLabel))]
+    private bool _isAddingManualRedaction;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ToggleManualRedactionModeCommand))]
+    private Bitmap? _pageImage;
+
+    [ObservableProperty]
     private IndexingProfile? _selectedImportProfile;
 
     [ObservableProperty]
@@ -272,9 +298,6 @@ public partial class MainViewModel : ViewModelBase
     private int _pageCount;
 
     [ObservableProperty]
-    private Bitmap? _pageImage;
-
-    [ObservableProperty]
     private PageLattice? _currentLattice;
 
     [ObservableProperty]
@@ -284,6 +307,8 @@ public partial class MainViewModel : ViewModelBase
     private IndexValueRow? _selectedIndex;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedManualRedaction))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveManualRedactionCommand))]
     private RedactionCandidateRow? _selectedRedactionCandidate;
 
     [ObservableProperty]
@@ -307,6 +332,8 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ExportAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleManualRedactionModeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveManualRedactionCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -500,6 +527,7 @@ public partial class MainViewModel : ViewModelBase
             StatusText = failures == 0
                 ? $"Redaction checked for {rows.Count} document(s)"
                 : $"Redaction checked for {rows.Count} document(s) — {failures} failed";
+            if (failures == 0) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -676,6 +704,14 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void OpenHelp()
+    {
+        var host = _dialogs.Host;
+        if (host is not null)
+            _help.Show(host);
+    }
+
+    [RelayCommand]
     private async Task OpenAboutAsync()
     {
         var host = _dialogs.Host;
@@ -847,6 +883,10 @@ public partial class MainViewModel : ViewModelBase
             if (skipped > 0)
                 parts.Add($"{skipped} skipped (not ready, or no export configured)");
             StatusText = parts.Count == 0 ? "Nothing to export" : string.Join(", ", parts);
+            if (exported > 0 || removed > 0 || failed > 0)
+            {
+                if (failed > 0) _toasts.ShowError(StatusText); else _toasts.ShowSuccess(StatusText);
+            }
         }
         finally
         {
@@ -921,6 +961,7 @@ public partial class MainViewModel : ViewModelBase
 
     async partial void OnSelectedDocumentChanged(DocumentRow? value)
     {
+        IsAddingManualRedaction = false;
         LoadReviewIndexes(value);
         await LoadRedactionCandidatesAsync(value);
         ApplyRedactionsCommand.NotifyCanExecuteChanged();
@@ -972,6 +1013,12 @@ public partial class MainViewModel : ViewModelBase
         }
 
         RefreshIndexHighlights();
+    }
+
+    partial void OnIsAddingManualRedactionChanged(bool value)
+    {
+        if (value)
+            StatusText = "Draw a rectangle on the page; select a manual rectangle to move or resize it";
     }
 
     private void RefreshRowSelectionFlags()
@@ -1605,23 +1652,122 @@ public partial class MainViewModel : ViewModelBase
         {
             var candidates = await _redactionCandidates.GetAsync(row.Id).ConfigureAwait(true);
             foreach (var candidate in candidates)
-            {
-                var candidateRow = new RedactionCandidateRow(candidate);
-                candidateRow.Selected = () => SelectedRedactionCandidate = candidateRow;
-                candidateRow.PropertyChanged += (_, e) =>
-                {
-                    if (e.PropertyName != nameof(RedactionCandidateRow.IsConfirmed))
-                        return;
-                    RefreshIndexHighlights();
-                    ApplyRedactionsCommand.NotifyCanExecuteChanged();
-                };
-                RedactionCandidates.Add(candidateRow);
-            }
+                RedactionCandidates.Add(CreateRedactionCandidateRow(candidate));
         }
 
         OnPropertyChanged(nameof(HasRedactionCandidates));
         OnPropertyChanged(nameof(HasRedactedFile));
         OnPropertyChanged(nameof(ApplyRedactionsButtonLabel));
+    }
+
+    private RedactionCandidateRow CreateRedactionCandidateRow(RedactionCandidate candidate)
+    {
+        var candidateRow = new RedactionCandidateRow(candidate);
+        candidateRow.Selected = () => SelectedRedactionCandidate = candidateRow;
+        candidateRow.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(RedactionCandidateRow.IsConfirmed))
+                return;
+            RefreshIndexHighlights();
+            ApplyRedactionsCommand.NotifyCanExecuteChanged();
+        };
+        return candidateRow;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanToggleManualRedactionMode))]
+    private void ToggleManualRedactionMode() => IsAddingManualRedaction = !IsAddingManualRedaction;
+
+    private bool CanToggleManualRedactionMode() =>
+        !IsBusy && SelectedDocument is not null && PageImage is not null;
+
+    [RelayCommand]
+    private void AddManualRedaction(NormalizedRect rect)
+    {
+        if (!IsAddingManualRedaction || SelectedDocument is null
+            || rect.Width < 0.004f || rect.Height < 0.004f)
+            return;
+
+        var candidate = new RedactionCandidate
+        {
+            Source = RedactionSource.Manual,
+            Label = "Manual redaction",
+            PageNumber = CurrentPageNumber,
+            X = Math.Clamp(rect.X, 0, 1),
+            Y = Math.Clamp(rect.Y, 0, 1),
+            Width = Math.Clamp(rect.Width, 0.002f, 1),
+            Height = Math.Clamp(rect.Height, 0.002f, 1),
+            Score = 1f,
+            Decision = RedactionDecision.Confirmed
+        };
+        var row = CreateRedactionCandidateRow(candidate);
+        RedactionCandidates.Add(row);
+        SelectedRedactionCandidate = row;
+        RefreshIndexHighlights();
+        SchedulePersistRedactionCandidates();
+        StatusText = "Manual redaction added; draw another or click Done adding redactions";
+    }
+
+    [RelayCommand]
+    private void ChangeManualRedaction(NormalizedRect rect)
+    {
+        if (!IsAddingManualRedaction || SelectedRedactionCandidate is not { IsManual: true } row)
+            return;
+
+        row.Candidate.X = Math.Clamp(rect.X, 0, 1);
+        row.Candidate.Y = Math.Clamp(rect.Y, 0, 1);
+        row.Candidate.Width = Math.Clamp(rect.Width, 0.002f, 1);
+        row.Candidate.Height = Math.Clamp(rect.Height, 0.002f, 1);
+        RefreshIndexHighlights();
+        SchedulePersistRedactionCandidates();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemoveManualRedaction))]
+    private void RemoveManualRedaction()
+    {
+        if (SelectedRedactionCandidate is not { IsManual: true } row)
+            return;
+
+        RedactionCandidates.Remove(row);
+        SelectedRedactionCandidate = null;
+        RefreshIndexHighlights();
+        SchedulePersistRedactionCandidates();
+        StatusText = "Manual redaction removed";
+    }
+
+    private bool CanRemoveManualRedaction() =>
+        !IsBusy && SelectedRedactionCandidate?.IsManual == true;
+
+    private void SchedulePersistRedactionCandidates()
+    {
+        if (SelectedDocument is null)
+            return;
+
+        var documentId = SelectedDocument.Id;
+        var candidates = RedactionCandidates.Select(row => row.Candidate).ToList();
+        var generation = _redactionPersistGenerations.TryGetValue(documentId, out var current)
+            ? current + 1
+            : 1;
+        _redactionPersistGenerations[documentId] = generation;
+        _ = PersistRedactionCandidatesAfterDelayAsync(documentId, candidates, generation);
+    }
+
+    private async Task PersistRedactionCandidatesAfterDelayAsync(
+        Guid documentId,
+        IReadOnlyList<RedactionCandidate> candidates,
+        int generation)
+    {
+        await Task.Delay(200).ConfigureAwait(true);
+        if (!_redactionPersistGenerations.TryGetValue(documentId, out var latest) || latest != generation)
+            return;
+
+        try
+        {
+            await _redactionCandidates.SaveAsync(documentId, candidates).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't save redaction edits: {ex.Message}";
+        }
     }
 
     [RelayCommand]
@@ -1661,6 +1807,8 @@ public partial class MainViewModel : ViewModelBase
         {
             var document = SelectedDocument.Document;
             var candidates = RedactionCandidates.Select(row => row.Candidate).ToList();
+            _redactionPersistGenerations[document.Id] =
+                _redactionPersistGenerations.TryGetValue(document.Id, out var generation) ? generation + 1 : 1;
             await _redactionCandidates.SaveAsync(document.Id, candidates).ConfigureAwait(true);
 
             var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
@@ -1677,10 +1825,12 @@ public partial class MainViewModel : ViewModelBase
             StatusText = document.RedactionStatus == RedactionStatus.Applied
                 ? $"Redacted PDF saved to {document.RedactedPath}"
                 : $"Redaction failed: {document.RedactionError}";
+            if (document.RedactionStatus == RedactionStatus.Applied) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -1861,7 +2011,7 @@ public partial class MainViewModel : ViewModelBase
                 Width = row.Candidate.Width,
                 Height = row.Candidate.Height,
                 IsSelected = SelectedRedactionCandidate?.Id == row.Id,
-                CanEdit = false,
+                CanEdit = row.IsManual,
                 IsRedaction = true,
                 IsRejected = !row.IsConfirmed
             });

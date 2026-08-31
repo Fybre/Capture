@@ -14,8 +14,13 @@ public static class AiExtractPrompt
         "You extract structured index fields from business documents. "
         + "Return JSON only. Use an object named values whose keys are the field ids. "
         + "Each value is {\"value\":\"...\",\"confidence\":0-100}. "
-        + "If a field is not present, use an empty value and confidence 0. "
-        + "Do not invent values. Keep dates and money as they appear.";
+        + "For most fields, only use text that literally appears in the document — if the exact "
+        + "field is not present, use an empty value and confidence 0, and never invent facts, "
+        + "numbers, or dates that aren't in the text. Keep dates and money as they appear. "
+        + "The one exception: if a field's own instructions explicitly ask you to summarize, name, "
+        + "title, or describe the document rather than quote a specific value, you may compose a "
+        + "short original answer drawn from the document's actual content instead of quoting it "
+        + "verbatim — but still never invent facts that the text doesn't support.";
 
     public static string UserMessage(string documentText, IReadOnlyList<IndexField> fields, int maxDocumentChars = MaxDocumentChars)
     {

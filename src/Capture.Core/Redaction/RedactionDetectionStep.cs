@@ -55,7 +55,7 @@ public sealed class RedactionDetectionStep : IPostIndexStep
 
         try
         {
-            if (_piiDetector.IsConfigured)
+            if (settings.DetectPii && _piiDetector.IsConfigured)
             {
                 foreach (var page in pages)
                 {

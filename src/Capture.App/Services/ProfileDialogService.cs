@@ -8,10 +8,12 @@ namespace Capture.App.Services;
 public sealed class ProfileDialogService : IProfileDialogService
 {
     private readonly IServiceProvider _services;
+    private readonly IToastService _toasts;
 
-    public ProfileDialogService(IServiceProvider services)
+    public ProfileDialogService(IServiceProvider services, IToastService toasts)
     {
         _services = services;
+        _toasts = toasts;
     }
 
     public async Task ShowAsync(object owner)
@@ -26,6 +28,14 @@ public sealed class ProfileDialogService : IProfileDialogService
         };
         viewModel.AttachHost(dialog);
         dialog.Opened += async (_, _) => await viewModel.InitializeAsync();
-        await dialog.ShowDialog(window);
+        _toasts.AttachHost(dialog);
+        try
+        {
+            await dialog.ShowDialog(window);
+        }
+        finally
+        {
+            _toasts.DetachHost(dialog);
+        }
     }
 }

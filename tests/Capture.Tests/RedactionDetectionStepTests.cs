@@ -45,6 +45,34 @@ public class RedactionDetectionStepTests
     }
 
     [Fact]
+    public async Task DetectPii_false_skips_Presidio_even_when_configured_but_still_redacts_Sensitive_fields()
+    {
+        var env = await CreateEnvironmentAsync();
+        var detector = new FakePiiDetector { IsConfigured = true, Matches = [new PiiMatch("PERSON", 8, 16, 0.95f)] };
+        var step = env.CreateStep(detector);
+
+        var document = await env.CreateDocumentAsync(pageCount: 1);
+        await env.SaveLatticeAsync(document.Id, 1, "Contact Jane Doe for details.");
+        var context = env.CreateContext(document, redactionEnabled: true, detectPii: false, indexValues:
+        [
+            new IndexValue
+            {
+                FieldId = Guid.NewGuid(),
+                FieldName = "SSN",
+                Sensitive = true,
+                Value = "123-45-6789",
+                Bounds = new ZoneRect { PageNumber = 1, X = 0.1f, Y = 0.1f, Width = 0.2f, Height = 0.05f }
+            }
+        ]);
+
+        await step.RunAsync(context);
+
+        var saved = await env.Candidates.GetAsync(document.Id);
+        var candidate = Assert.Single(saved);
+        Assert.Equal(RedactionSource.SensitiveField, candidate.Source);
+    }
+
+    [Fact]
     public async Task RunAsync_is_a_noop_when_the_document_is_not_Ready_or_redaction_is_disabled()
     {
         var env = await CreateEnvironmentAsync();
@@ -288,13 +316,15 @@ public class RedactionDetectionStepTests
             CaptureDocument document,
             bool redactionEnabled,
             IReadOnlyList<IndexValue> indexValues,
-            int bypassThreshold = 100)
+            int bypassThreshold = 100,
+            bool detectPii = true)
         {
             var profile = new IndexingProfile
             {
                 Redaction = new RedactionSettings
                 {
                     Enabled = redactionEnabled,
+                    DetectPii = detectPii,
                     BypassReviewScoreThresholdPercent = bypassThreshold
                 }
             };

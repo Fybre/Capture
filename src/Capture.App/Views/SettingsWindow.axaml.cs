@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Capture.App.ViewModels;
 
 namespace Capture.App.Views;
 
@@ -16,6 +17,20 @@ public partial class SettingsWindow : Window
     private async void OnConfigureThereforeClick(object? sender, RoutedEventArgs e)
     {
         var dialog = new ThereforeConnectionWindow { DataContext = DataContext };
-        await dialog.ShowDialog(this);
+        if (DataContext is not SettingsViewModel viewModel)
+        {
+            await dialog.ShowDialog(this);
+            return;
+        }
+
+        viewModel.Toasts.AttachHost(dialog);
+        try
+        {
+            await dialog.ShowDialog(this);
+        }
+        finally
+        {
+            viewModel.Toasts.DetachHost(dialog);
+        }
     }
 }

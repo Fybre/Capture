@@ -5,6 +5,8 @@
         xmlns:batches="using:Capture.Core.Batches"
         xmlns:redaction="using:Capture.Core.Redaction"
         xmlns:scanner="using:Capture.Scanner"
+        xmlns:watch="using:Capture.Core.Watch"
+        xmlns:conv="using:Capture.App.Converters"
         x:Class="Capture.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
@@ -128,22 +130,69 @@
                 <Border Grid.Row="2" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
                     <StackPanel Spacing="10">
                         <TextBlock Text="AI extraction" Classes="section-title" />
-                        <TextBlock Text="Endpoint" Classes="field-label" />
-                        <TextBox Text="{Binding AiEndpoint}" Watermark="https://api.openai.com/v1" />
-                        <TextBlock Text="API key" Classes="field-label" />
-                        <TextBox Text="{Binding AiApiKey}" PasswordChar="•" />
-                        <TextBlock Text="Model" Classes="field-label" />
-                        <TextBox Text="{Binding AiModel}" Watermark="gpt-4o-mini" />
-                        <TextBlock Text="Max document characters sent to AI" Classes="field-label" />
-                        <NumericUpDown Value="{Binding AiMaxDocumentChars}"
-                                       Minimum="1000"
-                                       Maximum="1000000"
-                                       Increment="1000"
-                                       FormatString="0"
-                                       HorizontalAlignment="Stretch" />
-                        <TextBlock Text="Longer documents are truncated to this length before being sent — raise it for long contracts, lower it to cut cost/latency."
+                        <TextBlock Text="Provider" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding AiProviderOptions}"
+                                  SelectedItem="{Binding AiProvider}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="watch:AiProvider">
+                                    <TextBlock Text="{Binding Converter={x:Static conv:AiProviderDisplayConverter.Instance}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Local runs entirely on this machine — no document text is sent anywhere. It needs a one-time model download and is slower and less accurate than the cloud provider."
                                    TextWrapping="Wrap"
+                                   IsVisible="{Binding IsAiLocal}"
                                    Classes="hint" />
+                        <TextBlock Text="AI extraction is disabled. AI-kind fields on every profile will be left blank."
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding IsAiNone}"
+                                   Classes="hint" />
+
+                        <StackPanel Spacing="10" IsVisible="{Binding IsAiOpenAiCompatible}">
+                            <TextBlock Text="Endpoint" Classes="field-label" />
+                            <TextBox Text="{Binding AiEndpoint}" Watermark="https://api.openai.com/v1" />
+                            <TextBlock Text="API key" Classes="field-label" />
+                            <TextBox Text="{Binding AiApiKey}" PasswordChar="•" />
+                            <TextBlock Text="Model" Classes="field-label" />
+                            <TextBox Text="{Binding AiModel}" Watermark="gpt-4o-mini" />
+                            <TextBlock Text="Max document characters sent to AI" Classes="field-label" />
+                            <NumericUpDown Value="{Binding AiMaxDocumentChars}"
+                                           Minimum="1000"
+                                           Maximum="1000000"
+                                           Increment="1000"
+                                           FormatString="0"
+                                           HorizontalAlignment="Stretch" />
+                            <TextBlock Text="Longer documents are truncated to this length before being sent — raise it for long contracts, lower it to cut cost/latency."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="10" IsVisible="{Binding IsAiLocal}">
+                            <TextBlock Text="Model" Classes="field-label" />
+                            <TextBlock Text="{Binding LocalAiModelFileName}" Classes="mono field-label" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding LocalAiModelStatus}" />
+                            <ProgressBar Value="{Binding LocalAiDownloadProgress}"
+                                         Minimum="0" Maximum="1"
+                                         IsVisible="{Binding IsDownloadingLocalAiModel}"
+                                         Height="6" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Download model"
+                                        Command="{Binding DownloadLocalAiModelCommand}"
+                                        IsEnabled="{Binding !IsDownloadingLocalAiModel}" />
+                                <Button Content="Open folder" Command="{Binding OpenLocalAiModelFolderCommand}" />
+                            </StackPanel>
+                            <TextBlock Text="Max document characters sent to the local model" Classes="field-label" />
+                            <NumericUpDown Value="{Binding LocalAiMaxDocumentChars}"
+                                           Minimum="1000"
+                                           Maximum="80000"
+                                           Increment="1000"
+                                           FormatString="0"
+                                           HorizontalAlignment="Stretch" />
+                            <TextBlock Text="Kept smaller than the cloud limit — long-context inference on CPU is slow, and small local models are weaker over very long documents anyway."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

@@ -7,8 +7,8 @@ public class PdfTextExtractorTests
     [Fact]
     public async Task Vector_invoice_page_extracts_real_text()
     {
-        var sample = "/Users/craig/Downloads/18.09.2026.SCM.PO2089 SCA Payment August 1st shipment.pdf";
-        if (!File.Exists(sample))
+        var sample = Environment.GetEnvironmentVariable("CAPTURE_TEST_VECTOR_PDF");
+        if (string.IsNullOrWhiteSpace(sample) || !File.Exists(sample))
             return;
 
         var extractor = new PdfPigTextExtractor();
@@ -16,8 +16,6 @@ public class PdfTextExtractorTests
 
         Assert.NotNull(words);
         Assert.NotEmpty(words);
-        var text = string.Join(' ', words!.Select(word => word.Text));
-        Assert.Contains("INVOICE", text, StringComparison.OrdinalIgnoreCase);
         Assert.All(words, word =>
         {
             Assert.InRange(word.X, 0, 1);
@@ -30,8 +28,8 @@ public class PdfTextExtractorTests
     [Fact]
     public async Task Raster_payment_slip_has_no_usable_pdf_text()
     {
-        var sample = "/Users/craig/Downloads/Sample SCDQ PO.pdf";
-        if (!File.Exists(sample))
+        var sample = Environment.GetEnvironmentVariable("CAPTURE_TEST_RASTER_PDF");
+        if (string.IsNullOrWhiteSpace(sample) || !File.Exists(sample))
             return;
 
         var extractor = new PdfPigTextExtractor();

@@ -21,6 +21,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     private readonly IPdfRasterizer _pdfRasterizer;
     private readonly IImagePageImporter _imageImporter;
     private readonly ILatticeBuilder _latticeBuilder;
+    private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
     private string? _testTempDir;
 
@@ -33,6 +34,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
         ILatticeBuilder latticeBuilder,
+        IToastService toasts,
         IBarcodeDecoder? barcodes)
     {
         Profile = profile;
@@ -43,6 +45,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         _pdfRasterizer = pdfRasterizer;
         _imageImporter = imageImporter;
         _latticeBuilder = latticeBuilder;
+        _toasts = toasts;
         _barcodes = barcodes;
 
         _name = profile.Name;
@@ -126,6 +129,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(Name))
         {
             StatusText = "Give this batch profile a name";
+            _toasts.ShowError(StatusText);
             return;
         }
 
@@ -139,6 +143,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
         await _store.SaveAsync(Profile).ConfigureAwait(true);
         Saved = true;
+        _toasts.ShowSuccess($"Saved \"{Profile.Name}\"");
         CloseCommand?.Execute(null);
     }
 

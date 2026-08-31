@@ -38,13 +38,24 @@ public class JsonRedactionCandidateStoreTests
                 Width = 0.2f,
                 Height = 0.03f,
                 Score = 1f
+            },
+            new()
+            {
+                Source = RedactionSource.Manual,
+                Label = "Manual redaction",
+                PageNumber = 3,
+                X = 0.4f,
+                Y = 0.45f,
+                Width = 0.15f,
+                Height = 0.08f,
+                Score = 1f
             }
         };
 
         await store.SaveAsync(documentId, candidates);
         var loaded = await store.GetAsync(documentId);
 
-        Assert.Equal(2, loaded.Count);
+        Assert.Equal(3, loaded.Count);
         var first = loaded.Single(item => item.Label == "PERSON");
         Assert.Equal(RedactionSource.Presidio, first.Source);
         Assert.Equal("Jane Doe", first.PreviewText);
@@ -55,6 +66,12 @@ public class JsonRedactionCandidateStoreTests
         var second = loaded.Single(item => item.Label == "SSN");
         Assert.Equal(RedactionSource.SensitiveField, second.Source);
         Assert.Equal(RedactionDecision.Confirmed, second.Decision);
+
+        var manual = loaded.Single(item => item.Source == RedactionSource.Manual);
+        Assert.Equal("Manual redaction", manual.Label);
+        Assert.Equal(3, manual.PageNumber);
+        Assert.Equal(0.15f, manual.Width);
+        Assert.Equal(RedactionDecision.Confirmed, manual.Decision);
     }
 
     [Fact]

@@ -48,12 +48,14 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
 {
     private readonly IWatchSettingsStore _watchSettings;
     private readonly IThereforeClient _client;
+    private readonly IToastService _toasts;
     private ThereforeConnectionSettings? _connection;
 
-    public ThereforeCategoryPickerViewModel(IWatchSettingsStore watchSettings, IThereforeClient client)
+    public ThereforeCategoryPickerViewModel(IWatchSettingsStore watchSettings, IThereforeClient client, IToastService toasts)
     {
         _watchSettings = watchSettings;
         _client = client;
+        _toasts = toasts;
     }
 
     public Action? Close { get; set; }
@@ -102,6 +104,7 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
         {
             StatusText = "Therefore isn't configured yet — set it up in Settings first.";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
             return;
         }
 
@@ -130,6 +133,7 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
         {
             StatusText = $"Could not load categories: {ex.Message}";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -163,11 +167,13 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
             OnPropertyChanged(nameof(HasFields));
             StatusText = $"Loaded {Fields.Count} field(s) from \"{info.Name}\"";
             StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Could not load category fields: {ex.Message}";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
         finally
         {

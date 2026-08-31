@@ -33,12 +33,7 @@ public class PdfRasterizerTests
 
     private static string? FindSamplePdf()
     {
-        var candidates = new[]
-        {
-            "/Users/craig/Downloads/Sample SCDQ PO.pdf",
-            "/Users/craig/Downloads/18.09.2026.SCM.PO2089 SCA Payment August 1st shipment.pdf"
-        };
-
-        return candidates.FirstOrDefault(File.Exists);
+        var sample = Environment.GetEnvironmentVariable("CAPTURE_TEST_SAMPLE_PDF");
+        return !string.IsNullOrWhiteSpace(sample) && File.Exists(sample) ? sample : null;
     }
 }

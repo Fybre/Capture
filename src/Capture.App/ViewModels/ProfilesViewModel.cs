@@ -19,6 +19,7 @@ public partial class ProfilesViewModel : ViewModelBase
     private readonly IAiExtractor _ai;
     private readonly IRedactionEntitySetStore _redactionSets;
     private readonly IThereforeCategoryPickerDialogService _thereforeCategoryPicker;
+    private readonly IToastService _toasts;
 
     public ProfilesViewModel(
         IProfileStore store,
@@ -27,7 +28,8 @@ public partial class ProfilesViewModel : ViewModelBase
         IBarcodeDecoder barcodes,
         IAiExtractor ai,
         IRedactionEntitySetStore redactionSets,
-        IThereforeCategoryPickerDialogService thereforeCategoryPicker)
+        IThereforeCategoryPickerDialogService thereforeCategoryPicker,
+        IToastService toasts)
     {
         _store = store;
         _samples = samples;
@@ -36,6 +38,7 @@ public partial class ProfilesViewModel : ViewModelBase
         _ai = ai;
         _redactionSets = redactionSets;
         _thereforeCategoryPicker = thereforeCategoryPicker;
+        _toasts = toasts;
     }
 
     public ObservableCollection<IndexingProfile> Profiles { get; } = [];
@@ -97,6 +100,7 @@ public partial class ProfilesViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -119,6 +123,7 @@ public partial class ProfilesViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -141,8 +146,10 @@ public partial class ProfilesViewModel : ViewModelBase
             return;
 
         var id = SelectedProfile.Id;
+        var name = SelectedProfile.Name;
         await _store.DeleteAsync(id);
         await ReloadAsync();
+        _toasts.ShowSuccess($"Deleted \"{name}\"");
     }
 
     [RelayCommand(CanExecute = nameof(CanEdit))]
@@ -161,10 +168,12 @@ public partial class ProfilesViewModel : ViewModelBase
             await using var stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, SelectedProfile, CaptureJsonOptions.Default);
             StatusText = $"Exported \"{SelectedProfile.Name}\" to {path}";
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Export failed: {ex.Message}";
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -183,10 +192,12 @@ public partial class ProfilesViewModel : ViewModelBase
             await using var stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, Profiles.ToList(), CaptureJsonOptions.Default);
             StatusText = $"Exported {Profiles.Count} profile(s) to {path}";
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Export failed: {ex.Message}";
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -226,6 +237,7 @@ public partial class ProfilesViewModel : ViewModelBase
             if (imported.Count == 0)
             {
                 StatusText = "That file doesn't contain a valid indexing profile";
+                _toasts.ShowError(StatusText);
                 return;
             }
 
@@ -234,14 +246,17 @@ public partial class ProfilesViewModel : ViewModelBase
             StatusText = imported.Count == 1
                 ? $"Imported \"{imported[0].Name}\""
                 : $"Imported {imported.Count} profile(s)";
+            _toasts.ShowSuccess(StatusText);
         }
         catch (JsonException)
         {
             StatusText = "That file doesn't contain a valid indexing profile";
+            _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Import failed: {ex.Message}";
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -273,7 +288,7 @@ public partial class ProfilesViewModel : ViewModelBase
 
     private async Task OpenDesignerAsync(IndexingProfile profile, bool isNew)
     {
-        var designer = new ProfileDesignerViewModel(profile, isNew, _samples, _store, _redactionSets, _dialogs, _thereforeCategoryPicker, _barcodes, _ai)
+        var designer = new ProfileDesignerViewModel(profile, isNew, _samples, _store, _redactionSets, _dialogs, _thereforeCategoryPicker, _toasts, _barcodes, _ai)
         {
             CloseCommand = CloseDesignerCommand
         };

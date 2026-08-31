@@ -20,6 +20,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
     private readonly IPdfRasterizer _pdfRasterizer;
     private readonly IImagePageImporter _imageImporter;
     private readonly ILatticeBuilder _latticeBuilder;
+    private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
 
     public BatchProfilesViewModel(
@@ -29,6 +30,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
         ILatticeBuilder latticeBuilder,
+        IToastService toasts,
         IBarcodeDecoder? barcodes = null)
     {
         _store = store;
@@ -37,6 +39,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
         _pdfRasterizer = pdfRasterizer;
         _imageImporter = imageImporter;
         _latticeBuilder = latticeBuilder;
+        _toasts = toasts;
         _barcodes = barcodes;
     }
 
@@ -97,8 +100,10 @@ public partial class BatchProfilesViewModel : ViewModelBase
             return;
 
         var id = SelectedProfile.Id;
+        var name = SelectedProfile.Name;
         await _store.DeleteAsync(id);
         await ReloadAsync();
+        _toasts.ShowSuccess($"Deleted \"{name}\"");
     }
 
     [RelayCommand]
@@ -126,10 +131,12 @@ public partial class BatchProfilesViewModel : ViewModelBase
             await using var stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, SelectedProfile, CaptureJsonOptions.Default);
             StatusText = $"Exported \"{SelectedProfile.Name}\" to {path}";
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Export failed: {ex.Message}";
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -148,10 +155,12 @@ public partial class BatchProfilesViewModel : ViewModelBase
             await using var stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, Profiles.ToList(), CaptureJsonOptions.Default);
             StatusText = $"Exported {Profiles.Count} batch profile(s) to {path}";
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Export failed: {ex.Message}";
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -191,6 +200,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
             if (imported.Count == 0)
             {
                 StatusText = "That file doesn't contain a valid batch profile";
+                _toasts.ShowError(StatusText);
                 return;
             }
 
@@ -199,14 +209,17 @@ public partial class BatchProfilesViewModel : ViewModelBase
             StatusText = imported.Count == 1
                 ? $"Imported \"{imported[0].Name}\""
                 : $"Imported {imported.Count} batch profile(s)";
+            _toasts.ShowSuccess(StatusText);
         }
         catch (JsonException)
         {
             StatusText = "That file doesn't contain a valid batch profile";
+            _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Import failed: {ex.Message}";
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -228,7 +241,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
     private Task OpenDesignerAsync(BatchProfile profile, bool isNew)
     {
         var designer = new BatchProfileDesignerViewModel(
-            profile, isNew, _store, _dialogs, _paths, _pdfRasterizer, _imageImporter, _latticeBuilder, _barcodes)
+            profile, isNew, _store, _dialogs, _paths, _pdfRasterizer, _imageImporter, _latticeBuilder, _toasts, _barcodes)
         {
             CloseCommand = CloseDesignerCommand
         };

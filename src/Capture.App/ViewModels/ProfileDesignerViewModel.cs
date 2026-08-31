@@ -20,6 +20,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private readonly IRedactionEntitySetStore _redactionSets;
     private readonly IFileDialogService _dialogs;
     private readonly IThereforeCategoryPickerDialogService _thereforeCategoryPicker;
+    private readonly IToastService _toasts;
     private readonly List<string> _pageImages = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
@@ -35,6 +36,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         IRedactionEntitySetStore redactionSets,
         IFileDialogService dialogs,
         IThereforeCategoryPickerDialogService thereforeCategoryPicker,
+        IToastService toasts,
         IBarcodeDecoder? barcodes = null,
         IAiExtractor? ai = null)
     {
@@ -45,6 +47,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _redactionSets = redactionSets;
         _dialogs = dialogs;
         _thereforeCategoryPicker = thereforeCategoryPicker;
+        _toasts = toasts;
         _barcodes = barcodes;
         _ai = ai;
         _name = profile.Name;
@@ -52,6 +55,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _separationPageCount = Math.Max(1, profile.Separation.PageCount);
         _separationDiscardPage = profile.Separation.DiscardSeparatorPage;
         _redactionEnabled = profile.Redaction.Enabled;
+        _redactionDetectPii = profile.Redaction.DetectPii;
         _redactionScoreThreshold = profile.Redaction.ScoreThresholdPercent;
         _redactionBypassScoreThreshold = profile.Redaction.BypassReviewScoreThresholdPercent;
         _removeAfterExport = profile.RemoveAfterExport;
@@ -152,6 +156,9 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private bool _redactionEnabled;
 
     [ObservableProperty]
+    private bool _redactionDetectPii = true;
+
+    [ObservableProperty]
     private int _redactionScoreThreshold = 50;
 
     [ObservableProperty]
@@ -244,10 +251,12 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             SampleFileName = Profile.SampleFileName;
             await LoadSampleAsync().ConfigureAwait(true);
             StatusText = PageCount == 0 ? "No sample pages" : "Sample updated";
+            if (PageCount == 0) _toasts.ShowError(StatusText); else _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -481,10 +490,12 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             }
 
             StatusText = extracted.Count == 0 ? "AI returned no values" : $"Extracted {extracted.Count} AI field(s)";
+            if (extracted.Count == 0) _toasts.ShowError(StatusText); else _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -626,6 +637,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Profile.Redaction = new RedactionSettings
         {
             Enabled = RedactionEnabled,
+            DetectPii = RedactionDetectPii,
             EntitySetId = SelectedRedactionSet?.Id,
             Entities = SelectedRedactionSet?.Entities.ToList() ?? [],
             ScoreThresholdPercent = Math.Clamp(RedactionScoreThreshold, 0, 100),
@@ -639,6 +651,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Saved = true;
         IsNew = false;
         StatusText = "Saved";
+        _toasts.ShowSuccess($"Saved \"{Profile.Name}\"");
     }
 
     partial void OnSelectedFieldChanged(FieldRow? value)

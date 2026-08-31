@@ -3,7 +3,8 @@ namespace Capture.Core.Redaction;
 public enum RedactionSource
 {
     Presidio = 0,
-    SensitiveField = 1
+    SensitiveField = 1,
+    Manual = 2
 }
 
 public enum RedactionDecision
@@ -28,10 +29,10 @@ public sealed class RedactionCandidate
     public string? PreviewText { get; init; }
 
     public int PageNumber { get; init; }
-    public float X { get; init; }
-    public float Y { get; init; }
-    public float Width { get; init; }
-    public float Height { get; init; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Width { get; set; }
+    public float Height { get; set; }
 
     /// <summary>0-1. Presidio's confidence for NLP matches; hardcoded 1.0 for Sensitive-field
     /// candidates, since a user explicitly marking a field Sensitive isn't a probabilistic guess.</summary>

@@ -31,6 +31,8 @@ public interface IAppPaths
     string SettingsPath { get; }
     string AiFieldCatalogPath { get; }
     string DebugLogPath { get; }
+    string LocalAiModelsDirectory { get; }
+    string LocalAiModelPath { get; }
     void EnsureCreated();
 }
 
@@ -47,6 +49,8 @@ public sealed class AppPaths : IAppPaths
         SettingsPath = Path.Combine(Root, "settings.json");
         AiFieldCatalogPath = Path.Combine(Root, "ai-field-catalog.json");
         DebugLogPath = Path.Combine(Root, "logs", "activity.log");
+        LocalAiModelsDirectory = Path.Combine(Root, "models");
+        LocalAiModelPath = Path.Combine(LocalAiModelsDirectory, "llama-3.2-3b-instruct-q4_k_m.gguf");
     }
 
     public string Root { get; }
@@ -54,6 +58,8 @@ public sealed class AppPaths : IAppPaths
     public string SettingsPath { get; }
     public string AiFieldCatalogPath { get; }
     public string DebugLogPath { get; }
+    public string LocalAiModelsDirectory { get; }
+    public string LocalAiModelPath { get; }
     public string ProfilesDirectory { get; }
     public string BatchProfilesDirectory { get; }
     public string RedactionSetsDirectory { get; }
@@ -136,6 +142,7 @@ public sealed class AppPaths : IAppPaths
         Directory.CreateDirectory(BatchProfilesDirectory);
         Directory.CreateDirectory(RedactionSetsDirectory);
         Directory.CreateDirectory(WorkDirectory);
+        Directory.CreateDirectory(LocalAiModelsDirectory);
     }
 
     private static string DefaultBaseDirectory =>

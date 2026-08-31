@@ -5,11 +5,27 @@ namespace Capture.App.Services;
 
 public sealed class AboutDialogService : IAboutDialogService
 {
+    private readonly IToastService _toasts;
+
+    public AboutDialogService(IToastService toasts)
+    {
+        _toasts = toasts;
+    }
+
     public async Task ShowAsync(object owner)
     {
         if (owner is not Window window)
             return;
 
-        await new AboutWindow().ShowDialog(window);
+        var dialog = new AboutWindow();
+        _toasts.AttachHost(dialog);
+        try
+        {
+            await dialog.ShowDialog(window);
+        }
+        finally
+        {
+            _toasts.DetachHost(dialog);
+        }
     }
 }

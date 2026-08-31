@@ -8,10 +8,12 @@ namespace Capture.App.Services;
 public sealed class ThereforeCategoryPickerDialogService : IThereforeCategoryPickerDialogService
 {
     private readonly IServiceProvider _services;
+    private readonly IToastService _toasts;
 
-    public ThereforeCategoryPickerDialogService(IServiceProvider services)
+    public ThereforeCategoryPickerDialogService(IServiceProvider services, IToastService toasts)
     {
         _services = services;
+        _toasts = toasts;
     }
 
     public async Task<ThereforeCategorySelection?> ShowAsync(object owner)
@@ -23,7 +25,15 @@ public sealed class ThereforeCategoryPickerDialogService : IThereforeCategoryPic
         var dialog = new ThereforeCategoryPickerWindow { DataContext = viewModel };
         viewModel.Close = () => dialog.Close();
         await viewModel.InitializeAsync();
-        await dialog.ShowDialog(window);
+        _toasts.AttachHost(dialog);
+        try
+        {
+            await dialog.ShowDialog(window);
+        }
+        finally
+        {
+            _toasts.DetachHost(dialog);
+        }
         return viewModel.Result;
     }
 }

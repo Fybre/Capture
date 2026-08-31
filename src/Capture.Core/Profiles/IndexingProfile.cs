@@ -158,6 +158,12 @@ public sealed class RedactionSettings
 {
     public bool Enabled { get; set; }
 
+    /// <summary>Whether Presidio-based PII detection runs at all when <see cref="Enabled"/> is true.
+    /// Sensitive-marked fields are redacted regardless of this setting — see
+    /// <c>RedactionDetectionStep</c>, which builds their candidates directly from the field's own
+    /// extracted bounds without going through Presidio.</summary>
+    public bool DetectPii { get; set; } = true;
+
     /// <summary>Which redaction set (see Capture.Core.Redaction.RedactionEntitySet /
     /// BuiltInRedactionSets) the profile designer's UI has selected — the source of truth for what to
     /// show as "currently chosen" when the profile is reopened. Null for profiles saved before this

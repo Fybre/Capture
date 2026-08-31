@@ -18,6 +18,15 @@ public sealed class WatchSettings
     public string? AiApiKey { get; set; }
     public string? AiModel { get; set; } = "gpt-4o-mini";
     public int AiMaxDocumentChars { get; set; } = AiExtractPrompt.MaxDocumentChars;
+
+    /// <summary>Which extractor <c>AiExtractorRouter</c> delegates to — the cloud OpenAI-compatible
+    /// endpoint above, or a locally-downloaded model (see Capture.LocalAi).</summary>
+    public AiProvider AiProvider { get; set; } = AiProvider.OpenAiCompatible;
+
+    /// <summary>Document-text truncation ceiling for the local extractor — deliberately smaller than
+    /// <see cref="AiMaxDocumentChars"/>: long-context prefill on CPU is slow and small local models
+    /// are weaker at very long contexts anyway.</summary>
+    public int LocalAiMaxDocumentChars { get; set; } = 12_000;
     public WorkspaceMode StartView { get; set; } = WorkspaceMode.Preview;
     public AppTheme Theme { get; set; } = AppTheme.System;
 
@@ -71,4 +80,15 @@ public enum ThereforeAuthMethod
 {
     Basic = 0,
     Bearer = 1
+}
+
+public enum AiProvider
+{
+    OpenAiCompatible = 0,
+    Local = 1,
+
+    /// <summary>AI extraction is off — AI-kind fields are left blank rather than silently falling
+    /// back to a provider the user never configured. Distinct from an unconfigured cloud/local
+    /// provider so the UI can say "disabled" instead of showing an error.</summary>
+    None = 2
 }

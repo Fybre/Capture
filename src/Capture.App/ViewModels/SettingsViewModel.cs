@@ -8,6 +8,7 @@ using Capture.Core.Paths;
 using Capture.Core.Profiles;
 using Capture.Core.Redaction;
 using Capture.Core.Watch;
+using Capture.LocalAi;
 using Capture.Scanner;
 using Capture.Storage;
 using Capture.Therefore;
@@ -27,6 +28,13 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IScanSource _scanSource;
     private readonly IAppPaths _paths;
     private readonly IThereforeClient _thereforeClient;
+    private readonly ILocalAiModelDownloader _localAiModelDownloader;
+    private readonly IToastService _toasts;
+
+    /// <summary>Exposed so SettingsWindow's code-behind can attach/detach the nested Therefore
+    /// connection dialog as a toast host — that window is opened directly from a Click handler with
+    /// no DI access of its own, and this ViewModel already has the service.</summary>
+    public IToastService Toasts => _toasts;
 
     public SettingsViewModel(
         IFileDialogService dialogs,
@@ -37,7 +45,9 @@ public partial class SettingsViewModel : ViewModelBase
         IRedactionEntitySetStore redactionEntitySets,
         IScanSource scanSource,
         IAppPaths paths,
-        IThereforeClient thereforeClient)
+        IThereforeClient thereforeClient,
+        ILocalAiModelDownloader localAiModelDownloader,
+        IToastService toasts)
     {
         _dialogs = dialogs;
         _store = store;
@@ -48,7 +58,10 @@ public partial class SettingsViewModel : ViewModelBase
         _scanSource = scanSource;
         _paths = paths;
         _thereforeClient = thereforeClient;
+        _localAiModelDownloader = localAiModelDownloader;
+        _toasts = toasts;
         WatchFolders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasWatchFolders));
+        RefreshLocalAiModelStatus();
     }
 
     public bool HasWatchFolders => WatchFolders.Count > 0;
@@ -113,6 +126,90 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _aiMaxDocumentChars = AiExtractPrompt.MaxDocumentChars;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAiOpenAiCompatible))]
+    [NotifyPropertyChangedFor(nameof(IsAiLocal))]
+    [NotifyPropertyChangedFor(nameof(IsAiNone))]
+    private AiProvider _aiProvider = AiProvider.OpenAiCompatible;
+
+    public IReadOnlyList<AiProvider> AiProviderOptions { get; } = Enum.GetValues<AiProvider>();
+
+    public bool IsAiOpenAiCompatible => AiProvider == AiProvider.OpenAiCompatible;
+
+    public bool IsAiLocal => AiProvider == AiProvider.Local;
+
+    public bool IsAiNone => AiProvider == AiProvider.None;
+
+    [ObservableProperty]
+    private int _localAiMaxDocumentChars = 12_000;
+
+    [ObservableProperty]
+    private string _localAiModelStatus = "Not downloaded";
+
+    [ObservableProperty]
+    private bool _isDownloadingLocalAiModel;
+
+    [ObservableProperty]
+    private double _localAiDownloadProgress;
+
+    public string LocalAiModelFileName => _localAiModelDownloader.ModelFileName;
+
+    private void RefreshLocalAiModelStatus()
+    {
+        LocalAiModelStatus = File.Exists(_paths.LocalAiModelPath)
+            ? $"Downloaded ({new FileInfo(_paths.LocalAiModelPath).Length / 1_000_000_000.0:0.0} GB)"
+            : "Not downloaded";
+    }
+
+    [RelayCommand]
+    private async Task DownloadLocalAiModelAsync()
+    {
+        IsDownloadingLocalAiModel = true;
+        LocalAiDownloadProgress = 0;
+        StatusText = $"Downloading {LocalAiModelFileName}…";
+        StatusIsError = false;
+        try
+        {
+            await _localAiModelDownloader.DownloadAsync(progress => LocalAiDownloadProgress = progress)
+                .ConfigureAwait(true);
+            StatusText = "Local AI model downloaded.";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Model download failed: {ex.Message}";
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsDownloadingLocalAiModel = false;
+            RefreshLocalAiModelStatus();
+        }
+    }
+
+    [RelayCommand]
+    private void OpenLocalAiModelFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(_paths.LocalAiModelsDirectory);
+            var psi = OperatingSystem.IsWindows()
+                ? new ProcessStartInfo("explorer.exe", $"\"{_paths.LocalAiModelsDirectory}\"")
+                : OperatingSystem.IsMacOS()
+                    ? new ProcessStartInfo("open", $"\"{_paths.LocalAiModelsDirectory}\"")
+                    : new ProcessStartInfo("xdg-open", $"\"{_paths.LocalAiModelsDirectory}\"");
+            psi.UseShellExecute = false;
+            Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't open the folder: {ex.Message}";
+            StatusIsError = true;
+        }
+    }
 
     // --- Therefore ------------------------------------------------------------------------------
 
@@ -193,11 +290,13 @@ public partial class SettingsViewModel : ViewModelBase
             var ok = await _thereforeClient.TestConnectionAsync(connection).ConfigureAwait(true);
             StatusText = ok ? "Therefore connection succeeded" : "Therefore connection failed — no token returned";
             StatusIsError = !ok;
+            if (ok) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Therefore connection failed: {ex.Message}";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -236,6 +335,9 @@ public partial class SettingsViewModel : ViewModelBase
         AiApiKey = settings.AiApiKey ?? string.Empty;
         AiModel = string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel;
         AiMaxDocumentChars = settings.AiMaxDocumentChars > 0 ? settings.AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars;
+        AiProvider = settings.AiProvider;
+        LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars > 0 ? settings.LocalAiMaxDocumentChars : 12_000;
+        RefreshLocalAiModelStatus();
 
         // Set BaseUrl before TenantName so the tenant-changed prefill (which only fires when the URL
         // is still blank) never overwrites an already-saved URL.
@@ -253,8 +355,24 @@ public partial class SettingsViewModel : ViewModelBase
         _pendingScanDeviceId = settings.ScanPreferredDeviceId;
 
         await LoadRedactionSetsAsync();
-        await RefreshScanDevicesAsync();
+
+        // The device's capability probe (native helper subprocess + ImageCaptureCore) can be slow,
+        // incomplete, or time out to restrictive fallback values — see RefreshScanCapabilities. None
+        // of that should be allowed to silently overwrite the DPI/source/duplex the user explicitly
+        // saved just because this one probe didn't confirm them.
+        _restoringSettings = true;
+        try
+        {
+            await RefreshScanDevicesAsync();
+        }
+        finally
+        {
+            _restoringSettings = false;
+        }
     }
+
+    // See InitializeAsync's call to RefreshScanDevicesAsync.
+    private bool _restoringSettings;
 
     // --- Scanning -----------------------------------------------------------------------------------
 
@@ -322,6 +440,12 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanScanDuplex));
     }
 
+    // While restoring saved settings (see InitializeAsync), a device's capability probe is trusted
+    // to EXPAND what's shown as available, but never to silently overturn what the user explicitly
+    // saved — the probe (a native helper subprocess + ImageCaptureCore) can be slow, report an
+    // incomplete capability set, or fall back to restrictive defaults on timeout, and none of that
+    // is a reason to forget the user's choice. Once the user actively changes device/source in this
+    // window, corrective clamping to the confirmed capabilities resumes as normal.
     private void RefreshScanCapabilities(ScanDevice? device)
     {
         var previousDpi = ScanDpi;
@@ -334,23 +458,62 @@ public partial class SettingsViewModel : ViewModelBase
                  .Order())
             ScanDpiOptions.Add(dpi);
 
-        if (ScanDpiOptions.Count > 0 && !ScanDpiOptions.Contains(previousDpi))
+        if (_restoringSettings)
+        {
+            if (previousDpi > 0 && !ScanDpiOptions.Contains(previousDpi))
+                InsertSorted(ScanDpiOptions, previousDpi);
+        }
+        else if (ScanDpiOptions.Count > 0 && !ScanDpiOptions.Contains(previousDpi))
+        {
             ScanDpi = ScanDpiOptions.MinBy(dpi => Math.Abs(dpi - previousDpi));
+        }
 
         ScanSourceOptions.Clear();
         if (device?.SupportsFlatbed != false)
             ScanSourceOptions.Add(ScanSourceKind.Flatbed);
         if (device?.SupportsFeeder == true)
             ScanSourceOptions.Add(ScanSourceKind.Feeder);
-        if (!ScanSourceOptions.Contains(SelectedScanSource))
-            SelectedScanSource = ScanSourceOptions.FirstOrDefault();
 
-        if (device?.SupportsGrayscale == false)
-            ScanGrayscale = false;
-        if (!CanScanDuplex)
-            ScanDuplex = false;
+        if (_restoringSettings)
+        {
+            if (!ScanSourceOptions.Contains(SelectedScanSource))
+                ScanSourceOptions.Add(SelectedScanSource);
+        }
+        else if (!ScanSourceOptions.Contains(SelectedScanSource))
+        {
+            SelectedScanSource = ScanSourceOptions.FirstOrDefault();
+        }
+
+        if (!_restoringSettings)
+        {
+            if (device?.SupportsGrayscale == false)
+                ScanGrayscale = false;
+            if (!CanScanDuplex)
+                ScanDuplex = false;
+        }
         OnPropertyChanged(nameof(CanScanDuplex));
         OnPropertyChanged(nameof(CanScanGrayscale));
+
+        // ScanDpiOptions/ScanSourceOptions are rebuilt above by Clear()-then-Add(), but ScanDpi/
+        // SelectedScanSource themselves may not have changed value at all (the common case: the
+        // saved DPI/source were already valid, so neither branch above reassigns them). The bound
+        // ComboBoxes' SelectedItem only resolves against an ItemsSource snapshot taken when they were
+        // first attached — which, in the InitializeAsync path, happens with an EMPTY collection an
+        // instant before this method fills it in, so with no value-change to notify on, the box is
+        // left showing nothing even though ScanDpi/SelectedScanSource are already correct. Explicitly
+        // re-raising the change notification (even for a same-value "change") forces the ComboBox to
+        // re-resolve SelectedItem against the now-populated list instead of leaving a stale/blank
+        // display until the user manually reselects something.
+        OnPropertyChanged(nameof(ScanDpi));
+        OnPropertyChanged(nameof(SelectedScanSource));
+    }
+
+    private static void InsertSorted(ObservableCollection<int> options, int value)
+    {
+        var index = 0;
+        while (index < options.Count && options[index] < value)
+            index++;
+        options.Insert(index, value);
     }
 
     // --- Redaction sets ---------------------------------------------------------------------------
@@ -418,6 +581,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             StatusText = "Name the redaction set before saving";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
             return;
         }
 
@@ -432,6 +596,7 @@ public partial class SettingsViewModel : ViewModelBase
         await LoadRedactionSetsAsync();
         StatusText = $"Saved redaction set \"{name}\"";
         StatusIsError = false;
+        _toasts.ShowSuccess(StatusText);
     }
 
     [RelayCommand]
@@ -496,6 +661,7 @@ public partial class SettingsViewModel : ViewModelBase
                     ? "Choose a folder for every enabled watch entry"
                     : $"\"{row.Folder}\" doesn't exist";
                 StatusIsError = true;
+                _toasts.ShowError(StatusText);
                 return false;
             }
         }
@@ -507,6 +673,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             StatusText = $"\"{duplicate.Key}\" is watched by more than one entry";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
             return false;
         }
 
@@ -520,6 +687,8 @@ public partial class SettingsViewModel : ViewModelBase
             AiApiKey = string.IsNullOrWhiteSpace(AiApiKey) ? null : AiApiKey.Trim(),
             AiModel = string.IsNullOrWhiteSpace(AiModel) ? "gpt-4o-mini" : AiModel.Trim(),
             AiMaxDocumentChars = AiMaxDocumentChars > 0 ? AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars,
+            AiProvider = AiProvider,
+            LocalAiMaxDocumentChars = LocalAiMaxDocumentChars > 0 ? LocalAiMaxDocumentChars : 12_000,
             ThereforeBaseUrl = string.IsNullOrWhiteSpace(ThereforeBaseUrl) ? null : ThereforeBaseUrl.Trim(),
             ThereforeTenantName = string.IsNullOrWhiteSpace(ThereforeTenantName) ? null : ThereforeTenantName.Trim(),
             ThereforeAuthMethod = ThereforeAuthMethod,
@@ -551,11 +720,13 @@ public partial class SettingsViewModel : ViewModelBase
             await JsonSerializer.SerializeAsync(stream, settings, CaptureJsonOptions.Default);
             StatusText = $"Exported settings to {path}";
             StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Export failed: {ex.Message}";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -574,6 +745,7 @@ public partial class SettingsViewModel : ViewModelBase
             {
                 StatusText = "That file doesn't contain valid settings";
                 StatusIsError = true;
+                _toasts.ShowError(StatusText);
                 return;
             }
 
@@ -589,6 +761,8 @@ public partial class SettingsViewModel : ViewModelBase
             AiApiKey = settings.AiApiKey ?? string.Empty;
             AiModel = string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel;
             AiMaxDocumentChars = settings.AiMaxDocumentChars > 0 ? settings.AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars;
+            AiProvider = settings.AiProvider;
+            LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars > 0 ? settings.LocalAiMaxDocumentChars : 12_000;
 
             ThereforeBaseUrl = settings.ThereforeBaseUrl ?? string.Empty;
             ThereforeTenantName = settings.ThereforeTenantName ?? string.Empty;
@@ -606,16 +780,19 @@ public partial class SettingsViewModel : ViewModelBase
 
             StatusText = "Settings imported — review and click Save to apply";
             StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
         }
         catch (JsonException)
         {
             StatusText = "That file doesn't contain valid settings";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"Import failed: {ex.Message}";
             StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
     }
 
@@ -647,5 +824,6 @@ public partial class SettingsViewModel : ViewModelBase
         AiFieldCatalog.Load(types);
         StatusText = $"Reloaded {types.Count} AI field type(s) from {AiFieldCatalogPath}";
         StatusIsError = false;
+        _toasts.ShowSuccess(StatusText);
     }
 }

@@ -145,24 +145,30 @@
                     <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                     <CheckBox Content="Redaction" IsChecked="{Binding RedactionEnabled}" />
                     <StackPanel Spacing="6" IsVisible="{Binding RedactionEnabled}">
-                        <TextBlock Text="Redaction set" Classes="field-label" />
-                        <ComboBox ItemsSource="{Binding RedactionSetOptions}"
-                                  SelectedItem="{Binding SelectedRedactionSet}"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="redaction:RedactionEntitySet">
-                                    <TextBlock Text="{Binding Name}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <TextBlock Text="Which PII types this set detects. Manage sets from Settings."
+                        <CheckBox Content="Detect PII automatically (Presidio)" IsChecked="{Binding RedactionDetectPii}" />
+                        <TextBlock Text="Fields marked Sensitive are always redacted, regardless of this setting — turn this off to redact only Sensitive fields, with no PII detection."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
-                        <TextBlock Text="Minimum confidence" Classes="field-label" />
-                        <NumericUpDown Value="{Binding RedactionScoreThreshold}" Minimum="0" Maximum="100" />
-                        <TextBlock Text="Matches below this confidence are ignored entirely."
-                                   TextWrapping="Wrap"
-                                   Classes="hint" />
+                        <StackPanel Spacing="6" IsVisible="{Binding RedactionDetectPii}">
+                            <TextBlock Text="Redaction set" Classes="field-label" />
+                            <ComboBox ItemsSource="{Binding RedactionSetOptions}"
+                                      SelectedItem="{Binding SelectedRedactionSet}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="redaction:RedactionEntitySet">
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="Which PII types this set detects. Manage sets from Settings."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <TextBlock Text="Minimum confidence" Classes="field-label" />
+                            <NumericUpDown Value="{Binding RedactionScoreThreshold}" Minimum="0" Maximum="100" />
+                            <TextBlock Text="Matches below this confidence are ignored entirely."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                        </StackPanel>
                         <TextBlock Text="Skip review at/above" Classes="field-label" />
                         <NumericUpDown Value="{Binding RedactionBypassScoreThreshold}" Minimum="0" Maximum="100" />
                         <TextBlock Text="Matches at or above this confidence are redacted automatically, no manual review. 0 always skips review; 100 (default) only skips it for fields explicitly marked Sensitive."

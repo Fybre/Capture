@@ -12,13 +12,13 @@
     <Grid RowDefinitions="*,Auto" Background="{DynamicResource GroundBrush}">
         <StackPanel Grid.Row="0" Margin="20" Spacing="10">
             <TextBlock Text="Tenant name" Classes="field-label" />
-            <TextBox Text="{Binding ThereforeTenantName}" Watermark="craigdemo (leave blank for on-premise)" />
+            <TextBox Text="{Binding ThereforeTenantName}" Watermark="your-tenant (leave blank for on-premise)" />
             <TextBlock Text="Prefills the base URL below as https://{tenant}.thereforeonline.com — leave blank for an on-premise server."
                        TextWrapping="Wrap"
                        Classes="hint" />
 
             <TextBlock Text="Base URL" Classes="field-label" />
-            <TextBox Text="{Binding ThereforeBaseUrl}" Watermark="https://craigdemo.thereforeonline.com" />
+            <TextBox Text="{Binding ThereforeBaseUrl}" Watermark="https://your-tenant.thereforeonline.com" />
 
             <TextBlock Text="Authentication" Classes="field-label" />
             <ComboBox ItemsSource="{Binding ThereforeAuthMethodOptions}" SelectedItem="{Binding ThereforeAuthMethod}" HorizontalAlignment="Stretch" />

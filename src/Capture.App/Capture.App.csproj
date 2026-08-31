@@ -33,6 +33,7 @@
     <ProjectReference Include="..\Capture.Scanner\Capture.Scanner.csproj" />
     <ProjectReference Include="..\Capture.Export\Capture.Export.csproj" />
     <ProjectReference Include="..\Capture.Therefore\Capture.Therefore.csproj" />
+    <ProjectReference Include="..\Capture.LocalAi\Capture.LocalAi.csproj" />
   </ItemGroup>
 
   <ItemGroup>

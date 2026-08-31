@@ -32,10 +32,15 @@ public sealed partial class RedactionCandidateRow : ObservableObject
     {
         RedactionSource.Presidio => "Detected",
         RedactionSource.SensitiveField => "Sensitive field",
+        RedactionSource.Manual => "Manual",
         _ => Candidate.Source.ToString()
     };
 
-    public string ScoreDisplay => $"{Candidate.Score * 100:0}%";
+    public string ScoreDisplay => Candidate.Source == RedactionSource.Manual
+        ? string.Empty
+        : $"{Candidate.Score * 100:0}%";
+
+    public bool IsManual => Candidate.Source == RedactionSource.Manual;
 
     public int PageNumber => Candidate.PageNumber;
 

@@ -28,6 +28,8 @@ public class JsonWatchSettingsStoreTests
             AiApiKey = "sk-test",
             AiModel = "gpt-4o-mini",
             AiMaxDocumentChars = 50_000,
+            AiProvider = AiProvider.Local,
+            LocalAiMaxDocumentChars = 9_000,
             ScanDpi = 300,
             ScanGrayscale = true,
             ScanSource = ScanInputSource.Feeder,
@@ -50,6 +52,8 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal("sk-test", loaded.AiApiKey);
         Assert.Equal("gpt-4o-mini", loaded.AiModel);
         Assert.Equal(50_000, loaded.AiMaxDocumentChars);
+        Assert.Equal(AiProvider.Local, loaded.AiProvider);
+        Assert.Equal(9_000, loaded.LocalAiMaxDocumentChars);
         Assert.True(loaded.AiConfigured);
         Assert.Equal(300, loaded.ScanDpi);
         Assert.True(loaded.ScanGrayscale);
@@ -114,10 +118,10 @@ public class JsonWatchSettingsStoreTests
         await store.SaveAsync(new WatchSettings
         {
             AiApiKey = "sk-ai-secret",
-            ThereforeBaseUrl = "https://craigdemo.thereforeonline.com",
-            ThereforeTenantName = "craigdemo",
+            ThereforeBaseUrl = "https://sampletenant.thereforeonline.com",
+            ThereforeTenantName = "sampletenant",
             ThereforeAuthMethod = ThereforeAuthMethod.Basic,
-            ThereforeUsername = "craig.mewett",
+            ThereforeUsername = "sample.user",
             ThereforePassword = "th-password-secret",
             ThereforeBearerToken = "th-bearer-secret"
         });
@@ -136,9 +140,9 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal("sk-ai-secret", loaded.AiApiKey);
         Assert.Equal("th-password-secret", loaded.ThereforePassword);
         Assert.Equal("th-bearer-secret", loaded.ThereforeBearerToken);
-        Assert.Equal("https://craigdemo.thereforeonline.com", loaded.ThereforeBaseUrl);
-        Assert.Equal("craigdemo", loaded.ThereforeTenantName);
-        Assert.Equal("craig.mewett", loaded.ThereforeUsername);
+        Assert.Equal("https://sampletenant.thereforeonline.com", loaded.ThereforeBaseUrl);
+        Assert.Equal("sampletenant", loaded.ThereforeTenantName);
+        Assert.Equal("sample.user", loaded.ThereforeUsername);
         Assert.True(loaded.ThereforeConfigured);
     }
 

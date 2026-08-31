@@ -209,6 +209,22 @@
                                             </StackPanel>
                                         </Button>
                                         <Separator Margin="4,3" />
+                                        <Button Command="{Binding OpenHelpCommand}"
+                                                Classes="ghost"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Path Data="M3,3.2 C3,2.5 3.5,2 4.2,2 L6.2,2 C7,2 7.6,2.3 8,2.9 C8.4,2.3 9,2 9.8,2 L11.8,2 C12.5,2 13,2.5 13,3.2 L13,11.5 C13,11.8 12.7,12 12.4,12 L9.7,12 C8.9,12 8.4,12.3 8,13 C7.6,12.3 7.1,12 6.3,12 L3.6,12 C3.3,12 3,11.8 3,11.5 Z M8,3 L8,11.5"
+                                                      Stretch="Uniform"
+                                                      Width="14"
+                                                      Height="14"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="1.3"
+                                                      StrokeLineCap="Round"
+                                                      StrokeJoin="Round" />
+                                                <TextBlock Text="Help…" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button Command="{Binding OpenAboutCommand}"
                                                 Classes="ghost"
                                                 HorizontalAlignment="Stretch"
@@ -519,6 +535,9 @@
                         <controls:PagePreview x:Name="PreviewImage"
                                               PageImage="{Binding PageImage}"
                                               Highlights="{Binding IndexHighlights}"
+                                              AllowDraw="{Binding IsAddingManualRedaction}"
+                                              ZoneDrawnCommand="{Binding AddManualRedactionCommand}"
+                                              ZoneChangedCommand="{Binding ChangeManualRedactionCommand}"
                                               HighlightClickedCommand="{Binding SelectIndexHighlightCommand}"
                                               Margin="8"
                                               IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}" />
@@ -678,6 +697,23 @@
                     </StackPanel>
                 </ScrollViewer>
                 <StackPanel Grid.Row="2" Margin="16,12" Spacing="8">
+                    <Button Content="{Binding ManualRedactionButtonLabel}"
+                            Command="{Binding ToggleManualRedactionModeCommand}"
+                            Classes.accent="{Binding IsAddingManualRedaction}"
+                            IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            ToolTip.Tip="Draw a rectangle anywhere on the current page to add a redaction" />
+                    <TextBlock Text="Draw on the page to add a redaction. Select a manual region to move or resize it."
+                               IsVisible="{Binding IsAddingManualRedaction}"
+                               TextWrapping="Wrap"
+                               FontSize="11"
+                               Foreground="{DynamicResource MutedBrush}" />
+                    <Button Content="Remove selected manual redaction"
+                            Command="{Binding RemoveManualRedactionCommand}"
+                            IsVisible="{Binding HasSelectedManualRedaction}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
                     <Border IsVisible="{Binding HasRedactedFile}"
                             Background="{DynamicResource Surface2Brush}"
                             BorderBrush="{DynamicResource BorderBrush1}"

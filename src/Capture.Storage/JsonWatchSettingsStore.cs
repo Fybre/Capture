@@ -105,6 +105,8 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             AiApiKey = Protect("AiApiKey", settings.AiApiKey),
             AiModel = settings.AiModel,
             AiMaxDocumentChars = settings.AiMaxDocumentChars,
+            AiProvider = settings.AiProvider,
+            LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars,
             LastImportProfileId = settings.LastImportProfileId,
             LastBatchProfileId = settings.LastBatchProfileId,
             ThereforeBaseUrl = settings.ThereforeBaseUrl,

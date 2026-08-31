@@ -9,8 +9,8 @@ public class ThereforeClientTests
     public void BuildBaseUrl_derives_the_online_url_from_tenant_when_no_url_given()
     {
         Assert.Equal(
-            "https://craigdemo.thereforeonline.com/theservice/v0001/restun",
-            ThereforeClient.BuildBaseUrl("craigdemo", null));
+            "https://sampletenant.thereforeonline.com/theservice/v0001/restun",
+            ThereforeClient.BuildBaseUrl("sampletenant", null));
     }
 
     [Fact]
@@ -22,16 +22,16 @@ public class ThereforeClientTests
     }
 
     [Theory]
-    [InlineData("https://craigdemo.thereforeonline.com")]
-    [InlineData("https://craigdemo.thereforeonline.com/theservice")]
-    [InlineData("https://craigdemo.thereforeonline.com/theservice/v0001")]
-    [InlineData("https://craigdemo.thereforeonline.com/theservice/v0001/restun")]
-    [InlineData("https://craigdemo.thereforeonline.com/theservice/v0001/restun/")]
+    [InlineData("https://sampletenant.thereforeonline.com")]
+    [InlineData("https://sampletenant.thereforeonline.com/theservice")]
+    [InlineData("https://sampletenant.thereforeonline.com/theservice/v0001")]
+    [InlineData("https://sampletenant.thereforeonline.com/theservice/v0001/restun")]
+    [InlineData("https://sampletenant.thereforeonline.com/theservice/v0001/restun/")]
     public void BuildBaseUrl_normalizes_any_level_of_pasted_url_to_the_same_result(string pasted)
     {
         Assert.Equal(
-            "https://craigdemo.thereforeonline.com/theservice/v0001/restun",
-            ThereforeClient.BuildBaseUrl("craigdemo", pasted));
+            "https://sampletenant.thereforeonline.com/theservice/v0001/restun",
+            ThereforeClient.BuildBaseUrl("sampletenant", pasted));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class ThereforeClientTests
     [Fact]
     public void ParseCategoryInfo_maps_label_and_real_fields_from_a_live_response_shape()
     {
-        // Trimmed from a real GetCategoryInfo response (category "Invoices", craigdemo tenant).
+        // Representative GetCategoryInfo response shape for an invoice category.
         using var doc = JsonDocument.Parse("""
             {
               "Name": "Invoices",
@@ -145,8 +145,7 @@ public class ThereforeClientTests
     [Fact]
     public void ParseCategoryInfo_maps_counter_field_type()
     {
-        // Trimmed from a real response (category "format test", craigdemo tenant) — a server-generated
-        // sequence field.
+        // Representative response containing a server-generated sequence field.
         using var doc = JsonDocument.Parse("""
             {
               "Name": "format test",
