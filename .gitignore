@@ -17,3 +17,8 @@ local-nuget-feed/*
 native/CaptureScanHelperMac/.build/
 native/CaptureScanHelperMac/CaptureScanHelperMac
 native/CaptureScanHelperMac/CaptureScanHelperMac.app/
+
+# Packaging build/output — build-dmg.sh and iscc (re)generate these; only the scripts belong in git.
+packaging/macos/.build/
+packaging/macos/out/
+packaging/windows/out/

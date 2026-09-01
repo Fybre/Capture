@@ -1,0 +1,137 @@
+name: Package Capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version override (blank = derive from tag or run number)
+        required: false
+  push:
+    tags: ['v*']
+
+jobs:
+  determine-version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            version="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.0-ci.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+  package-macos:
+    needs: determine-version
+    runs-on: macos-15
+    env:
+      GITHUB_PACKAGES_USERNAME: Fybre
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.CAPTURE_PACKAGES_PAT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Import Developer ID certificate
+        if: secrets.APPLE_CERT_P12_BASE64 != ''
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          KEYCHAIN=build.keychain
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$KEYCHAIN" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f /tmp/cert.p12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
+          identity="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.*)"/\1/')"
+          echo "CAPTURE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+      - name: Write notarization API key
+        if: secrets.APPLE_API_KEY_P8_BASE64 != ''
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        shell: bash
+        run: |
+          echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > /tmp/apple-api-key.p8
+          echo "APPLE_API_KEY_P8_PATH=/tmp/apple-api-key.p8" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=${{ secrets.APPLE_API_KEY_ID }}" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER_ID=${{ secrets.APPLE_API_ISSUER_ID }}" >> "$GITHUB_ENV"
+      - name: Build .dmg
+        shell: bash
+        run: packaging/macos/build-dmg.sh "${{ needs.determine-version.outputs.version }}"
+      - name: Clean up temporary keychain
+        if: always()
+        shell: bash
+        run: security delete-keychain build.keychain 2>/dev/null || true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Capture-macos
+          path: packaging/macos/out/*.dmg
+          if-no-files-found: error
+
+  package-windows:
+    needs: determine-version
+    runs-on: windows-2025
+    env:
+      GITHUB_PACKAGES_USERNAME: Fybre
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.CAPTURE_PACKAGES_PAT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        shell: pwsh
+        run: >-
+          dotnet publish src/Capture.App/Capture.App.csproj
+          --runtime win-x64 --self-contained true --configuration Release
+          -p:Version=${{ needs.determine-version.outputs.version }}
+          --output publish
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: pwsh
+        run: >-
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+          /DVersion=${{ needs.determine-version.outputs.version }}
+          /DPublishDir=${{ github.workspace }}\publish
+          packaging\windows\installer.iss
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Capture-windows
+          path: packaging/windows/out/*.exe
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [determine-version, package-macos, package-windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: Capture-macos
+          path: artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          name: Capture-windows
+          path: artifacts
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release create "${{ github.ref_name }}" artifacts/*.dmg artifacts/*.exe
+          --repo "${{ github.repository }}"
+          --title "Capture ${{ needs.determine-version.outputs.version }}"
+          --generate-notes

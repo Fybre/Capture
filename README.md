@@ -185,3 +185,73 @@ curl -X POST http://127.0.0.1:<port>/analyze \
   -H "Content-Type: application/json" \
   -d '{"text": "Contact Jane Doe at jane.doe@example.com.", "language": "en"}'
 ```
+
+## Packaging & distribution
+
+`.github/workflows/package.yml` builds an end-user-installable package for macOS (a signed, notarized
+`.dmg`) and Windows (an unsigned `CaptureSetup-<version>.exe` installer — no code-signing certificate
+yet; Windows will show a one-time SmartScreen "unknown publisher" prompt until one exists). Trigger it
+via **Actions → Package Capture → Run workflow** (optionally overriding the version), or push a
+`vX.Y.Z` tag to also create a GitHub Release with both artifacts attached.
+
+### macOS: `packaging/macos/build-dmg.sh`
+
+Publishes a self-contained, single-file `osx-arm64` build, assembles a real `Capture.app` (icon from
+`Assets/Brand/Capture.icns`, `CaptureScanHelperMac.app` rebuilt into it since its own MSBuild target
+only hooks `Build`, not `Publish`), code-signs every nested binary individually (`--deep` chokes on
+Presidio's PyInstaller payload — see the script's own comments), and packages it into a `.dmg`.
+Notarizes and staples automatically if Apple credentials are present; otherwise produces an ad-hoc
+signed build good enough for a local sanity check but not for handing to anyone else (Gatekeeper will
+still block it).
+
+Local run: `./packaging/macos/build-dmg.sh <version>`. A few non-obvious things this script works
+around, in case you're debugging it — all confirmed by reproducing each independently:
+- **Build outside any iCloud-Drive-synced folder.** If your checkout lives under `~/Documents` (or
+  anywhere else iCloud syncs), the file-provider daemon asynchronously touches freshly-written files
+  and intermittently breaks `codesign` with `resource fork, Finder information, or similar detritus not
+  allowed`. The script always builds in a fresh `mktemp -d` under `/tmp` regardless of where the repo
+  lives, so this shouldn't bite you, but it's the reason that choice is there.
+- **`-p:PublishSingleFile=true` and `-p:DebugType=none`** aren't just size optimizations — codesign
+  refuses to seal a bundle containing loose PE-format `.dll`/`.pdb` files directly in `Contents/MacOS`
+  ("code object is not signed at all"); collapsing managed assemblies into the one Mach-O apphost and
+  dropping debug symbols removes that class of file entirely.
+- **`presidio-sidecar-data/` and `tessdata/` move to `Contents/Resources/`**, with a symlink left at
+  their original `Contents/MacOS/` path. `Contents/MacOS` must contain only genuinely signable code —
+  Presidio's ~300MB PyInstaller data tree trips the same "must be signed" check even for plain
+  non-code files (Python package metadata, stray source files bundled as package data). `Resources` is
+  exempt. The symlink means `PresidioSidecarLauncher`/`TesseractCliOcrEngine`'s existing
+  `Path.Combine(AppContext.BaseDirectory, ...)` lookups keep working unmodified.
+- **`packaging/macos/entitlements.plist`** grants `allow-jit`/`allow-unsigned-executable-memory` —
+  without them, hardened runtime (required for notarization) blocks CoreCLR's JIT outright and the app
+  fails to start with `Failed to create CoreCLR, HRESULT: 0x80070008`.
+
+Apple secrets the CI workflow needs (none of these can be generated on your behalf — they require your
+own Apple ID/Developer account):
+- `APPLE_CERT_P12_BASE64` + `APPLE_CERT_PASSWORD` — a **Developer ID Application** certificate exported
+  from Keychain Access as a `.p12` (`base64 -i cert.p12 | pbcopy`).
+- `APPLE_TEAM_ID` — from the Apple Developer portal's Membership page.
+- `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`, `APPLE_API_KEY_P8_BASE64` — an **App Store Connect API
+  key** (Users and Access → Integrations → Keys, "Developer" role) for `notarytool`, chosen over an
+  Apple ID + app-specific password since it doesn't hit 2FA prompts in CI.
+
+### Windows: `packaging/windows/installer.iss`
+
+An [Inno Setup](https://jrsoftware.org/isinfo.php) script — CI installs it via Chocolatey
+(`choco install innosetup`) and compiles against a self-contained, single-RID `win-x64` publish:
+
+```powershell
+dotnet publish src/Capture.App/Capture.App.csproj --runtime win-x64 --self-contained true --configuration Release -p:Version=1.2.3 --output publish
+& "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /DVersion=1.2.3 /DPublishDir=publish packaging\windows\installer.iss
+```
+
+Produces `packaging/windows/out/CaptureSetup-<version>.exe`. No signing step yet — add a `SignTool=`
+line to `installer.iss`'s `[Setup]` section once a certificate exists; nothing else about the pipeline
+needs to change.
+
+### CI secrets
+
+Both jobs restore `Capture.Tesseract.Binaries`/`Capture.Presidio.Binaries` from GitHub Packages, which
+needs `CAPTURE_PACKAGES_PAT` (repo secret) — the same `read:packages`-scoped PAT already used for local
+development (see "Native binary packages" above). The macOS job additionally needs the five Apple
+secrets listed above; without them it still builds and produces an ad-hoc signed `.dmg` (useful for
+verifying the pipeline itself still works, not for distribution).

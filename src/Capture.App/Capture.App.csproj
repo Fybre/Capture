@@ -19,6 +19,10 @@
          packaging, which doesn't exist yet for this app. -->
     <ApplicationIcon>Assets\capture.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Defaults for local dev; the packaging workflow overrides both via -p:Version=x.y.z so a real
+         release carries a real version instead of every build claiming to be 0.1.0. -->
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <FileVersion Condition="'$(FileVersion)' == ''">$(Version).0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
