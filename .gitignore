@@ -6,10 +6,9 @@ obj/
 *.suo
 .DS_Store
 
-# Locally-downloaded Capture.Presidio.Binaries package (see README.md) — a few hundred MB of frozen
-# Python/spaCy binaries per platform. Never commit the package itself; each dev/build machine fetches
-# its own copy. The directory is tracked (via local-nuget-feed/.gitkeep) so it exists on a clean clone —
-# Capture.App.csproj only references the package when a matching .nupkg is actually present there.
+# Locally-downloaded native binary packages (see README.md). Never commit the packages themselves;
+# each dev/build machine fetches its own copies. The directory is tracked (via .gitkeep) so it exists
+# on a clean clone; Capture.App.csproj only references packages that are actually present there.
 local-nuget-feed/*
 !local-nuget-feed/.gitkeep
 

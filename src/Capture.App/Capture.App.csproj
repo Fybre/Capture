@@ -65,6 +65,19 @@
     <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.1" />
   </ItemGroup>
 
+  <!-- Like Presidio, the bundled OCR package is currently supplied through local-nuget-feed/ and
+       remains optional so a clean clone can still build. At runtime Capture falls back to a system
+       Tesseract when the package is absent. -->
+  <PropertyGroup>
+    <TesseractLocalFeedDir>$(MSBuildThisFileDirectory)..\..\local-nuget-feed</TesseractLocalFeedDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <_TesseractPackageFiles Include="$(TesseractLocalFeedDir)\Capture.Tesseract.Binaries.*.nupkg" Condition="Exists('$(TesseractLocalFeedDir)')" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(_TesseractPackageFiles)' != ''">
+    <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.1" />
+  </ItemGroup>
+
   <!-- CaptureScanHelperMac is a small native Swift helper that talks to Apple's ImageCaptureCore
        framework on behalf of MacScanSource — there is no public .NET binding for it, so this mirrors
        the bundled-native-helper pattern already used for the Presidio sidecar. It must run as a signed

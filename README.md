@@ -24,20 +24,14 @@ Therefore Online repository.
 ## Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- **Tesseract OCR** — required for OCR of scanned pages with no embedded PDF text.
-  `TesseractCliOcrEngine` resolves a `tesseract` binary from `CAPTURE_TESSERACT`, then `PATH`, then a
-  few well-known install locations. This is currently the one dependency **not** bundled with the
-  app — install it separately:
-  - macOS: `brew install tesseract`
-  - Windows: [UB-Mannheim's installer](https://github.com/UB-Mannheim/tesseract/wiki)
-  - Linux: `apt install tesseract-ocr` (or your distro's equivalent)
 - **macOS only: Xcode Command Line Tools** (`xcode-select --install`) — `Capture.App.csproj` builds
   the `CaptureScanHelperMac` native scan helper (a small Swift binary) via `swiftc` on every build,
   automatically, on macOS. No action needed if the Command Line Tools are already installed; skipped
   entirely on other platforms.
 
 Everything else (PDF rendering, SQLite, barcode decoding, image processing, local AI inference via
-LLamaSharp, and — once set up below — Presidio) is bundled via NuGet with no separate install.
+LLamaSharp, and — once set up below — Tesseract and Presidio) is bundled via NuGet with no separate
+install.
 
 ## Build & run
 
@@ -69,6 +63,39 @@ directory). It runs on CPU via [LLamaSharp](https://github.com/SciSharp/LLamaSha
 grammar-constrained decoding, so no GPU or extra setup is required, but it is slower and less
 accurate than the cloud provider — reasonable for privacy-sensitive or offline use, not a drop-in
 replacement for it. See `src/Capture.LocalAi` for the implementation.
+
+## OCR: bundled Tesseract
+
+OCR of scanned pages with no embedded PDF text uses a bundled Tesseract executable; there is nothing
+for the end user to install on `win-x64` or `osx-arm64`. See
+[`Fybre/tesseract-app`](https://github.com/Fybre/tesseract-app) for the native source build. The
+package contains English language data from `tessdata_fast` only.
+
+`Capture.Tesseract.Binaries` is not published to a public feed yet. For local development:
+
+1. Trigger **Build Tesseract package** in `Fybre/tesseract-app`, or download an existing artifact with
+   `gh run download <run-id> --repo Fybre/tesseract-app -n Capture.Tesseract.Binaries`.
+2. Put the `.nupkg` in `local-nuget-feed/`.
+3. Match its version to the `Capture.Tesseract.Binaries` reference in
+   `src/Capture.App/Capture.App.csproj`, then run `dotnet restore`.
+
+The package reference is conditional, so a clean clone without the package still builds. Resolution
+uses `CAPTURE_TESSERACT` first, then the bundled executable, then `PATH`, then the existing well-known
+install paths. A sibling `tessdata/` directory is supplied to the child process automatically. If no
+Tesseract exists anywhere, OCR reports a clear `InvalidOperationException`; other app features remain
+available. Linux continues to use a system installation. Windows-on-ARM uses the `win-x64` app and
+Tesseract package under emulation; there is no separate `win-arm64` bundle.
+
+To verify the package, build or publish for a supported RID and check that the output contains
+`tesseract` (`tesseract.exe` on Windows) and `tessdata/eng.traineddata`:
+
+```bash
+dotnet publish src/Capture.App/Capture.App.csproj --runtime osx-arm64 --self-contained false
+# Windows: use --runtime win-x64
+```
+
+For an end-to-end check, unset `CAPTURE_TESSERACT`, temporarily move any system Tesseract aside, then
+import a scanned PDF or image and confirm that OCR/indexing succeeds.
 
 ## Redaction: setting up the Presidio sidecar
 

@@ -12,6 +12,20 @@ public sealed partial class TesseractCliOcrEngine : IOcrEngine
     public static string? ResolveExecutable()
     {
         var configured = Environment.GetEnvironmentVariable("CAPTURE_TESSERACT");
+        return ResolveExecutable(
+            AppContext.BaseDirectory,
+            configured,
+            Environment.GetEnvironmentVariable("PATH"));
+    }
+
+    internal static string? ResolveExecutable(
+        string baseDirectory,
+        string? configured,
+        string? path,
+        IEnumerable<string>? wellKnownPaths = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+
         if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
             return configured;
 
@@ -19,21 +33,36 @@ public sealed partial class TesseractCliOcrEngine : IOcrEngine
             ? new[] { "tesseract.exe", "tesseract" }
             : new[] { "tesseract" };
 
+        var bundled = Path.Combine(baseDirectory, names[0]);
+        if (File.Exists(bundled))
+            return bundled;
+
         foreach (var name in names)
         {
-            var fromPath = FindOnPath(name);
+            var fromPath = FindOnPath(name, path);
             if (fromPath is not null)
                 return fromPath;
         }
 
-        var extras = new[]
+        wellKnownPaths ??= new[]
         {
             "/opt/homebrew/bin/tesseract",
             "/usr/local/bin/tesseract",
             @"C:\Program Files\Tesseract-OCR\tesseract.exe"
         };
 
-        return extras.FirstOrDefault(File.Exists);
+        return wellKnownPaths.FirstOrDefault(File.Exists);
+    }
+
+    internal static string? ResolveTessdataDir(string executablePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        var executableDirectory = Path.GetDirectoryName(executablePath);
+        if (string.IsNullOrWhiteSpace(executableDirectory))
+            return null;
+
+        var tessdataDirectory = Path.Combine(executableDirectory, "tessdata");
+        return Directory.Exists(tessdataDirectory) ? tessdataDirectory : null;
     }
 
     public async Task<OcrResult> RecognizeAsync(string imagePath, CancellationToken cancellationToken = default)
@@ -43,7 +72,8 @@ public sealed partial class TesseractCliOcrEngine : IOcrEngine
             throw new FileNotFoundException("Image not found.", imagePath);
 
         var executable = ResolveExecutable()
-            ?? throw new InvalidOperationException("Tesseract was not found. Install Tesseract OCR and ensure it is on PATH.");
+            ?? throw new InvalidOperationException(
+                "Tesseract was not found. Restore the bundled Tesseract package or install Tesseract OCR and ensure it is on PATH.");
 
         var language = Environment.GetEnvironmentVariable("CAPTURE_OCR_LANG");
         if (string.IsNullOrWhiteSpace(language))
@@ -67,6 +97,10 @@ public sealed partial class TesseractCliOcrEngine : IOcrEngine
         start.ArgumentList.Add("--psm");
         start.ArgumentList.Add("6");
         start.ArgumentList.Add("tsv");
+
+        var tessdataDirectory = ResolveTessdataDir(executable);
+        if (tessdataDirectory is not null)
+            start.Environment["TESSDATA_PREFIX"] = tessdataDirectory;
 
         using var process = new Process { StartInfo = start };
         if (!process.Start())
@@ -102,9 +136,8 @@ public sealed partial class TesseractCliOcrEngine : IOcrEngine
         return TesseractTsvParser.Parse(stdout);
     }
 
-    private static string? FindOnPath(string fileName)
+    private static string? FindOnPath(string fileName, string? path)
     {
-        var path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrWhiteSpace(path))
             return null;
 
