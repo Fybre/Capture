@@ -63,7 +63,7 @@
     <_PresidioPackageFiles Include="$(PresidioLocalFeedDir)\Capture.Presidio.Binaries.*.nupkg" Condition="Exists('$(PresidioLocalFeedDir)')" />
   </ItemGroup>
   <ItemGroup Condition="'@(_PresidioPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
-    <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.1" />
+    <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.2" />
   </ItemGroup>
 
   <!-- Like Presidio, the bundled OCR package is restorable from local-nuget-feed/ or GitHub Packages
@@ -76,7 +76,7 @@
     <_TesseractPackageFiles Include="$(TesseractLocalFeedDir)\Capture.Tesseract.Binaries.*.nupkg" Condition="Exists('$(TesseractLocalFeedDir)')" />
   </ItemGroup>
   <ItemGroup Condition="'@(_TesseractPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
-    <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.1" />
+    <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.2" />
   </ItemGroup>
 
   <!-- CaptureScanHelperMac is a small native Swift helper that talks to Apple's ImageCaptureCore
