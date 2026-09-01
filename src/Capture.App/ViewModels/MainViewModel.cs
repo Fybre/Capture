@@ -400,6 +400,33 @@ public partial class MainViewModel : ViewModelBase
         await ImportPathsAsync(files);
     }
 
+    /// <summary>Handles file(s)/folder(s) dropped onto the window from Finder/Explorer — the drop
+    /// target itself lives in MainWindow's code-behind (OS-level drag-and-drop isn't something a
+    /// ViewModel can subscribe to directly); this is where it hands off into the same import pipeline
+    /// <see cref="ImportFilesAsync"/> uses, so a drop behaves identically to picking files via the
+    /// toolbar button. Folders are expanded one level deep, matching <see cref="ImportFolderAsync"/>.</summary>
+    public async Task ImportDroppedPathsAsync(IReadOnlyList<string> paths)
+    {
+        if (!CanImport())
+            return;
+
+        var files = paths
+            .SelectMany(path => Directory.Exists(path)
+                ? Directory.EnumerateFiles(path)
+                : [path])
+            .Where(ImportFormats.IsSupported)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            StatusText = "No supported files in the dropped item(s)";
+            return;
+        }
+
+        await ImportPathsAsync(files);
+    }
+
     [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task ImportFolderAsync()
     {

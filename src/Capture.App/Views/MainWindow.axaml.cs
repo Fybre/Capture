@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using Capture.App.Converters;
 using Capture.App.ViewModels;
@@ -39,6 +40,38 @@ public partial class MainWindow : Window
         Opened += OnOpened;
         WireDragDrop(InboxGrid);
         WirePageDragDrop(PageThumbnailStrip);
+        WireFileDrop();
+    }
+
+    // Lets a user drag file(s)/folder(s) from Finder/Explorer anywhere onto the window to import them
+    // — functionally the same as the Import Files toolbar button. Uses the OS-level DataFormats.Files
+    // format, distinct from DocumentDragFormat/PageDragFormat above (in-app row/page reordering via a
+    // custom format string), so the two coexist without conflict.
+    private void WireFileDrop()
+    {
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnWindowDragOver);
+        AddHandler(DragDrop.DropEvent, OnWindowDrop);
+    }
+
+    private void OnWindowDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = e.Data.Contains(DataFormats.Files) ? DragDropEffects.Copy : DragDropEffects.None;
+    }
+
+    private async void OnWindowDrop(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel || !e.Data.Contains(DataFormats.Files))
+            return;
+
+        var paths = (e.Data.GetFiles() ?? [])
+            .Select(item => item.TryGetLocalPath())
+            .Where(path => path is not null)
+            .Select(path => path!)
+            .ToList();
+
+        if (paths.Count > 0)
+            await viewModel.ImportDroppedPathsAsync(paths);
     }
 
     private async void OnOpened(object? sender, EventArgs e)
