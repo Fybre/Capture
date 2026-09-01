@@ -59,10 +59,17 @@ public partial class MainWindow : Window
         e.DragEffects = e.Data.Contains(DataFormats.Files) ? DragDropEffects.Copy : DragDropEffects.None;
     }
 
-    private async void OnWindowDrop(object? sender, DragEventArgs e)
+    private async void OnWindowDrop(object? sender, DragEventArgs e) => await TryImportDroppedFilesAsync(e);
+
+    // Shared by the window-level drop target and OnGridDrop below — the Inbox grid (and every Table-
+    // mode group grid, via the same WireDragDrop wiring) marks DragOver/Drop events Handled
+    // unconditionally for its own in-app row-reorder format, which stops the window-level handler from
+    // ever seeing a Files-format drop over those areas. Checking Files here first, before falling back
+    // to the row-reorder logic, is what lets dropping files directly onto the Inbox work too.
+    private async Task<bool> TryImportDroppedFilesAsync(DragEventArgs e)
     {
         if (DataContext is not MainViewModel viewModel || !e.Data.Contains(DataFormats.Files))
-            return;
+            return false;
 
         var paths = (e.Data.GetFiles() ?? [])
             .Select(item => item.TryGetLocalPath())
@@ -72,6 +79,7 @@ public partial class MainWindow : Window
 
         if (paths.Count > 0)
             await viewModel.ImportDroppedPathsAsync(paths);
+        return true;
     }
 
     private async void OnOpened(object? sender, EventArgs e)
@@ -209,6 +217,12 @@ public partial class MainWindow : Window
 
     private void OnGridDragOver(object? sender, DragEventArgs e)
     {
+        if (e.Data.Contains(DataFormats.Files))
+        {
+            e.DragEffects = DragDropEffects.Copy;
+            e.Handled = true;
+            return;
+        }
         e.DragEffects = sender is DataGrid grid && CanDrop(grid, e) ? DragDropEffects.Move : DragDropEffects.None;
         e.Handled = true;
     }
@@ -216,6 +230,8 @@ public partial class MainWindow : Window
     private async void OnGridDrop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
+        if (await TryImportDroppedFilesAsync(e))
+            return;
         if (sender is not DataGrid grid || DataContext is not MainViewModel viewModel || !TryGetDragIds(e.Data, out var ids))
             return;
 
