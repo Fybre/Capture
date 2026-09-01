@@ -306,7 +306,16 @@ public partial class MainViewModel : ViewModelBase
     private int _pageCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentPageWords))]
     private PageLattice? _currentLattice;
+
+    /// <summary>The current page's recognized OCR/PDF-text words, for the same "Show OCR text" overlay
+    /// toggle already used in the Profile Designer — lets a reviewer see exactly where extraction
+    /// thinks text is, e.g. when a redaction or index highlight looks misplaced.</summary>
+    public IReadOnlyList<LatticeWord> CurrentPageWords => CurrentLattice?.Words ?? [];
+
+    [ObservableProperty]
+    private bool _showOcrWords;
 
     [ObservableProperty]
     private IReadOnlyList<IndexHighlight> _indexHighlights = [];

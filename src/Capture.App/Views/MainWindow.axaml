@@ -616,6 +616,8 @@
                         <controls:PagePreview x:Name="PreviewImage"
                                               PageImage="{Binding PageImage}"
                                               Highlights="{Binding IndexHighlights}"
+                                              OcrWords="{Binding CurrentPageWords}"
+                                              ShowOcrWords="{Binding ShowOcrWords}"
                                               AllowDraw="{Binding IsAddingManualRedaction}"
                                               ZoneDrawnCommand="{Binding AddManualRedactionCommand}"
                                               ZoneChangedCommand="{Binding ChangeManualRedactionCommand}"
@@ -640,6 +642,12 @@
                                 Padding="3"
                                 IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}">
                             <StackPanel Orientation="Horizontal" Spacing="2">
+                                <CheckBox Content="OCR text"
+                                          IsChecked="{Binding ShowOcrWords}"
+                                          VerticalAlignment="Center"
+                                          Margin="6,0,4,0"
+                                          FontSize="11.5"
+                                          ToolTip.Tip="Show boxes around recognized text, with the text and confidence on hover" />
                                 <Button Classes="ghost"
                                         Width="26" Height="26" Padding="0" CornerRadius="6"
                                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
