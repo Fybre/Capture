@@ -33,13 +33,18 @@ jobs:
     env:
       GITHUB_PACKAGES_USERNAME: Fybre
       GITHUB_PACKAGES_TOKEN: ${{ secrets.CAPTURE_PACKAGES_PAT }}
+      # `if:` conditions can't reference the `secrets` context directly (GitHub Actions rejects it at
+      # parse time: "Unrecognized named-value: 'secrets'") — route the presence check through env vars
+      # instead, which `env:` blocks are allowed to read from secrets.
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
+      HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_P8_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
       - name: Import Developer ID certificate
-        if: secrets.APPLE_CERT_P12_BASE64 != ''
+        if: env.HAS_APPLE_CERT == 'true'
         env:
           APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -58,7 +63,7 @@ jobs:
           identity="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.*)"/\1/')"
           echo "CAPTURE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
       - name: Write notarization API key
-        if: secrets.APPLE_API_KEY_P8_BASE64 != ''
+        if: env.HAS_APPLE_API_KEY == 'true'
         env:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
         shell: bash
