@@ -295,6 +295,21 @@ public sealed class SqliteDocumentStore : IDocumentStore
         return results;
     }
 
+    public async Task<CaptureDocument?> GetAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error
+            FROM documents
+            WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", documentId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadDocument(reader) : null;
+    }
+
     public async Task<IReadOnlyList<DocumentPage>> GetPagesAsync(
         Guid documentId,
         CancellationToken cancellationToken = default)

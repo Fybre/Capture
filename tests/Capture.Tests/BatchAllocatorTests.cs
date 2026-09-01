@@ -32,6 +32,31 @@ public class BatchAllocatorTests
     }
 
     [Fact]
+    public async Task No_profile_keeps_documents_from_every_file_in_one_batch()
+    {
+        var store = await CreateStoreAsync();
+        var allocator = await BatchAllocator.CreateAsync(store, profile: null, watchFolderEntryId: null);
+
+        var fileOne = await allocator.NextAsync(isFirstDocumentOfFile: true, batchTriggerHit: false, pageCount: 1);
+        var fileTwo = await allocator.NextAsync(isFirstDocumentOfFile: true, batchTriggerHit: false, pageCount: 1);
+
+        Assert.Equal(fileOne.Id, fileTwo.Id);
+    }
+
+    [Fact]
+    public async Task No_profile_with_a_watch_folder_resumes_its_latest_batch()
+    {
+        var store = await CreateStoreAsync();
+        var folderId = Guid.NewGuid();
+        var existing = await store.CreateBatchAsync(folderId);
+        var allocator = await BatchAllocator.CreateAsync(store, profile: null, watchFolderEntryId: folderId);
+
+        var next = await allocator.NextAsync(isFirstDocumentOfFile: true, batchTriggerHit: false, pageCount: 1);
+
+        Assert.Equal(existing.Id, next.Id);
+    }
+
+    [Fact]
     public async Task Barcode_starts_a_new_batch_only_when_the_trigger_fires_after_the_first_document()
     {
         var store = await CreateStoreAsync();

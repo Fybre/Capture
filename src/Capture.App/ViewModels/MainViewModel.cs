@@ -30,6 +30,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IAppPaths _paths;
     private readonly IDocumentStore _store;
     private readonly IDocumentImporter _importer;
+    private readonly IPageManagementService _pageManagement;
     private readonly IFileDialogService _dialogs;
     private readonly IScanSource _scanSource;
     private readonly ProfileExportRunner _exportRunner;
@@ -76,6 +77,7 @@ public partial class MainViewModel : ViewModelBase
         IAppPaths paths,
         IDocumentStore store,
         IDocumentImporter importer,
+        IPageManagementService pageManagement,
         IFileDialogService dialogs,
         IScanSource scanSource,
         ProfileExportRunner exportRunner,
@@ -105,6 +107,7 @@ public partial class MainViewModel : ViewModelBase
         _paths = paths;
         _store = store;
         _importer = importer;
+        _pageManagement = pageManagement;
         _dialogs = dialogs;
         _scanSource = scanSource;
         _exportRunner = exportRunner;
@@ -132,6 +135,7 @@ public partial class MainViewModel : ViewModelBase
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
         SelectedDocuments.CollectionChanged += OnSelectedDocumentsChanged;
+        SelectedPageThumbnails.CollectionChanged += (_, _) => DeleteSelectedPagesCommand.NotifyCanExecuteChanged();
         Profiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProfiles));
         RedactionCandidates.CollectionChanged += (_, _) =>
         {
@@ -147,6 +151,10 @@ public partial class MainViewModel : ViewModelBase
     }
 
     public ObservableCollection<DocumentRow> Documents { get; } = [];
+
+    public ObservableCollection<PageThumbnailRow> PageThumbnails { get; } = [];
+
+    public ObservableCollection<PageThumbnailRow> SelectedPageThumbnails { get; } = [];
 
     public ObservableCollection<IndexingProfile> Profiles { get; } = [];
 
@@ -190,6 +198,8 @@ public partial class MainViewModel : ViewModelBase
 
     public bool HasSelectedDocuments => GetActingRows().Count > 0;
 
+    public bool HasMultipleSelectedDocuments => SelectedDocuments.Count > 1;
+
     public string SelectedDocumentsSummary
     {
         get
@@ -215,19 +225,14 @@ public partial class MainViewModel : ViewModelBase
 
     private IReadOnlyList<DocumentRow> _redactPickerRows = [];
 
-    // In Preview mode there's no multi-select UI — the single InboxGrid selection is the source of
-    // truth, read directly here rather than mirrored into SelectedDocuments. A mirror requires staying
-    // in lockstep with SelectedDocument across every change, including ones Avalonia's DataGrid makes on
-    // its own deferred layout pass when the selected row is removed — any missed sync silently disables
-    // "act on selection" commands. Reading SelectedDocument straight from its own property has no such
-    // window: whatever it currently holds is authoritative. Table mode keeps using SelectedDocuments,
-    // which its grid's own multi-select genuinely drives.
+    // Both views mirror their DataGrid multi-selection into SelectedDocuments. SelectedDocument remains
+    // the active/anchor row used by the single-document preview; fall back to it for programmatic
+    // selections that land before a DataGrid has synchronized its SelectedItems collection.
     private IReadOnlyList<DocumentRow> GetActingRows()
     {
-        if (IsPreviewMode)
-            return SelectedDocument is { } row ? [row] : [];
-
-        return SelectedDocuments.ToList();
+        return SelectedDocuments.Count > 0
+            ? SelectedDocuments.ToList()
+            : SelectedDocument is { } row ? [row] : [];
     }
 
     [ObservableProperty]
@@ -278,9 +283,10 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MergeSelectedDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExportSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
     [NotifyPropertyChangedFor(nameof(HasSelectedDocuments))]
     [NotifyPropertyChangedFor(nameof(SelectedDocumentsSummary))]
     private DocumentRow? _selectedDocument;
@@ -288,12 +294,14 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SplitDocumentAtCurrentPageCommand))]
     [NotifyPropertyChangedFor(nameof(PageLabel))]
     private int _currentPageNumber = 1;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SplitDocumentAtCurrentPageCommand))]
     [NotifyPropertyChangedFor(nameof(PageLabel))]
     private int _pageCount;
 
@@ -324,16 +332,19 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(OpenSettingsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MergeSelectedDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
     [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExportSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleManualRedactionModeCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveManualRedactionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedPagesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SplitDocumentAtCurrentPageCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -439,6 +450,164 @@ public partial class MainViewModel : ViewModelBase
         CurrentPageNumber++;
         var generation = Interlocked.Increment(ref _loadGeneration);
         _ = ShowPageAsync(generation);
+    }
+
+    /// <summary>Moves the main preview to the given page — called from the thumbnail strip's
+    /// SelectionChanged handler in code-behind when exactly one thumbnail ends up selected (a plain
+    /// click, as opposed to a ctrl/shift-click extending a multi-selection for bulk delete).</summary>
+    public void JumpToPage(int pageNumber)
+    {
+        if (pageNumber == CurrentPageNumber)
+            return;
+
+        CurrentPageNumber = pageNumber;
+        var generation = Interlocked.Increment(ref _loadGeneration);
+        _ = ShowPageAsync(generation);
+    }
+
+    private bool CanDeleteSelectedPages() =>
+        !IsBusy && SelectedPageThumbnails.Count > 0 && SelectedPageThumbnails.Count < PageThumbnails.Count;
+
+    [RelayCommand(CanExecute = nameof(CanDeleteSelectedPages))]
+    private async Task DeleteSelectedPagesAsync()
+    {
+        if (SelectedDocument is not { } row)
+            return;
+
+        var pageNumbers = SelectedPageThumbnails.Select(item => item.PageNumber).ToList();
+        IsBusy = true;
+        try
+        {
+            var updated = await _pageManagement.DeletePagesAsync(row.Id, pageNumbers).ConfigureAwait(true);
+            await RefreshDocumentRowInPlaceAsync(row, updated).ConfigureAwait(true);
+            RefreshDocumentGroups();
+            StatusText = pageNumbers.Count == 1 ? "Deleted 1 page" : $"Deleted {pageNumbers.Count} pages";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanSplitAtCurrentPage() =>
+        !IsBusy && SelectedDocument is not null && PageCount > 1 && CurrentPageNumber > 1;
+
+    [RelayCommand(CanExecute = nameof(CanSplitAtCurrentPage))]
+    private async Task SplitDocumentAtCurrentPageAsync()
+    {
+        if (SelectedDocument is not { } row)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var (first, second) = await _pageManagement.SplitDocumentAsync(row.Id, CurrentPageNumber).ConfigureAwait(true);
+            var secondRow = await CreateRowAsync(second).ConfigureAwait(true);
+            var insertIndex = Documents.IndexOf(row) + 1;
+            Documents.Insert(Math.Clamp(insertIndex, 0, Documents.Count), secondRow);
+            await RefreshDocumentRowInPlaceAsync(row, first).ConfigureAwait(true);
+            RefreshBatchAccents();
+            RefreshDocumentGroups();
+            StatusText = "Split into two documents";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Moves a single page to sit at another page's position, called from the thumbnail strip's
+    /// drag-and-drop handler in code-behind — everything after the drop point shifts along by one.</summary>
+    public async Task ReorderPagesAsync(int fromPageNumber, int toPageNumber)
+    {
+        if (SelectedDocument is not { } row || fromPageNumber == toPageNumber)
+            return;
+
+        var newOrder = _pages.Select(page => page.PageNumber).OrderBy(number => number).ToList();
+        if (!newOrder.Contains(toPageNumber) || !newOrder.Remove(fromPageNumber))
+            return;
+        var insertAt = newOrder.IndexOf(toPageNumber);
+        newOrder.Insert(insertAt < 0 ? newOrder.Count : insertAt, fromPageNumber);
+
+        IsBusy = true;
+        try
+        {
+            var updated = await _pageManagement.ReorderPagesAsync(row.Id, newOrder).ConfigureAwait(true);
+            await RefreshDocumentRowInPlaceAsync(row, updated).ConfigureAwait(true);
+            StatusText = "Reordered pages";
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Refreshes a document row's state after a page-management operation, mutating the
+    /// existing <see cref="DocumentRow"/>/<see cref="CaptureDocument"/> in place rather than swapping in
+    /// a new row instance. This is deliberate, not just an optimization: replacing the object at this
+    /// row's index in <see cref="Documents"/> makes Avalonia's DataGrid lose track of which row was
+    /// selected (it doesn't reliably preserve selection across an ItemsSource element replacement — a
+    /// single deferred re-assertion of SelectedItem was tried here and lost the race against the
+    /// DataGrid's own later correction, unlike the simpler item-removal case RemoveSelectedAsync already
+    /// works around), silently bouncing the selection to another document right after the edit. Keeping
+    /// the same object reference selected the whole time sidesteps that entirely.</summary>
+    private async Task RefreshDocumentRowInPlaceAsync(DocumentRow row, CaptureDocument updated)
+    {
+        row.Document.StoredPath = updated.StoredPath;
+        row.Document.PageCount = updated.PageCount;
+        row.Document.Status = updated.Status;
+        row.Document.RedactionStatus = updated.RedactionStatus;
+        row.Document.RedactedPath = updated.RedactedPath;
+        row.Document.ErrorMessage = updated.ErrorMessage;
+
+        if (updated.ProfileId is { } profileId)
+        {
+            var profile = await _profileStore.GetAsync(profileId).ConfigureAwait(true);
+            if (profile is not null)
+            {
+                row.ConfidenceThreshold = profile.AutoReadyThreshold;
+                row.Locale = profile.Locale;
+                row.ProfileName = profile.Name;
+            }
+        }
+
+        var documentValues = await _indexes.GetAsync(row.Id).ConfigureAwait(true);
+        row.SetDocumentIndexes(documentValues);
+        if (row.Document.BatchId is { } batchId)
+        {
+            var batchValues = await _indexes.GetBatchAsync(batchId).ConfigureAwait(true);
+            row.SetBatchIndexes(batchValues);
+        }
+
+        row.NotifyIndexes();
+
+        // Since the row object never changed, SelectedDocument never "changes" either, so
+        // OnSelectedDocumentChanged's usual reload doesn't fire on its own — do the same reload it
+        // would have done, directly, when this is the row currently being previewed.
+        if (ReferenceEquals(SelectedDocument, row))
+        {
+            LoadReviewIndexes(row);
+            await LoadRedactionCandidatesAsync(row).ConfigureAwait(true);
+            ApplyRedactionsCommand.NotifyCanExecuteChanged();
+            await LoadSelectedDocumentAsync(row).ConfigureAwait(true);
+        }
     }
 
     private async Task ApplyProfileToRowAsync(DocumentRow row, IndexingProfile profile)
@@ -614,6 +783,57 @@ public partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanMergeSelectedDocuments() => !IsBusy && GetActingRows().Count > 1;
+
+    [RelayCommand(CanExecute = nameof(CanMergeSelectedDocuments))]
+    private async Task MergeSelectedDocumentsAsync()
+    {
+        var rows = SelectedDocuments.ToList();
+        if (rows.Count < 2)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var targetRow = rows[0];
+            var merged = await _pageManagement.MergeDocumentsAsync(rows.Select(row => row.Id).ToList())
+                .ConfigureAwait(true);
+
+            if (_lastManualBatch is { } openBatch
+                && rows.Skip(1).Any(row => row.Document.BatchId == openBatch.Id))
+            {
+                _lastManualBatch = merged.BatchId is { } batchId
+                    ? new CaptureBatch
+                    {
+                        Id = batchId,
+                        Number = await _store.GetBatchNumberAsync(batchId).ConfigureAwait(true)
+                    }
+                    : null;
+            }
+
+            foreach (var absorbed in rows.Skip(1))
+                Documents.Remove(absorbed);
+            await RefreshDocumentRowInPlaceAsync(targetRow, merged).ConfigureAwait(true);
+
+            SelectedDocuments.Clear();
+            SelectedDocuments.Add(targetRow);
+            SelectedDocument = targetRow;
+            RefreshBatchAccents();
+            RefreshDocumentGroups();
+            StatusText = $"Merged {rows.Count} documents into {merged.PageCount} pages";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -818,11 +1038,17 @@ public partial class MainViewModel : ViewModelBase
 
     private enum ExportOutcome { Exported, ExportedAndRemoved, Skipped, Failed }
 
-    [RelayCommand(CanExecute = nameof(CanActOnSelected))]
-    private async Task ExportSelectedAsync() => await RunExportAsync(GetActingRows()).ConfigureAwait(true);
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportAsync()
+    {
+        var selected = GetActingRows();
+        await RunExportAsync(selected.Count > 0 ? selected : Documents.ToList()).ConfigureAwait(true);
+    }
 
     [RelayCommand(CanExecute = nameof(CanExportAll))]
     private async Task ExportAllAsync() => await RunExportAsync(Documents.ToList()).ConfigureAwait(true);
+
+    private bool CanExport() => !IsBusy && Documents.Count > 0;
 
     private bool CanExportAll() => !IsBusy && Documents.Count > 0;
 
@@ -896,8 +1122,8 @@ public partial class MainViewModel : ViewModelBase
 
     // Only a Ready document is eligible — one that's still NeedsReview, Queued, Processing, or Error
     // is skipped rather than exported with incomplete/unvalidated data. An already-Exported document is
-    // also skipped: re-running export is available per-document via re-selecting and using Export
-    // Selected, not implicitly folded into a bulk Export All pass.
+    // also skipped: re-running export is available per-document by selecting it and using Export, not
+    // implicitly folded into a bulk export-all pass.
     private async Task<ExportOutcome> ExportDocumentAsync(DocumentRow row)
     {
         var document = row.Document;
@@ -970,15 +1196,16 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnViewModeChanged(WorkspaceMode value)
     {
-        // GetActingRows() switches source (SelectedDocument vs. SelectedDocuments) based on ViewMode, so
-        // switching views can change what "the current selection" means without either property itself
-        // changing — nudge the dependents that don't otherwise know to re-check.
+        // The visible DataGrid can change without either selection property changing immediately, so
+        // nudge every selection-dependent command/property when switching views.
         OnPropertyChanged(nameof(HasSelectedDocuments));
         OnPropertyChanged(nameof(SelectedDocumentsSummary));
+        OnPropertyChanged(nameof(HasMultipleSelectedDocuments));
         ApplySelectedProfileCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
+        MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
         RedactSelectedCommand.NotifyCanExecuteChanged();
-        ExportSelectedCommand.NotifyCanExecuteChanged();
+        ExportCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedIndexChanged(IndexValueRow? value)
@@ -1049,7 +1276,8 @@ public partial class MainViewModel : ViewModelBase
                     ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
                     : null)
                 : SelectedBatchProfile;
-            var resumeBatch = watchFolderEntry is null && batchProfile?.Trigger == BatchTrigger.Manual
+            var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
+            var resumeBatch = watchFolderEntry is null && keepsBatchOpen
                 ? _lastManualBatch
                 : null;
             var allocator = await BatchAllocator.CreateAsync(
@@ -1098,7 +1326,7 @@ public partial class MainViewModel : ViewModelBase
                 }
             }
 
-            if (watchFolderEntry is null && batchProfile?.Trigger == BatchTrigger.Manual)
+            if (watchFolderEntry is null && keepsBatchOpen)
                 _lastManualBatch = allocator.Current;
 
             RefreshBatchAccents();
@@ -1178,7 +1406,8 @@ public partial class MainViewModel : ViewModelBase
         {
             var profile = SelectedImportProfile;
             var batchProfile = SelectedBatchProfile;
-            var resumeBatch = batchProfile?.Trigger == BatchTrigger.Manual ? _lastManualBatch : null;
+            var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
+            var resumeBatch = keepsBatchOpen ? _lastManualBatch : null;
             var allocator = await BatchAllocator.CreateAsync(_store, batchProfile, watchFolderEntryId: null, resumeBatch)
                 .ConfigureAwait(true);
 
@@ -1212,7 +1441,7 @@ public partial class MainViewModel : ViewModelBase
                 }
             }
 
-            if (batchProfile?.Trigger == BatchTrigger.Manual)
+            if (keepsBatchOpen)
                 _lastManualBatch = allocator.Current;
 
             RefreshBatchAccents();
@@ -1894,6 +2123,8 @@ public partial class MainViewModel : ViewModelBase
         CurrentLattice = null;
         IndexHighlights = [];
         SetPageImage(null);
+        PageThumbnails.Clear();
+        SelectedPageThumbnails.Clear();
         OnPropertyChanged(nameof(PreviewMessage));
 
         if (row is null)
@@ -1908,7 +2139,10 @@ public partial class MainViewModel : ViewModelBase
             _pages = pages;
             PageCount = pages.Count;
             CurrentPageNumber = pages.Count == 0 ? 1 : 1;
+            foreach (var page in pages)
+                PageThumbnails.Add(new PageThumbnailRow(page));
             await ShowPageAsync(generation).ConfigureAwait(true);
+            _ = LoadPageThumbnailsAsync(pages, generation);
         }
         catch (Exception ex)
         {
@@ -1918,6 +2152,45 @@ public partial class MainViewModel : ViewModelBase
         finally
         {
             OnPropertyChanged(nameof(PreviewMessage));
+        }
+    }
+
+    private const int ThumbnailPixelWidth = 120;
+
+    private async Task LoadPageThumbnailsAsync(IReadOnlyList<DocumentPage> pages, int generation)
+    {
+        foreach (var page in pages)
+        {
+            if (generation != _loadGeneration)
+                return;
+            if (!File.Exists(page.ImagePath))
+                continue;
+
+            Bitmap thumbnail;
+            try
+            {
+                thumbnail = await Task.Run(() =>
+                {
+                    using var stream = File.OpenRead(page.ImagePath);
+                    return Bitmap.DecodeToWidth(stream, ThumbnailPixelWidth);
+                }).ConfigureAwait(true);
+            }
+            catch (Exception)
+            {
+                continue; // skip an unreadable page's thumbnail rather than failing the whole strip
+            }
+
+            if (generation != _loadGeneration)
+            {
+                thumbnail.Dispose();
+                return;
+            }
+
+            var thumbnailRow = PageThumbnails.FirstOrDefault(item => item.PageNumber == page.PageNumber);
+            if (thumbnailRow is not null)
+                thumbnailRow.Thumbnail = thumbnail;
+            else
+                thumbnail.Dispose();
         }
     }
 
@@ -2137,6 +2410,7 @@ public partial class MainViewModel : ViewModelBase
     private void OnDocumentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasNoDocuments));
+        ExportCommand.NotifyCanExecuteChanged();
         ExportAllCommand.NotifyCanExecuteChanged();
     }
 
@@ -2144,9 +2418,11 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasSelectedDocuments));
         OnPropertyChanged(nameof(SelectedDocumentsSummary));
+        OnPropertyChanged(nameof(HasMultipleSelectedDocuments));
         ApplySelectedProfileCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
+        MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
         RedactSelectedCommand.NotifyCanExecuteChanged();
-        ExportSelectedCommand.NotifyCanExecuteChanged();
+        ExportCommand.NotifyCanExecuteChanged();
     }
 }

@@ -15,6 +15,8 @@ public interface IDocumentStore
 
     Task<IReadOnlyList<CaptureDocument>> GetAllAsync(CancellationToken cancellationToken = default);
 
+    Task<CaptureDocument?> GetAsync(Guid documentId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<DocumentPage>> GetPagesAsync(
         Guid documentId,
         CancellationToken cancellationToken = default);

@@ -6,7 +6,7 @@ namespace Capture.Core.Batches;
 /// <summary>
 /// Decides which <see cref="CaptureBatch"/> a newly materialized document belongs to, according to a
 /// <see cref="BatchProfile"/>. One allocator is created per import operation and asked once per document.
-/// A null profile behaves like <see cref="BatchTrigger.NewBatchPerFile"/> — today's default.
+/// A null profile keeps every document in one batch, matching <see cref="BatchTrigger.Manual"/>.
 /// </summary>
 public sealed class BatchAllocator
 {
@@ -19,7 +19,7 @@ public sealed class BatchAllocator
     private BatchAllocator(IDocumentStore store, BatchProfile? profile, Guid? watchFolderEntryId, CaptureBatch? seed)
     {
         _store = store;
-        _trigger = profile?.Trigger ?? BatchTrigger.NewBatchPerFile;
+        _trigger = profile?.Trigger ?? BatchTrigger.Manual;
         _pageThreshold = Math.Max(1, profile?.PageCount ?? 1);
         _watchFolderEntryId = watchFolderEntryId;
         Current = seed;
@@ -41,7 +41,9 @@ public sealed class BatchAllocator
         CancellationToken cancellationToken = default)
     {
         var seed = resumeBatch;
-        if (seed is null && profile?.Trigger == BatchTrigger.Manual && watchFolderEntryId is { } id)
+        if (seed is null
+            && (profile is null || profile.Trigger == BatchTrigger.Manual)
+            && watchFolderEntryId is { } id)
             seed = await store.GetLatestBatchForFolderAsync(id, cancellationToken).ConfigureAwait(false);
 
         return new BatchAllocator(store, profile, watchFolderEntryId, seed);

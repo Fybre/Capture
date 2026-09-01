@@ -48,6 +48,20 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <!-- Capture.Presidio.Binaries is only fetched from the developer's own local-nuget-feed/ (see
+       README.md) — a fresh clone doesn't have it, and PII redaction is documented as gracefully
+       optional at runtime when the package is absent (see PresidioSidecarLauncher). Referencing it
+       unconditionally would turn "package not yet fetched" into a hard NU1101 build failure instead,
+       so only add the reference when a matching .nupkg actually exists in the local feed. -->
+  <PropertyGroup>
+    <PresidioLocalFeedDir>$(MSBuildThisFileDirectory)..\..\local-nuget-feed</PresidioLocalFeedDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <_PresidioPackageFiles Include="$(PresidioLocalFeedDir)\Capture.Presidio.Binaries.*.nupkg" Condition="Exists('$(PresidioLocalFeedDir)')" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(_PresidioPackageFiles)' != ''">
     <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.1" />
   </ItemGroup>
 

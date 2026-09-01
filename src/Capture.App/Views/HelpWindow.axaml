@@ -132,7 +132,7 @@
                             <Border Grid.Row="3" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="4" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                             <TextBlock Grid.Row="3" Grid.Column="1" Text="Choose Mark ready when the required review is complete. Profile-driven redaction may run at this point." Classes="help-body" Margin="4,1,0,12" />
                             <Border Grid.Row="4" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="5" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
-                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Choose Export selected, or use its menu to export every Ready document." Classes="help-body" Margin="4,1,0,0" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Choose Export for the current selection, or every Ready document when nothing is selected." Classes="help-body" Margin="4,1,0,0" />
                         </Grid>
 
                         <Border Classes="help-tip">
@@ -147,8 +147,10 @@
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Text="The workspace" Classes="help-title" />
-                        <TextBlock Text="Preview mode is designed for focused review. Table mode gives a spreadsheet-style overview and supports multi-selection."
+                        <TextBlock Text="Preview mode supports focused review and multi-selection in the Inbox. Table mode gives a spreadsheet-style overview with the same bulk actions."
                                    Classes="help-lead" />
+                        <TextBlock Text="Ctrl/Command-click or Shift-click documents to select several at once. The page preview pauses while multiple documents are selected. Choose Merge to append their pages in displayed order; the first document keeps its filename, profile, batch, and document-level index values."
+                                   Classes="help-body" />
 
                         <Border Classes="help-card">
                             <StackPanel Spacing="12">
@@ -462,7 +464,7 @@
                         <TextBlock Text="Export definitions live on indexing profiles. A profile may run several enabled destinations for each Ready document."
                                    Classes="help-lead" />
                         <TextBlock Text="Configure exports" Classes="help-h2" />
-                        <TextBlock Text="Open the profile editor and add an export. Give it a meaningful name, enable it, select CSV or Therefore, and configure the destination. Export selected runs all enabled definitions for Ready documents in the selection; Export all processes every Ready document in the Inbox."
+                        <TextBlock Text="Open the profile editor and add an export. Give it a meaningful name, enable it, select CSV or Therefore, and configure the destination. Export runs all enabled definitions for Ready documents in the selection, or processes every Ready document in the Inbox when nothing is selected."
                                    Classes="help-body" />
                         <TextBlock Text="CSV" Classes="help-h2" />
                         <TextBlock Text="Choose one file per document or append rows to a shared CSV. Select and order the fields, include or omit the header, and optionally copy the original or redacted document beside the data. One-file mode supports filename tokens including profile fields, original filename, document ID, date, and time."

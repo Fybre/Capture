@@ -16,6 +16,7 @@ namespace Capture.App.Views;
 public partial class MainWindow : Window
 {
     private const string DocumentDragFormat = "capture.document";
+    private const string PageDragFormat = "capture.page";
 
     // Rail, File, Pages, Status, Issues — the columns each Table-mode group DataGrid declares in XAML,
     // before per-profile index-field columns are appended in code-behind.
@@ -27,11 +28,17 @@ public partial class MainWindow : Window
     private Point _pressPoint;
     private bool _dragging;
 
+    private ListBox? _pressPageStrip;
+    private PageThumbnailRow? _pressPageThumbnail;
+    private Point _pressPagePoint;
+    private bool _pageDragging;
+
     public MainWindow()
     {
         InitializeComponent();
         Opened += OnOpened;
         WireDragDrop(InboxGrid);
+        WirePageDragDrop(PageThumbnailStrip);
     }
 
     private async void OnOpened(object? sender, EventArgs e)
@@ -71,15 +78,28 @@ public partial class MainWindow : Window
         _pressPoint = e.GetPosition(grid);
         _dragging = false;
 
+        // Each Table-mode section is a separate DataGrid. A plain click starts a fresh selection,
+        // while Ctrl/Command/Shift-click extends the selection across section boundaries just as it
+        // does within one grid.
+        if (_pressRow is not null
+            && _groupGrids.Contains(grid)
+            && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) == 0)
+        {
+            foreach (var other in _groupGrids)
+            {
+                if (other != grid)
+                    other.SelectedItems.Clear();
+            }
+        }
+
         // A left-click that lands on neither a row nor a column header is empty space below/around
         // the rows — Avalonia's DataGrid has no built-in "click empty space to deselect" behavior,
         // so without this a selection (the single Preview-mode document, or the whole Table-mode
         // multi-selection) could never be cleared once made.
         if (_pressRow is null && !IsOnColumnHeader(e.Source) && DataContext is MainViewModel viewModel)
         {
-            // DataGridSelectedItemsCollection.Clear() throws in Single selection mode (the Preview
-            // InboxGrid) — SelectedItem is the only mutable surface there; Table-mode group grids are
-            // Extended and go through SelectedItems instead.
+            // DataGridSelectedItemsCollection.Clear() throws in Single selection mode; the current
+            // document grids are Extended, but keep this safe for any future single-select reuse.
             if (grid.SelectionMode == DataGridSelectionMode.Single)
                 grid.SelectedItem = null;
             else
@@ -237,6 +257,169 @@ public partial class MainWindow : Window
         return null;
     }
 
+    // Jumps the main preview to whatever single thumbnail the user just plain-clicked. Ctrl/shift-click
+    // extending the ListBox's own multi-selection (for a bulk delete) leaves more than one item selected,
+    // in which case the preview deliberately stays put rather than following the most recent click.
+    private void OnPageThumbnailSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListBox strip || DataContext is not MainViewModel viewModel)
+            return;
+        if (strip.SelectedItems is { Count: 1 } selected && selected[0] is PageThumbnailRow only)
+            viewModel.JumpToPage(only.PageNumber);
+    }
+
+    private void OnInboxSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not DataGrid grid
+            || DataContext is not MainViewModel viewModel
+            || !viewModel.IsPreviewMode)
+            return;
+
+        viewModel.SelectedDocuments.Clear();
+        foreach (var item in grid.SelectedItems)
+        {
+            if (item is DocumentRow row)
+                viewModel.SelectedDocuments.Add(row);
+        }
+
+        viewModel.SelectedDocument = grid.SelectedItems.Count == 1
+            ? grid.SelectedItems[0] as DocumentRow
+            : grid.SelectedItems.Count == 0
+                ? null
+                : grid.SelectedItem as DocumentRow;
+    }
+
+    // Right-click (or the keyboard menu key) on a thumbnail that isn't part of the current multi-selection
+    // replaces the selection with just that page before its context menu opens — matching the usual
+    // file-manager convention — so "Delete page(s)"/"Split here" always act on the page under the pointer
+    // rather than some earlier, unrelated selection. Right-clicking within an existing multi-selection
+    // leaves it alone, so "Delete page(s)" still deletes the whole selection.
+    private void OnPageThumbnailContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not Border border || border.DataContext is not PageThumbnailRow row || DataContext is not MainViewModel viewModel)
+            return;
+
+        if (!viewModel.SelectedPageThumbnails.Contains(row))
+        {
+            viewModel.SelectedPageThumbnails.Clear();
+            viewModel.SelectedPageThumbnails.Add(row);
+        }
+
+        viewModel.JumpToPage(row.PageNumber);
+    }
+
+    // Drag-to-reorder wiring for the page thumbnail strip, mirroring WireDragDrop's press/move/release +
+    // DragOver/Drop shape for the Inbox grid above — dropping one thumbnail onto another moves it to sit
+    // at that page's position.
+    private void WirePageDragDrop(ListBox strip)
+    {
+        DragDrop.SetAllowDrop(strip, true);
+        strip.AddHandler(PointerPressedEvent, OnPageStripPointerPressed, RoutingStrategies.Tunnel, true);
+        strip.AddHandler(PointerMovedEvent, OnPageStripPointerMoved, RoutingStrategies.Tunnel, true);
+        strip.AddHandler(PointerReleasedEvent, OnPageStripPointerReleased, RoutingStrategies.Tunnel, true);
+        strip.AddHandler(DragDrop.DragOverEvent, OnPageStripDragOver, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
+        strip.AddHandler(DragDrop.DropEvent, OnPageStripDrop, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
+    }
+
+    private void OnPageStripPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not ListBox strip || !e.GetCurrentPoint(strip).Properties.IsLeftButtonPressed)
+            return;
+        if (IsOnScrollBar(e.Source))
+            return;
+
+        _pressPageStrip = strip;
+        _pressPageThumbnail = ThumbnailAt(strip, e.Source, e.GetPosition(strip));
+        _pressPagePoint = e.GetPosition(strip);
+        _pageDragging = false;
+    }
+
+    private async void OnPageStripPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_pageDragging || _pressPageThumbnail is null || _pressPageStrip is null || !ReferenceEquals(sender, _pressPageStrip))
+            return;
+        if (!e.GetCurrentPoint(_pressPageStrip).Properties.IsLeftButtonPressed)
+            return;
+
+        var delta = e.GetPosition(_pressPageStrip) - _pressPagePoint;
+        if (Math.Abs(delta.X) < 6 && Math.Abs(delta.Y) < 6)
+            return;
+
+        _pageDragging = true;
+        var data = new DataObject();
+        data.Set(PageDragFormat, _pressPageThumbnail.PageNumber.ToString());
+        try
+        {
+            await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+        }
+        finally
+        {
+            _pressPageThumbnail = null;
+            _pressPageStrip = null;
+            _pageDragging = false;
+        }
+    }
+
+    private void OnPageStripPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_pageDragging)
+        {
+            _pressPageThumbnail = null;
+            _pressPageStrip = null;
+        }
+    }
+
+    private void OnPageStripDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = sender is ListBox strip && CanDropPage(strip, e) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnPageStripDrop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not ListBox strip || DataContext is not MainViewModel viewModel || !TryGetDragPageNumber(e.Data, out var fromPageNumber))
+            return;
+
+        var target = ThumbnailAt(strip, e.Source, e.GetPosition(strip));
+        if (target is null || target.PageNumber == fromPageNumber)
+            return;
+
+        await viewModel.ReorderPagesAsync(fromPageNumber, target.PageNumber);
+    }
+
+    private bool CanDropPage(ListBox strip, DragEventArgs e)
+    {
+        if (!TryGetDragPageNumber(e.Data, out var fromPageNumber))
+            return false;
+
+        var target = ThumbnailAt(strip, e.Source, e.GetPosition(strip));
+        return target is not null && target.PageNumber != fromPageNumber;
+    }
+
+    private static bool TryGetDragPageNumber(IDataObject data, out int pageNumber)
+    {
+        pageNumber = 0;
+        return data.Contains(PageDragFormat)
+            && data.Get(PageDragFormat) is string text
+            && int.TryParse(text, out pageNumber);
+    }
+
+    private static PageThumbnailRow? ThumbnailAt(ListBox strip, object? source, Point position)
+    {
+        if ((source as Control)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext is PageThumbnailRow fromSource)
+            return fromSource;
+
+        foreach (var visual in strip.GetVisualsAt(position))
+        {
+            var item = (visual as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true);
+            if (item?.DataContext is PageThumbnailRow row)
+                return row;
+        }
+
+        return null;
+    }
+
     private void OnGroupTableLoaded(object? sender, RoutedEventArgs e)
     {
         if (sender is not DataGrid grid || grid.DataContext is not DocumentGroupViewModel group)
@@ -323,28 +506,49 @@ public partial class MainWindow : Window
 
     private void OnGroupTableSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is not DataGrid grid || DataContext is not MainViewModel viewModel)
+        if (sender is not DataGrid grid
+            || DataContext is not MainViewModel viewModel
+            || !viewModel.IsTableMode)
             return;
 
-        // Table mode presents one DataGrid per profile group; treat selection as a single
-        // set spanning the whole view, so selecting in one group clears any other.
-        foreach (var other in _groupGrids)
-        {
-            if (other != grid)
-                other.SelectedItems.Clear();
-        }
-
+        // Table mode presents one DataGrid per profile group. Rebuild the shared selection from every
+        // grid so Ctrl/Command/Shift-click can extend it across section boundaries.
         viewModel.SelectedDocuments.Clear();
-        foreach (var item in grid.SelectedItems)
+        foreach (var groupGrid in _groupGrids)
         {
-            if (item is DocumentRow row)
-                viewModel.SelectedDocuments.Add(row);
+            foreach (var item in groupGrid.SelectedItems)
+            {
+                if (item is DocumentRow row)
+                    viewModel.SelectedDocuments.Add(row);
+            }
         }
 
         // Always assign, including null — grid.SelectedItem going empty (e.g. an empty-space click
         // clearing the selection) must clear SelectedDocument too, not leave it pointing at whatever
         // was selected before.
         viewModel.SelectedDocument = grid.SelectedItem as DocumentRow;
+    }
+
+    private void OnSelectAllGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: DocumentGroupViewModel group })
+            return;
+
+        var grid = _groupGrids.FirstOrDefault(item => ReferenceEquals(item.DataContext, group));
+        if (grid is null)
+            return;
+
+        // Selection is owned by the individual DataGrids. Populate the matching grid so both the
+        // row highlights and the shared selection used by bulk actions stay in sync.
+        foreach (var other in _groupGrids)
+        {
+            if (other != grid)
+                other.SelectedItems.Clear();
+        }
+
+        grid.SelectedItems.Clear();
+        foreach (var document in group.Documents)
+            grid.SelectedItems.Add(document);
     }
 
     private void OnGroupTableDoubleTapped(object? sender, TappedEventArgs e)

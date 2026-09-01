@@ -115,5 +115,10 @@ public sealed partial class DocumentRow : ObservableObject
         OnPropertyChanged(nameof(IssueDisplay));
         OnPropertyChanged(nameof(RedactionStatusDisplay));
         OnPropertyChanged(nameof(Indexes));
+        // PageCount reads straight through to Document.PageCount, which isn't itself observable — a
+        // page delete/split/reorder mutates it in place on this same row (see MainViewModel's page
+        // management commands) rather than replacing the row, so the Page column needs an explicit
+        // nudge here alongside everything else this method already refreshes after such a mutation.
+        OnPropertyChanged(nameof(PageCount));
     }
 }

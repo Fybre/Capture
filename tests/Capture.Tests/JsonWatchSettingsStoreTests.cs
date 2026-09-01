@@ -102,7 +102,10 @@ public class JsonWatchSettingsStoreTests
         // The plaintext key never lands in settings.json — only a sentinel does.
         var raw = await File.ReadAllTextAsync(paths.SettingsPath);
         Assert.DoesNotContain("sk-real-secret", raw);
-        Assert.Equal("sk-real-secret", credentialStore.TryRead("AiApiKey"));
+        // On Windows, JsonWatchSettingsStore.Protect() takes the DPAPI branch instead of the
+        // IOsCredentialStore, so the fake store is legitimately never invoked there.
+        if (!OperatingSystem.IsWindows())
+            Assert.Equal("sk-real-secret", credentialStore.TryRead("AiApiKey"));
 
         var loaded = await store.LoadAsync();
         Assert.Equal("sk-real-secret", loaded.AiApiKey);
@@ -132,9 +135,14 @@ public class JsonWatchSettingsStoreTests
         Assert.DoesNotContain("th-bearer-secret", raw);
 
         // Each secret lands under its own account name — no collision between the three.
-        Assert.Equal("sk-ai-secret", credentialStore.TryRead("AiApiKey"));
-        Assert.Equal("th-password-secret", credentialStore.TryRead("ThereforePassword"));
-        Assert.Equal("th-bearer-secret", credentialStore.TryRead("ThereforeBearerToken"));
+        // On Windows, Protect() takes the DPAPI branch instead of the IOsCredentialStore, so the
+        // fake store is legitimately never invoked there.
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal("sk-ai-secret", credentialStore.TryRead("AiApiKey"));
+            Assert.Equal("th-password-secret", credentialStore.TryRead("ThereforePassword"));
+            Assert.Equal("th-bearer-secret", credentialStore.TryRead("ThereforeBearerToken"));
+        }
 
         var loaded = await store.LoadAsync();
         Assert.Equal("sk-ai-secret", loaded.AiApiKey);

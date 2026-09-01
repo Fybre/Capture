@@ -1,8 +1,25 @@
 # Capture
 
-.NET 8 / Avalonia desktop app for document capture: import, batch/document separation, OCR and
-zonal/pattern indexing, and post-indexing redaction (PII detection via a bundled Presidio sidecar,
-plus manually-marked Sensitive fields).
+.NET 8 / Avalonia desktop app for document capture: import, batch/document separation, OCR,
+zonal/pattern/barcode/AI-based indexing, post-indexing redaction, and export to CSV or a
+Therefore Online repository.
+
+## Features
+
+- **Import & batching** — watch folders or manual import, with barcode/blank-page/page-count
+  document separation and configurable batch profiles.
+- **Indexing** — zonal, key/value, regex, barcode, lookup, and AI-extracted fields, plus manual
+  text entry. AI extraction runs against either a cloud OpenAI-compatible endpoint or a local,
+  fully offline model (see below) — selectable per install.
+- **Scanning** — direct scan-to-import on macOS (via a bundled native helper,
+  `native/CaptureScanHelperMac`) and Windows (WIA).
+- **Redaction** — automatic PII detection via a bundled Presidio sidecar, fields explicitly marked
+  *Sensitive*, or manually-drawn regions; PII detection can be turned off per profile to redact only
+  Sensitive fields with no NLP involved.
+- **Export** — CSV, and direct document creation in a Therefore Online repository (configure the
+  connection once in Settings; category/field mapping is per export definition).
+- **Debug logging** — an opt-in activity log (imports, exports, watch-folder activity, errors) for
+  troubleshooting, toggled in Settings.
 
 ## Prerequisites
 
@@ -14,9 +31,13 @@ plus manually-marked Sensitive fields).
   - macOS: `brew install tesseract`
   - Windows: [UB-Mannheim's installer](https://github.com/UB-Mannheim/tesseract/wiki)
   - Linux: `apt install tesseract-ocr` (or your distro's equivalent)
+- **macOS only: Xcode Command Line Tools** (`xcode-select --install`) — `Capture.App.csproj` builds
+  the `CaptureScanHelperMac` native scan helper (a small Swift binary) via `swiftc` on every build,
+  automatically, on macOS. No action needed if the Command Line Tools are already installed; skipped
+  entirely on other platforms.
 
-Everything else (PDF rendering, SQLite, barcode decoding, image processing, and — once set up below —
-Presidio) is bundled via NuGet with no separate install.
+Everything else (PDF rendering, SQLite, barcode decoding, image processing, local AI inference via
+LLamaSharp, and — once set up below — Presidio) is bundled via NuGet with no separate install.
 
 ## Build & run
 
@@ -30,6 +51,16 @@ dotnet run --project src/Capture.App
 ```bash
 dotnet test tests/Capture.Tests/Capture.Tests.csproj
 ```
+
+## Local, offline AI extraction
+
+AI field extraction can run entirely on-device instead of calling a cloud endpoint — no document
+text leaves the machine. This is opt-in per install: switch **Settings → AI extraction → Provider**
+to *Local*, then click **Download model** (a one-time ~2GB download, cached under the app's data
+directory). It runs on CPU via [LLamaSharp](https://github.com/SciSharp/LLamaSharp) (llama.cpp) with
+grammar-constrained decoding, so no GPU or extra setup is required, but it is slower and less
+accurate than the cloud provider — reasonable for privacy-sensitive or offline use, not a drop-in
+replacement for it. See `src/Capture.LocalAi` for the implementation.
 
 ## Redaction: setting up the Presidio sidecar
 
@@ -56,7 +87,9 @@ alongside `nuget.org` — no further configuration needed once the file is in pl
 **Redaction is a no-op without this** — `PresidioSidecarLauncher.IsAvailable` simply returns false if
 the executable isn't present, so the app builds and runs fine either way. Fields marked *Sensitive*
 still get redacted regardless, since that path doesn't need Presidio at all — only the automatic PII
-*detection* is affected.
+*detection* is affected. A profile's Redaction settings can also disable PII detection explicitly
+(**Detect PII automatically** checkbox) to redact only Sensitive fields on purpose, independent of
+whether the sidecar is even installed.
 
 ### Verifying the sidecar actually works
 

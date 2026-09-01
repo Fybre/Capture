@@ -37,7 +37,7 @@ public sealed class DebugLogService : IDebugLogService, IDisposable
             if (enabled)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
-                var stream = new FileStream(LogFilePath, FileMode.Append, FileAccess.Write, FileShare.Read);
+                var stream = new FileStream(LogFilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
                 _listener = new TextWriterTraceListener(stream, "CaptureDebugLog");
                 Trace.Listeners.Add(_listener);
                 Trace.AutoFlush = true;

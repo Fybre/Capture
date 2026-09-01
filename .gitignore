@@ -7,8 +7,11 @@ obj/
 .DS_Store
 
 # Locally-downloaded Capture.Presidio.Binaries package (see README.md) — a few hundred MB of frozen
-# Python/spaCy binaries per platform. Never commit this; each dev/build machine fetches its own copy.
-local-nuget-feed/
+# Python/spaCy binaries per platform. Never commit the package itself; each dev/build machine fetches
+# its own copy. The directory is tracked (via local-nuget-feed/.gitkeep) so it exists on a clean clone —
+# Capture.App.csproj only references the package when a matching .nupkg is actually present there.
+local-nuget-feed/*
+!local-nuget-feed/.gitkeep
 
 # CaptureScanHelperMac build output — build.sh (re)generates these; only the source (main.swift,
 # entitlements.plist, build.sh) belongs in git.

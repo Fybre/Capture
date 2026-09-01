@@ -34,6 +34,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IImagePageImporter, SkiaImagePageImporter>();
         services.AddSingleton<IPdfTextExtractor, PdfPigTextExtractor>();
         services.AddSingleton<IPdfSubsetWriter, PdfPigSubsetWriter>();
+        services.AddSingleton<IMergedDocumentWriter, PdfPigMergedDocumentWriter>();
         services.AddSingleton<IOcrEngine, TesseractCliOcrEngine>();
         services.AddSingleton<ILatticeBuilder, LatticeBuilder>();
         services.AddSingleton(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(90) });
@@ -56,6 +57,7 @@ public static class ServiceConfiguration
         services.AddSingleton<RedactionDetectionStep>();
         services.AddSingleton<IPostIndexStep>(sp => sp.GetRequiredService<RedactionDetectionStep>());
         services.AddSingleton<IDocumentImporter, DocumentImporter>();
+        services.AddSingleton<IPageManagementService, PageManagementService>();
         services.AddSingleton<IIndexValueStore, JsonIndexValueStore>();
         services.AddSingleton<IProfileApplicator, ProfileApplicator>();
         services.AddSingleton<IProfileStore, JsonProfileStore>();
