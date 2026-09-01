@@ -16,6 +16,10 @@
 AppId={{8408B821-8B5A-40E3-BB59-45A54E70F267}
 AppName=Capture
 AppVersion={#Version}
+; Without this, Inno Setup defaults AppVerName to "AppName AppVersion", which shows up as the bold
+; entry name in Windows' Installed Apps list (e.g. "Capture version 0.1.0-ci.4") — the version is
+; already shown on its own via AppVersion/DisplayVersion, so keep the name itself just "Capture".
+AppVerName=Capture
 AppPublisher=Fybre
 DefaultDirName={autopf}\Capture
 DefaultGroupName=Capture
