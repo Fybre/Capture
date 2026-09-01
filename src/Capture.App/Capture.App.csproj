@@ -20,9 +20,12 @@
     <ApplicationIcon>Assets\capture.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <!-- Defaults for local dev; the packaging workflow overrides both via -p:Version=x.y.z so a real
-         release carries a real version instead of every build claiming to be 0.1.0. -->
+         release carries a real version instead of every build claiming to be 0.1.0. FileVersion must
+         be purely numeric (major.minor.build.revision) — strip any prerelease suffix like "-ci.2"
+         before appending the revision component, or the SDK warns CS7035 and Windows file properties
+         end up with a version string it can't actually parse. -->
     <Version Condition="'$(Version)' == ''">0.1.0</Version>
-    <FileVersion Condition="'$(FileVersion)' == ''">$(Version).0</FileVersion>
+    <FileVersion Condition="'$(FileVersion)' == ''">$(Version.Split('-')[0]).0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

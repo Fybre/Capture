@@ -200,11 +200,23 @@ codesign --force -s "$IDENTITY" --timestamp "$DMG_PATH"
 
 if [[ -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER_ID:-}" && -n "${APPLE_API_KEY_P8_PATH:-}" ]]; then
   echo "==> Notarizing $DMG_PATH"
-  xcrun notarytool submit "$DMG_PATH" \
+  notarize_output="$(xcrun notarytool submit "$DMG_PATH" \
     --key "$APPLE_API_KEY_P8_PATH" \
     --key-id "$APPLE_API_KEY_ID" \
     --issuer "$APPLE_API_ISSUER_ID" \
-    --wait
+    --wait 2>&1)"
+  echo "$notarize_output"
+  if ! grep -q "status: Accepted" <<< "$notarize_output"; then
+    # `--wait` only reports Accepted/Invalid, not *why* — fetch the actual rejection reasons so a CI
+    # failure is self-diagnosing instead of needing someone with local Apple credentials to re-fetch it.
+    submission_id="$(grep -m1 '^  id:' <<< "$notarize_output" | awk '{print $2}')"
+    echo "==> Notarization rejected — fetching detailed log for $submission_id"
+    xcrun notarytool log "$submission_id" \
+      --key "$APPLE_API_KEY_P8_PATH" \
+      --key-id "$APPLE_API_KEY_ID" \
+      --issuer "$APPLE_API_ISSUER_ID"
+    exit 1
+  fi
   echo "==> Stapling notarization ticket"
   xcrun stapler staple "$DMG_PATH"
 else
