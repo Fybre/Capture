@@ -177,6 +177,17 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private IReadOnlyList<IndexHighlight> _highlights = [];
 
     [ObservableProperty]
+    private bool _showOcrWords;
+
+    /// <summary>The current page's recognized OCR/PDF-text words, for the "Show OCR text" overlay
+    /// toggle — lets someone drawing a zone/pattern see exactly where extraction thinks text is,
+    /// rather than guessing why a draw came back empty. Computed from the same <see cref="_lattices"/>
+    /// used for extraction itself, so it's always in sync; <see cref="RefreshHighlights"/> is the
+    /// existing "something about the page changed" choke point, so it raises this too.</summary>
+    public IReadOnlyList<LatticeWord> CurrentPageWords =>
+        _lattices.TryGetValue(CurrentPageNumber, out var lattice) ? lattice.Words : [];
+
+    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
     [NotifyPropertyChangedFor(nameof(PageLabel))]
@@ -890,6 +901,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private void RefreshHighlights()
     {
         Highlights = Fields.SelectMany(row => HighlightsFor(row, CurrentPageNumber)).ToList();
+        OnPropertyChanged(nameof(CurrentPageWords));
     }
 
     private IEnumerable<IndexHighlight> HighlightsFor(FieldRow row, int pageNumber)

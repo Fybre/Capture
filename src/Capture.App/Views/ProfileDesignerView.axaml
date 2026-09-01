@@ -400,6 +400,8 @@
                         <controls:PagePreview x:Name="PreviewImage"
                                               PageImage="{Binding PageImage}"
                                               Highlights="{Binding Highlights}"
+                                              OcrWords="{Binding CurrentPageWords}"
+                                              ShowOcrWords="{Binding ShowOcrWords}"
                                               AllowDraw="True"
                                               ZoneDrawnCommand="{Binding CompleteZoneCommand}"
                                               ZoneChangedCommand="{Binding ChangeZoneCommand}"
@@ -415,6 +417,12 @@
                                 Padding="3"
                                 IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}">
                             <StackPanel Orientation="Horizontal" Spacing="2">
+                                <CheckBox Content="OCR text"
+                                          IsChecked="{Binding ShowOcrWords}"
+                                          VerticalAlignment="Center"
+                                          Margin="6,0,4,0"
+                                          FontSize="11.5"
+                                          ToolTip.Tip="Show boxes around recognized text, to see why a zone or pattern draw did or didn't match" />
                                 <Button Classes="ghost"
                                         Width="26" Height="26" Padding="0" CornerRadius="6"
                                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"

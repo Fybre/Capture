@@ -17,6 +17,12 @@ public sealed class PagePreview : Control
     public static readonly StyledProperty<IReadOnlyList<IndexHighlight>?> HighlightsProperty =
         AvaloniaProperty.Register<PagePreview, IReadOnlyList<IndexHighlight>?>(nameof(Highlights));
 
+    public static readonly StyledProperty<IReadOnlyList<LatticeWord>?> OcrWordsProperty =
+        AvaloniaProperty.Register<PagePreview, IReadOnlyList<LatticeWord>?>(nameof(OcrWords));
+
+    public static readonly StyledProperty<bool> ShowOcrWordsProperty =
+        AvaloniaProperty.Register<PagePreview, bool>(nameof(ShowOcrWords));
+
     public static readonly StyledProperty<bool> AllowDrawProperty =
         AvaloniaProperty.Register<PagePreview, bool>(nameof(AllowDraw));
 
@@ -73,6 +79,8 @@ public sealed class PagePreview : Control
     {
         DashStyle = DashStyle.Dash
     };
+    private static readonly IBrush OcrWordFill = new SolidColorBrush(Color.FromArgb(30, 40, 200, 90));
+    private static readonly Pen OcrWordStroke = new(new SolidColorBrush(Color.FromArgb(150, 40, 200, 90)), 1);
 
     private enum EditMode
     {
@@ -97,7 +105,7 @@ public sealed class PagePreview : Control
 
     static PagePreview()
     {
-        AffectsRender<PagePreview>(PageImageProperty, HighlightsProperty, AllowDrawProperty, ZoomProperty);
+        AffectsRender<PagePreview>(PageImageProperty, HighlightsProperty, OcrWordsProperty, ShowOcrWordsProperty, AllowDrawProperty, ZoomProperty);
     }
 
     public Bitmap? PageImage
@@ -116,6 +124,18 @@ public sealed class PagePreview : Control
     {
         get => GetValue(HighlightsProperty);
         set => SetValue(HighlightsProperty, value);
+    }
+
+    public IReadOnlyList<LatticeWord>? OcrWords
+    {
+        get => GetValue(OcrWordsProperty);
+        set => SetValue(OcrWordsProperty, value);
+    }
+
+    public bool ShowOcrWords
+    {
+        get => GetValue(ShowOcrWordsProperty);
+        set => SetValue(ShowOcrWordsProperty, value);
     }
 
     public bool AllowDraw
@@ -155,6 +175,12 @@ public sealed class PagePreview : Control
             return;
 
         context.DrawImage(bitmap, dest);
+
+        if (ShowOcrWords && OcrWords is not null)
+        {
+            foreach (var word in OcrWords)
+                context.DrawRectangle(OcrWordFill, OcrWordStroke, ToScreen(word, dest));
+        }
 
         if (Highlights is not null)
         {
@@ -702,6 +728,15 @@ public sealed class PagePreview : Control
             dest.Y + highlight.Y * dest.Height,
             Math.Max(1, highlight.Width * dest.Width),
             Math.Max(1, highlight.Height * dest.Height));
+    }
+
+    private static Rect ToScreen(LatticeWord word, Rect dest)
+    {
+        return new Rect(
+            dest.X + word.X * dest.Width,
+            dest.Y + word.Y * dest.Height,
+            Math.Max(1, word.Width * dest.Width),
+            Math.Max(1, word.Height * dest.Height));
     }
 
     private static Rect NormalizeScreen(Point start, Point current)
