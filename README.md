@@ -64,6 +64,28 @@ grammar-constrained decoding, so no GPU or extra setup is required, but it is sl
 accurate than the cloud provider — reasonable for privacy-sensitive or offline use, not a drop-in
 replacement for it. See `src/Capture.LocalAi` for the implementation.
 
+## Native binary packages (Tesseract, Presidio)
+
+Both Tesseract and Presidio ship as native NuGet packages (`Capture.Tesseract.Binaries`,
+`Capture.Presidio.Binaries`), built from source per-platform by their own repo's CI, rather than
+published to nuget.org. `nuget.config` at the repo root configures two ways to get them, either is
+fine, and both can be used together:
+
+- **`CaptureLocalFeed` → `local-nuget-feed/`** — download a `.nupkg` by hand (a workflow artifact, see
+  each package's section below) and drop it in this gitignored folder (tracked as an empty directory
+  via `.gitkeep`). No auth needed. `dotnet restore` picks it up automatically once the version there
+  matches the `PackageReference` in `src/Capture.App/Capture.App.csproj`.
+- **`FybreGitHubPackages` → GitHub Packages** — each repo's CI also pushes every built package to
+  `https://nuget.pkg.github.com/Fybre/index.json`, so it's permanently available there without
+  re-downloading a workflow artifact (whose retention is time-limited). GitHub Packages requires an
+  authenticated pull even for a public repo: set `GITHUB_PACKAGES_USERNAME` (your GitHub username) and
+  `GITHUB_PACKAGES_TOKEN` (a [PAT](https://github.com/settings/tokens) with `read:packages`) as
+  environment variables before restoring.
+
+Both `PackageReference`s are conditional — present only when a matching local `.nupkg` exists **or**
+`GITHUB_PACKAGES_TOKEN` is set — so a clean, uncredentialed clone with neither configured still builds;
+it just runs without that package (see each section's degraded-mode behavior below).
+
 ## OCR: bundled Tesseract
 
 OCR of scanned pages with no embedded PDF text uses a bundled Tesseract executable; there is nothing
@@ -71,7 +93,8 @@ for the end user to install on `win-x64` or `osx-arm64`. See
 [`Fybre/tesseract-app`](https://github.com/Fybre/tesseract-app) for the native source build. The
 package contains English language data from `tessdata_fast` only.
 
-`Capture.Tesseract.Binaries` is not published to a public feed yet. For local development:
+For local development, either configure GitHub Packages restore (see above — the low-effort, no
+manual-download option) or download a `.nupkg` by hand:
 
 1. Trigger **Build Tesseract package** in `Fybre/tesseract-app`, or download an existing artifact with
    `gh run download <run-id> --repo Fybre/tesseract-app -n Capture.Tesseract.Binaries`.
@@ -79,7 +102,7 @@ package contains English language data from `tessdata_fast` only.
 3. Match its version to the `Capture.Tesseract.Binaries` reference in
    `src/Capture.App/Capture.App.csproj`, then run `dotnet restore`.
 
-The package reference is conditional, so a clean clone without the package still builds. Resolution
+Resolution
 uses `CAPTURE_TESSERACT` first, then the bundled executable, then `PATH`, then the existing well-known
 install paths. A sibling `tessdata/` directory is supplied to the child process automatically. If no
 Tesseract exists anywhere, OCR reports a clear `InvalidOperationException`; other app features remain
@@ -103,8 +126,9 @@ PII detection for redaction runs against a self-contained, bundled Presidio exec
 launches it itself as a local child process; there's nothing for the *end user* to install. See
 [`Fybre/presidio-app`](https://github.com/Fybre/presidio-app) for how that executable is built.
 
-That package (`Capture.Presidio.Binaries`) isn't published to a real feed yet, so for local
-development it's consumed from a local folder:
+That package (`Capture.Presidio.Binaries`) isn't published to nuget.org, so for local development
+either configure GitHub Packages restore (see "Native binary packages" above) or download a `.nupkg`
+by hand:
 
 1. Build or download the package. Either:
    - Trigger the `Build sidecar package` workflow in `Fybre/presidio-app` (GitHub Actions → Run
@@ -117,14 +141,11 @@ development it's consumed from a local folder:
    `<PackageReference Include="Capture.Presidio.Binaries" .../>` matches the `.nupkg`'s version
    (rename the file or edit the csproj if they differ), then `dotnet restore`.
 
-Without a matching `.nupkg` present, `Capture.App.csproj` skips the `PackageReference` entirely
-(checked via an MSBuild file-existence condition), so a clean clone builds and runs fine — just
-without the sidecar. No `win-arm64` build of the package exists (only `linux-x64`, `osx-arm64`,
-`osx-x64`, `win-x64`), so on Windows-on-ARM you need an x64 build (see above) for the sidecar to be
-available at all.
-
-`nuget.config` at the repo root already points a `CapturePresidioLocal` source at `local-nuget-feed/`
-alongside `nuget.org` — no further configuration needed once the file is in place.
+Without a matching `.nupkg` present and no `GITHUB_PACKAGES_TOKEN` configured, `Capture.App.csproj`
+skips the `PackageReference` entirely, so a clean clone builds and runs fine — just without the
+sidecar. No `win-arm64` build of the package exists (only `linux-x64`, `osx-arm64`, `osx-x64`,
+`win-x64`), so on Windows-on-ARM you need an x64 build (see above) for the sidecar to be available at
+all.
 
 **Redaction is a no-op without this** — `PresidioSidecarLauncher.IsAvailable` simply returns false if
 the executable isn't present, so the app builds and runs fine either way. Fields marked *Sensitive*

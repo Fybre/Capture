@@ -50,31 +50,32 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 
-  <!-- Capture.Presidio.Binaries is only fetched from the developer's own local-nuget-feed/ (see
-       README.md) — a fresh clone doesn't have it, and PII redaction is documented as gracefully
-       optional at runtime when the package is absent (see PresidioSidecarLauncher). Referencing it
-       unconditionally would turn "package not yet fetched" into a hard NU1101 build failure instead,
-       so only add the reference when a matching .nupkg actually exists in the local feed. -->
+  <!-- Capture.Presidio.Binaries is only fetched when it's actually restorable — either a manually
+       downloaded .nupkg sitting in local-nuget-feed/, or GitHub Packages restore configured via
+       GITHUB_PACKAGES_TOKEN (see nuget.config/README.md) — a fresh, uncredentialed clone has
+       neither, and PII redaction is documented as gracefully optional at runtime when the package is
+       absent (see PresidioSidecarLauncher). Referencing it unconditionally would turn "package not
+       yet fetched" into a hard NU1101 build failure instead. -->
   <PropertyGroup>
     <PresidioLocalFeedDir>$(MSBuildThisFileDirectory)..\..\local-nuget-feed</PresidioLocalFeedDir>
   </PropertyGroup>
   <ItemGroup>
     <_PresidioPackageFiles Include="$(PresidioLocalFeedDir)\Capture.Presidio.Binaries.*.nupkg" Condition="Exists('$(PresidioLocalFeedDir)')" />
   </ItemGroup>
-  <ItemGroup Condition="'@(_PresidioPackageFiles)' != ''">
+  <ItemGroup Condition="'@(_PresidioPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
     <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.1" />
   </ItemGroup>
 
-  <!-- Like Presidio, the bundled OCR package is currently supplied through local-nuget-feed/ and
-       remains optional so a clean clone can still build. At runtime Capture falls back to a system
-       Tesseract when the package is absent. -->
+  <!-- Like Presidio, the bundled OCR package is restorable from local-nuget-feed/ or GitHub Packages
+       and remains optional so a clean, uncredentialed clone can still build. At runtime Capture
+       falls back to a system Tesseract when the package is absent. -->
   <PropertyGroup>
     <TesseractLocalFeedDir>$(MSBuildThisFileDirectory)..\..\local-nuget-feed</TesseractLocalFeedDir>
   </PropertyGroup>
   <ItemGroup>
     <_TesseractPackageFiles Include="$(TesseractLocalFeedDir)\Capture.Tesseract.Binaries.*.nupkg" Condition="Exists('$(TesseractLocalFeedDir)')" />
   </ItemGroup>
-  <ItemGroup Condition="'@(_TesseractPackageFiles)' != ''">
+  <ItemGroup Condition="'@(_TesseractPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
     <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.1" />
   </ItemGroup>
 
