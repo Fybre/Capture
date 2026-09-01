@@ -74,9 +74,12 @@ find "$PUBLISH_DIR/runtimes" -mindepth 1 -maxdepth 1 -type d ! -name osx-arm64 -
 
 # BuildCaptureScanHelperMac (Capture.App.csproj) only hooks AfterTargets="Build", not "Publish", so
 # `dotnet publish` alone would ship without the scan helper — re-run it explicitly against the publish
-# output rather than editing that target (used by every local dev Build).
+# output rather than editing that target (used by every local dev Build). Pass through this script's
+# own resolved identity so the helper gets a real Developer ID signature too, not the ad-hoc default —
+# it's excluded from the later individual-signing loop (re-signing it there would invalidate this
+# bundle-level signature), so this is the only place it gets signed at all.
 echo "==> Building CaptureScanHelperMac into the publish output"
-"$REPO_ROOT/native/CaptureScanHelperMac/build.sh" "$PUBLISH_DIR"
+CAPTURE_SCAN_HELPER_SIGNING_IDENTITY="$IDENTITY" "$REPO_ROOT/native/CaptureScanHelperMac/build.sh" "$PUBLISH_DIR"
 
 echo "==> Assembling Capture.app"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"

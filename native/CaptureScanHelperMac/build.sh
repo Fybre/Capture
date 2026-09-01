@@ -45,7 +45,12 @@ cat > "$BUILD_DIR/CaptureScanHelperMac.app/Contents/Info.plist" << 'PLIST'
 PLIST
 
 xattr -cr "$BUILD_DIR/CaptureScanHelperMac.app"
-codesign --force -s "$IDENTITY" --entitlements "$SCRIPT_DIR/entitlements.plist" --options runtime --timestamp=none \
+# --timestamp=none is fine (and faster) for ad-hoc local-dev signing, but a real Developer ID signature
+# needs a secure timestamp or Apple's notary service rejects it outright ("The signature does not
+# include a secure timestamp") — reproduced via a real CI notarization failure.
+TIMESTAMP_FLAG="--timestamp=none"
+[[ "$IDENTITY" != "-" ]] && TIMESTAMP_FLAG="--timestamp"
+codesign --force -s "$IDENTITY" --entitlements "$SCRIPT_DIR/entitlements.plist" --options runtime "$TIMESTAMP_FLAG" \
   "$BUILD_DIR/CaptureScanHelperMac.app"
 
 mkdir -p "$OUT_DIR"
