@@ -46,6 +46,14 @@ dotnet build Capture.sln
 dotnet run --project src/Capture.App
 ```
 
+To build for a specific architecture (e.g. testing x64 under emulation on Windows-on-ARM), pass
+`-a`/`--arch` to the individual project, not the solution — `dotnet build Capture.sln -a x64` fails
+with `NETSDK1134` (a solution build can't take a `RuntimeIdentifier`):
+
+```bash
+dotnet build src/Capture.App/Capture.App.csproj -a x64
+```
+
 ## Tests
 
 ```bash
@@ -75,11 +83,18 @@ development it's consumed from a local folder:
    - Trigger the `Build sidecar package` workflow in `Fybre/presidio-app` (GitHub Actions → Run
      workflow) and download the resulting `Capture.Presidio.Binaries` artifact, or
    - Grab it from an existing successful run: `gh run download <run-id> --repo Fybre/presidio-app -n Capture.Presidio.Binaries`
-2. Place the `.nupkg` in `local-nuget-feed/` at the repo root (create it if it doesn't exist — it's
-   git-ignored, since the package is a few hundred MB of frozen Python/spaCy binaries per platform).
+2. Place the `.nupkg` in `local-nuget-feed/` at the repo root (already tracked as an empty directory
+   via `.gitkeep` — the `.nupkg` itself is git-ignored, since the package is a few hundred MB of
+   frozen Python/spaCy binaries per platform).
 3. Make sure the version in `src/Capture.App/Capture.App.csproj`'s
    `<PackageReference Include="Capture.Presidio.Binaries" .../>` matches the `.nupkg`'s version
    (rename the file or edit the csproj if they differ), then `dotnet restore`.
+
+Without a matching `.nupkg` present, `Capture.App.csproj` skips the `PackageReference` entirely
+(checked via an MSBuild file-existence condition), so a clean clone builds and runs fine — just
+without the sidecar. No `win-arm64` build of the package exists (only `linux-x64`, `osx-arm64`,
+`osx-x64`, `win-x64`), so on Windows-on-ARM you need an x64 build (see above) for the sidecar to be
+available at all.
 
 `nuget.config` at the repo root already points a `CapturePresidioLocal` source at `local-nuget-feed/`
 alongside `nuget.org` — no further configuration needed once the file is in place.

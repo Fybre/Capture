@@ -22,7 +22,14 @@ public class DebugLogServiceTests
             Assert.True(service.IsEnabled);
             Trace.TraceInformation("marker-while-enabled");
 
-            var contentsWhileEnabled = File.ReadAllText(service.LogFilePath);
+            // The writer is still open with FileAccess.Write at this point. On Windows, share-mode
+            // checking is bidirectional: reading it back needs FileShare.ReadWrite here too, or the
+            // open fails with "being used by another process" — File.ReadAllText's implicit
+            // FileShare.Read isn't enough, since it doesn't tolerate the writer's Write access.
+            string contentsWhileEnabled;
+            using (var stream = new FileStream(service.LogFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(stream))
+                contentsWhileEnabled = reader.ReadToEnd();
             Assert.Contains("marker-while-enabled", contentsWhileEnabled);
 
             service.SetEnabled(false);
