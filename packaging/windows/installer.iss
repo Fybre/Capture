@@ -25,7 +25,11 @@ DefaultDirName={autopf}\Capture
 DefaultGroupName=Capture
 UninstallDisplayIcon={app}\Capture.App.exe
 OutputDir=out
-OutputBaseFilename=CaptureSetup-{#Version}
+; Deliberately not version-suffixed: the README links to
+; github.com/Fybre/Capture/releases/latest/download/CaptureSetup.exe, which only resolves correctly
+; when every release's asset has this exact same filename — the release itself (tag/title) still
+; carries the version, visible on the GitHub release page.
+OutputBaseFilename=CaptureSetup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible

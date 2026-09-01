@@ -4,6 +4,10 @@
 zonal/pattern/barcode/AI-based indexing, post-indexing redaction, and export to CSV or a
 Therefore Online repository.
 
+**Download the latest release:**
+[macOS (.dmg)](https://github.com/Fybre/Capture/releases/latest/download/Capture.dmg) ·
+[Windows (.exe installer)](https://github.com/Fybre/Capture/releases/latest/download/CaptureSetup.exe)
+
 ## Features
 
 - **Import & batching** — watch folders or manual import, with barcode/blank-page/page-count

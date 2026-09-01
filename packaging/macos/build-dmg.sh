@@ -191,7 +191,11 @@ echo "==> Code-signing Capture.app ($IDENTITY)"
 # fixes it — see packaging/macos/entitlements.plist).
 codesign --force -s "$IDENTITY" --entitlements "$ENTITLEMENTS" --options runtime --timestamp "$APP_DIR"
 
-DMG_PATH="$OUT_DIR/Capture-$VERSION.dmg"
+# Deliberately not version-suffixed: the README links to
+# github.com/Fybre/Capture/releases/latest/download/Capture.dmg, which only resolves correctly when
+# every release's asset has this exact same filename — the release itself (tag/title) still carries
+# the version, visible on the GitHub release page.
+DMG_PATH="$OUT_DIR/Capture.dmg"
 echo "==> Building $DMG_PATH"
 mkdir -p "$DMG_STAGING"
 cp -R "$APP_DIR" "$DMG_STAGING/Capture.app"
