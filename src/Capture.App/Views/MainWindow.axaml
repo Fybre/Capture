@@ -542,6 +542,7 @@
                                  SelectionMode="Multiple"
                                  Background="Transparent"
                                  Padding="0"
+                                 IsEnabled="{Binding !IsBusy}"
                                  SelectionChanged="OnPageThumbnailSelectionChanged">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -556,6 +557,13 @@
                                 </Style>
                                 <Style Selector="ListBoxItem:selected">
                                     <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                                </Style>
+                                <!-- Avalonia's default theme applies no visual treatment to a disabled ListBox
+                                     (confirmed: identical pixels idle vs. busy without this) — without an
+                                     explicit dim, the strip would look normal and still draggable while
+                                     IsEnabled="False" silently blocks input, worse than no gate at all. -->
+                                <Style Selector="ListBoxItem:disabled">
+                                    <Setter Property="Opacity" Value="0.4" />
                                 </Style>
                             </ListBox.Styles>
                             <ListBox.ItemTemplate>

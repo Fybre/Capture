@@ -532,7 +532,13 @@ public partial class MainViewModel : ViewModelBase
     /// drag-and-drop handler in code-behind — everything after the drop point shifts along by one.</summary>
     public async Task ReorderPagesAsync(int fromPageNumber, int toPageNumber)
     {
-        if (SelectedDocument is not { } row || fromPageNumber == toPageNumber)
+        // Unlike DeleteSelectedPagesAsync/SplitDocumentAtCurrentPageAsync, this isn't a [RelayCommand]
+        // gated on CanExecute(!IsBusy) — it's called directly from the drop handler in code-behind, so a
+        // drop landing mid-operation would otherwise start a second concurrent RewriteDocumentAsync over
+        // a stale _pages snapshot with nothing downstream to serialize it. The PageThumbnailStrip is also
+        // now disabled (IsEnabled="{Binding !IsBusy}") while busy, so this should be unreachable via the
+        // UI; the check stays as a direct guard against the underlying race regardless.
+        if (IsBusy || SelectedDocument is not { } row || fromPageNumber == toPageNumber)
             return;
 
         var newOrder = _pages.Select(page => page.PageNumber).OrderBy(number => number).ToList();
