@@ -175,6 +175,14 @@
                         <TextBlock Text="Drag the vertical dividers to give the Inbox, preview, or indexing panel more space. The zoom controls reset, reduce, or enlarge the page."
                                    Classes="help-body" />
 
+                        <TextBlock Text="Page management" Classes="help-h2" />
+                        <TextBlock Text="Right-click a thumbnail in the page strip for Delete page(s) (works on a multi-selection) or Split here, which moves that page and everything after it into a new document inheriting the same profile and batch. Drag a thumbnail to a new position to reorder pages within the document. Deleting, splitting, and reordering all update index values and any redaction candidates to match the new page numbers."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Importing by drag-and-drop" Classes="help-h2" />
+                        <TextBlock Text="Drag file(s) or a folder from Finder or Explorer onto the window, the Inbox, or the page strip to import them — it behaves exactly like Import files, including the same supported-format filtering. Dropping a folder imports its top-level supported files, the same as Import folder."
+                                   Classes="help-body" />
+
                         <TextBlock Text="Table mode" Classes="help-h2" />
                         <TextBlock Text="Documents are grouped by indexing profile and their index values become columns. Select one or several rows for bulk profile application, redaction, removal, or export. Double-click a row to return to Preview mode. Drag selected documents onto a row in another batch to move them together."
                                    Classes="help-body" />
@@ -182,6 +190,7 @@
                         <TextBlock Text="Statuses" Classes="help-h2" />
                         <TextBlock Text="Needs review means one or more editable values require attention. Ready means the document can be exported. Exported records a completed export. A separate redaction status may indicate review, applied, or failed without changing the indexing status."
                                    Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="The page strip and most buttons dim and stop responding while an import, page edit, redaction, or export is in progress — this is normal, not a fault. A progress indicator appears in the status bar; wait for it to finish before trying again." Classes="help-note" /></Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -499,7 +508,7 @@
                         <TextBlock Text="Open Settings › Scanning, refresh the device list, select a scanner, then choose resolution, source, duplex, and grayscale options. 200 DPI is a practical text default; increase it for small print or difficult barcodes at the cost of speed and file size. Select the desired batch and indexing profiles before choosing Scan."
                                    Classes="help-body" />
                         <TextBlock Text="OCR requirement" Classes="help-h2" />
-                        <TextBlock Text="Scanned images and image-only PDFs need Tesseract OCR to produce searchable text for zones, patterns, and PII detection. If imported text documents work but scans do not extract values, confirm that Tesseract is installed and available to Capture."
+                        <TextBlock Text="Scanned images and image-only PDFs need Tesseract OCR to produce searchable text for zones, patterns, and PII detection. A packaged copy of Capture bundles Tesseract, so this works with no separate install on a standard installation. If imported text documents work but scans do not extract values, confirm the installation is a supported build for your platform — only a build run from source without the bundled package, or one where that package is missing, needs a system Tesseract install on PATH instead."
                                    Classes="help-body" />
                         <TextBlock Text="Watch folders" Classes="help-h2" />
                         <TextBlock Text="In Settings, add a folder, enable it, and choose the indexing and batch profiles that every arriving file should use. Settle seconds controls how long Capture waits for a file to stop changing before import—raise it for large files copied over a network. Each watched folder is independent."
@@ -525,9 +534,9 @@
                                    Classes="help-body" />
                         <TextBlock Text="Common problems" Classes="help-h2" />
                         <Border Classes="help-card"><StackPanel Spacing="12">
-                            <StackPanel Spacing="3"><TextBlock Text="No text or extracted values from scans" Classes="help-h3" /><TextBlock Text="Install or expose Tesseract OCR, then re-import. Check that the sample and production layouts align with fixed zones." Classes="help-note" /></StackPanel>
+                            <StackPanel Spacing="3"><TextBlock Text="No text or extracted values from scans" Classes="help-h3" /><TextBlock Text="Tesseract ships bundled, so this is rarely a missing-install problem. Re-import and check that the sample and production layouts align with fixed zones; if it's a build without the bundled package, install Tesseract OCR and ensure it is on PATH." Classes="help-note" /></StackPanel>
                             <Separator />
-                            <StackPanel Spacing="3"><TextBlock Text="Redact finds no PII" Classes="help-h3" /><TextBlock Text="Check the chosen redaction set, confidence threshold, document language/text, and sidecar availability. Sensitive fields and manual rectangles do not depend on PII detection." Classes="help-note" /></StackPanel>
+                            <StackPanel Spacing="3"><TextBlock Text="Redact finds no PII" Classes="help-h3" /><TextBlock Text="Check the chosen redaction set, confidence threshold, document language/text, and that the bundled Presidio sidecar started (it ships with Capture and starts automatically; a very slow first launch while the OS verifies it is normal). Sensitive fields and manual rectangles do not depend on PII detection." Classes="help-note" /></StackPanel>
                             <Separator />
                             <StackPanel Spacing="3"><TextBlock Text="Mark ready is disabled" Classes="help-h3" /><TextBlock Text="Populate every mandatory editable field and correct invalid formatted values. Hidden and read-only fields are excluded from the check." Classes="help-note" /></StackPanel>
                             <Separator />
