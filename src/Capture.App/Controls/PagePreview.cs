@@ -401,6 +401,7 @@ public sealed class PagePreview : Control
         if (_mode == EditMode.None)
         {
             UpdateHoverCursor(point);
+            UpdateOcrWordTooltip(point);
             return;
         }
 
@@ -469,6 +470,12 @@ public sealed class PagePreview : Control
         InvalidateVisual();
     }
 
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        ToolTip.SetIsOpen(this, false);
+    }
+
     private void BeginEdit(EditMode mode, Point point, Rect origin)
     {
         _mode = mode;
@@ -522,6 +529,43 @@ public sealed class PagePreview : Control
         {
             if (ToScreen(Highlights[i], dest).Contains(point))
                 return Highlights[i];
+        }
+
+        return null;
+    }
+
+    // Manually driven rather than relying on Avalonia's automatic hover-delay ToolTip triggering —
+    // this control draws every word itself instead of having one element per word, so there's nothing
+    // for the automatic behavior to key off as the pointer moves between words within the same control.
+    private void UpdateOcrWordTooltip(Point point)
+    {
+        if (!ShowOcrWords || OcrWords is null)
+        {
+            ToolTip.SetIsOpen(this, false);
+            return;
+        }
+
+        var dest = ImageDestination();
+        var word = HitOcrWord(dest, point);
+        if (word is null)
+        {
+            ToolTip.SetIsOpen(this, false);
+            return;
+        }
+
+        ToolTip.SetTip(this, $"{word.Text} ({word.Confidence:F0}%)");
+        ToolTip.SetIsOpen(this, true);
+    }
+
+    private LatticeWord? HitOcrWord(Rect dest, Point point)
+    {
+        if (OcrWords is null)
+            return null;
+
+        for (var i = OcrWords.Count - 1; i >= 0; i--)
+        {
+            if (ToScreen(OcrWords[i], dest).Contains(point))
+                return OcrWords[i];
         }
 
         return null;
