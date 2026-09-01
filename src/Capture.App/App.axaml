@@ -2,7 +2,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Capture.App.App"
              xmlns:local="using:Capture.App"
+             Name="Capture"
              RequestedThemeVariant="Default">
+    <!-- Two separate things were needed, confirmed by testing an actual packaged .app bundle (not
+         `dotnet run`, which has no process identity for macOS to read at all):
+         - Application.Name (above) is what the AvaloniaNative macOS backend reads for the bold app-menu
+           title and the "Hide"/boilerplate item wording — Info.plist's CFBundleName does NOT drive
+           this, confirmed live (the title stayed "Avalonia Application" in a real signed .app bundle
+           without this).
+         - NativeMenu.Menu (below) replaces the "About"/quit items. Items go directly at the top level,
+           not wrapped in an extra "Capture" NativeMenuItem — nesting them under one was tried first and
+           produced a confusing extra "Capture > Capture" submenu layer, confirmed live via screenshot.
+    -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="About Capture" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Quit Capture" />
+        </NativeMenu>
+    </NativeMenu.Menu>
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>

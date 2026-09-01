@@ -39,29 +39,19 @@ public partial class App : Application
             // without this, the sidecar child process (once bundled) would be orphaned on app exit.
             desktop.Exit += (_, _) => services.Dispose();
 
-            // Without an explicit NativeMenu, Avalonia falls back to a generic macOS app menu titled
-            // "Avalonia Application" with a boilerplate "About Avalonia Application" item — the app's
-            // real name (from Info.plist's CFBundleName) doesn't override this. Supplying our own is the
-            // documented fix, and it reuses the same About dialog already wired to the in-app "More"
-            // menu (MainViewModel.OpenAboutCommand) instead of a separate/duplicate implementation.
-            var aboutItem = new NativeMenuItem("About Capture");
+            // The menu structure itself is declared in App.axaml (Application.Name + NativeMenu.Menu,
+            // loaded during Initialize() — setting NativeMenu.Menu here imperatively instead compiled
+            // fine but the native menu bridge never picked it up, confirmed live). x:Name doesn't
+            // generate code-behind fields for NativeMenuItem the way it does for visual controls
+            // (confirmed: CS0103), so look the items up by position instead, then wire behavior now
+            // that the real ViewModel/command exists — reuses the same About dialog already wired to
+            // the in-app "More" menu (MainViewModel.OpenAboutCommand) instead of a separate one.
+            var appMenu = NativeMenu.GetMenu(this)!;
+            var aboutItem = (NativeMenuItem)appMenu.Items[0];
+            var quitItem = (NativeMenuItem)appMenu.Items[2];
             aboutItem.Click += (_, _) => mainViewModel.OpenAboutCommand.Execute(null);
-            var quitItem = new NativeMenuItem("Quit Capture") { Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta) };
+            quitItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
             quitItem.Click += (_, _) => desktop.Shutdown();
-            var appMenu = new NativeMenu
-            {
-                Items =
-                {
-                    new NativeMenuItem("Capture")
-                    {
-                        Menu = new NativeMenu
-                        {
-                            Items = { aboutItem, new NativeMenuItemSeparator(), quitItem }
-                        }
-                    }
-                }
-            };
-            NativeMenu.SetMenu(this, appMenu);
         }
 
         base.OnFrameworkInitializationCompleted();
