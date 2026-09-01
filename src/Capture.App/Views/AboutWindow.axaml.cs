@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
@@ -36,4 +37,15 @@ public partial class AboutWindow : Window
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void OnLicenseLinkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { Tag: string url } || string.IsNullOrWhiteSpace(url))
+            return;
+
+        // ProcessStartInfo.UseShellExecute is the standard cross-platform way to hand a URL to the
+        // OS's default browser — Process.Start(url) alone doesn't work on Windows for non-executable
+        // paths, and passing false here would try (and fail) to execute the URL as a local file.
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
 }
