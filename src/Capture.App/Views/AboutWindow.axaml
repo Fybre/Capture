@@ -9,6 +9,23 @@
         MinHeight="460"
         WindowStartupLocation="CenterOwner"
         CanResize="True">
+    <Window.Styles>
+        <Style Selector="Button.license-link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+        <Style Selector="Button.license-link:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.license-link TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush1}" />
+            <Setter Property="TextDecorations" Value="Underline" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+    </Window.Styles>
     <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
         <Border Grid.Row="0"
                 Background="{DynamicResource Surface2Brush}"
@@ -50,6 +67,12 @@
                                Classes="hint"
                                FontSize="11.5"
                                TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Licensed under the" Classes="hint" FontSize="11.5" />
+                        <Button Classes="license-link" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLicenseLinkClick">
+                            <TextBlock Text="Apache License, Version 2.0" FontSize="11.5" />
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
 
                 <Border Classes="card" HorizontalAlignment="Stretch">
@@ -61,24 +84,6 @@
                                    TextWrapping="Wrap" />
 
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-                            <Grid.Styles>
-                                <Style Selector="Button.license-link">
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                    <Setter Property="Padding" Value="0" />
-                                    <Setter Property="Cursor" Value="Hand" />
-                                    <Setter Property="HorizontalAlignment" Value="Right" />
-                                </Style>
-                                <Style Selector="Button.license-link:pointerover /template/ ContentPresenter">
-                                    <Setter Property="Background" Value="Transparent" />
-                                </Style>
-                                <Style Selector="Button.license-link TextBlock">
-                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush1}" />
-                                    <Setter Property="TextDecorations" Value="Underline" />
-                                    <Setter Property="FontSize" Value="12.5" />
-                                </Style>
-                            </Grid.Styles>
-
                             <TextBlock Grid.Row="0" Text="Avalonia UI 11.3.6" />
                             <Button Grid.Row="0" Grid.Column="1" Classes="license-link" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
                                 <TextBlock Text="MIT" />

@@ -255,3 +255,10 @@ needs `CAPTURE_PACKAGES_PAT` (repo secret) — the same `read:packages`-scoped P
 development (see "Native binary packages" above). The macOS job additionally needs the five Apple
 secrets listed above; without them it still builds and produces an ad-hoc signed `.dmg` (useful for
 verifying the pipeline itself still works, not for distribution).
+
+## License
+
+Apache License, Version 2.0 — see [`LICENSE`](LICENSE). Every bundled third-party component (Avalonia,
+Tesseract/Leptonica, Presidio/spaCy, LLamaSharp, and the rest) is under a compatible permissive license
+(MIT/BSD/Apache/zlib/public domain); the in-app **About Capture** dialog lists each one with a link to
+its actual license text.
