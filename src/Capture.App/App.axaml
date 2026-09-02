@@ -27,6 +27,10 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+        <!-- Without this, AvaloniaEdit's TextEditor (script pop-out editor) has no control template at
+             all — it renders as an inert shell that never becomes interactive/focusable, confirmed live
+             (opens but silently rejects all typing). -->
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
         <StyleInclude Source="avares://Capture.App/Styles/Theme.axaml" />
     </Application.Styles>
 </Application>
