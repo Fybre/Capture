@@ -71,6 +71,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _redactionBypassScoreThreshold = profile.Redaction.BypassReviewScoreThresholdPercent;
         _removeAfterExport = profile.RemoveAfterExport;
         _sampleFileName = profile.SampleFileName;
+        _sharedScriptSource = profile.SharedScriptSource;
         foreach (var field in profile.Fields)
             Fields.Add(Wrap(field));
         RefreshBarcodeFieldOptions();
@@ -119,6 +120,13 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     public ObservableCollection<ScriptRow> Scripts { get; } = [];
 
     public bool HasNoScripts => Scripts.Count == 0;
+
+    /// <summary>C# helper functions available to every profile-level script, Script-kind field
+    /// expression, and Button field script in this profile — compiled as a prefix ahead of each one's
+    /// own source (see IFieldScriptRunner's sharedSource parameter), so a helper only needs to be
+    /// written once instead of copy-pasted into every script that wants it.</summary>
+    [ObservableProperty]
+    private string _sharedScriptSource;
 
     /// <summary>False when scripting is off in Settings (WatchSettings.AllowFieldScripts) — purely
     /// informational, shown as an inline hint so a profile author knows a saved script won't actually
@@ -644,6 +652,38 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         RefreshHighlights();
     }
 
+    private bool CanMoveFieldUp => SelectedField is not null && Fields.IndexOf(SelectedField) > 0;
+
+    private bool CanMoveFieldDown => SelectedField is not null && Fields.IndexOf(SelectedField) < Fields.Count - 1;
+
+    [RelayCommand(CanExecute = nameof(CanMoveFieldUp))]
+    private void MoveFieldUp()
+    {
+        if (SelectedField is null)
+            return;
+
+        var index = Fields.IndexOf(SelectedField);
+        Fields.Move(index, index - 1);
+        NotifyMoveFieldCommands();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMoveFieldDown))]
+    private void MoveFieldDown()
+    {
+        if (SelectedField is null)
+            return;
+
+        var index = Fields.IndexOf(SelectedField);
+        Fields.Move(index, index + 1);
+        NotifyMoveFieldCommands();
+    }
+
+    private void NotifyMoveFieldCommands()
+    {
+        MoveFieldUpCommand.NotifyCanExecuteChanged();
+        MoveFieldDownCommand.NotifyCanExecuteChanged();
+    }
+
     [RelayCommand]
     private void AddExportDefinition()
     {
@@ -700,6 +740,17 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         var edited = await _scriptEditor.EditAsync(host, $"Button script — {row.Name}", row.ButtonScriptSource);
         if (edited is not null)
             row.ButtonScriptSource = edited;
+    }
+
+    [RelayCommand]
+    private async Task PopOutSharedScriptAsync()
+    {
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, "Shared functions", SharedScriptSource);
+        if (edited is not null)
+            SharedScriptSource = edited;
     }
 
     /// <summary>Snapshots every field's current designer-preview value into real IndexValue objects — the
@@ -770,7 +821,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         try
         {
             var values = BuildPreviewIndexValues();
-            var result = await _scripts.RunProfileScriptAsync(script, BuildScriptPreviewContext(values)).ConfigureAwait(true);
+            var result = await _scripts.RunProfileScriptAsync(script, BuildScriptPreviewContext(values), sharedSource: SharedScriptSource).ConfigureAwait(true);
             if (!result.Success)
             {
                 StatusText = $"Script failed: {result.ErrorMessage}";
@@ -818,7 +869,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         try
         {
             var context = BuildScriptPreviewContext(BuildPreviewIndexValues());
-            var result = await _scripts.RunFieldExpressionAsync(row.Id, row.ScriptExpression, context).ConfigureAwait(true);
+            var result = await _scripts.RunFieldExpressionAsync(row.Id, row.ScriptExpression, context, sharedSource: SharedScriptSource).ConfigureAwait(true);
             if (!result.Success)
             {
                 StatusText = $"Script failed: {result.ErrorMessage}";
@@ -916,6 +967,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     partial void OnSelectedFieldChanged(FieldRow? value)
     {
         OnPropertyChanged(nameof(SelectedFieldPageNumber));
+        NotifyMoveFieldCommands();
 
         if (value is not null && value.Field.PageNumber != CurrentPageNumber && value.Field.PageNumber >= 1)
         {
@@ -959,6 +1011,11 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     partial void OnNameChanged(string value)
     {
         Profile.Name = value;
+    }
+
+    partial void OnSharedScriptSourceChanged(string value)
+    {
+        Profile.SharedScriptSource = value;
     }
 
     partial void OnSeparationTriggerChanged(DocumentSeparationTrigger value)

@@ -80,7 +80,7 @@ public sealed class ProfileExportRunner
 
         foreach (var script in scripts)
         {
-            var result = await _scripts.RunProfileScriptAsync(script, context, cancellationToken).ConfigureAwait(false);
+            var result = await _scripts.RunProfileScriptAsync(script, context, cancellationToken, profile.SharedScriptSource).ConfigureAwait(false);
             if (!result.Success)
                 Trace.TraceError($"Export script \"{script.Name}\" ({trigger}) failed: {result.ErrorMessage}");
         }

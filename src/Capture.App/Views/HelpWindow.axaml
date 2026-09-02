@@ -591,6 +591,8 @@
                             <Border Grid.Column="2" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Button field kind" Classes="help-h3" /><TextBlock Text="Renders as a button in the review panel instead of a value control. Like a profile-level script — imperative, full read/write over every field — but only runs when someone clicks it, not automatically." Classes="help-note" /></StackPanel></Border>
                         </Grid>
 
+                        <Border Classes="help-tip"><TextBlock Text="Shared functions (Scripts section, above the script list) are C# available to all three shapes above on this profile — write a helper once there instead of pasting it into every script/expression that needs it. Declare functions only; the box itself isn't run." Classes="help-note" /></Border>
+
                         <TextBlock Text="What a script can see" Classes="help-h2" />
                         <Border Classes="help-card">
                             <StackPanel Spacing="10">
@@ -653,7 +655,7 @@
 
                         <TextBlock Text="Writing a helper function" Classes="help-h3" />
                         <Border Classes="help-code"><TextBlock Classes="help-code" Text="string Combine(string first, string last) =&gt; $&quot;{last}, {first}&quot;;&#10;Fields[&quot;Full Name&quot;].Value = Combine(Fields[&quot;First Name&quot;].Value, Fields[&quot;Last Name&quot;].Value);" /></Border>
-                        <TextBlock Text="A script is compiled as an ordinary C# class body, so it can declare its own local functions (or full methods) anywhere in the script text and call them from later statements in that same script — no special syntax needed. A function declared in one script isn't visible to another; each script/expression compiles on its own."
+                        <TextBlock Text="A script is compiled as an ordinary C# class body, so it can declare its own local functions (or full methods) anywhere in the script text and call them from later statements in that same script — no special syntax needed. A function declared this way in one script isn't visible to another; each script/expression compiles on its own. To share a helper across several scripts on the same profile, put it in Shared functions instead (Scripts section, above the script list) — it compiles ahead of every profile-level script, Script field expression, and Button field script on that profile, so it only needs to be written once."
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
 

@@ -47,6 +47,53 @@ public class RoslynFieldScriptRunnerTests
     }
 
     [Fact]
+    public async Task A_profile_script_can_call_a_function_from_the_profile_s_shared_source()
+    {
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var context = Context(new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Name", Value = "" });
+        var script = new FieldScript { Source = "Fields[\"Name\"].Value = Shout(\"hi\");" };
+        const string shared = "string Shout(string s) => s.ToUpperInvariant() + \"!\";";
+
+        var result = await runner.RunProfileScriptAsync(script, context, sharedSource: shared);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("HI!", context.Values.Single().Value);
+    }
+
+    [Fact]
+    public async Task A_field_expression_can_call_a_function_from_the_profile_s_shared_source()
+    {
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var context = Context();
+        const string shared = "string Shout(string s) => s.ToUpperInvariant() + \"!\";";
+
+        var result = await runner.RunFieldExpressionAsync(Guid.NewGuid(), "Shout(\"hi\")", context, sharedSource: shared);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("HI!", result.Value);
+    }
+
+    [Fact]
+    public async Task Changing_the_shared_source_invalidates_the_compiled_cache_instead_of_running_stale()
+    {
+        // Same script id and text both times — only sharedSource changes. If the cache key didn't
+        // account for it, the second run would silently reuse the first compilation (missing Shout).
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var scriptId = Guid.NewGuid();
+        var context1 = Context(new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Name", Value = "" });
+        var script = new FieldScript { Id = scriptId, Source = "Fields[\"Name\"].Value = Shout(\"hi\");" };
+
+        var first = await runner.RunProfileScriptAsync(script, context1, sharedSource: "string Shout(string s) => \"v1:\" + s;");
+        Assert.True(first.Success, first.ErrorMessage);
+        Assert.Equal("v1:hi", context1.Values.Single().Value);
+
+        var context2 = Context(new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Name", Value = "" });
+        var second = await runner.RunProfileScriptAsync(script, context2, sharedSource: "string Shout(string s) => \"v2:\" + s;");
+        Assert.True(second.Success, second.ErrorMessage);
+        Assert.Equal("v2:hi", context2.Values.Single().Value);
+    }
+
+    [Fact]
     public async Task A_profile_script_can_write_to_several_fields_other_than_a_single_one_of_its_own()
     {
         // Mirrors the Button field use case: read one field, write several others — a profile-level

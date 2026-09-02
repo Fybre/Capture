@@ -19,18 +19,25 @@ public interface IFieldScriptRunner
     /// <summary>Runs one profile-level script. <paramref name="context"/>'s <c>Values</c> are the real,
     /// mutable <see cref="Capture.Core.Models.IndexValue"/> instances — a successful run's mutations are
     /// already reflected in them; there is no separate result payload to copy back.</summary>
+    /// <param name="sharedSource">Compiled as a prefix ahead of <paramref name="script"/>'s own source —
+    /// typically an <see cref="Capture.Core.Profiles.IndexingProfile.SharedScriptSource"/> of reusable
+    /// helper functions. Empty by default; the compiled cache key already covers this text, so changing
+    /// it correctly invalidates every script that used the old version.</param>
     Task<ScriptRunResult> RunProfileScriptAsync(
         FieldScript script,
         ScriptExecutionContext context,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string sharedSource = "");
 
     /// <summary>Evaluates one field's <see cref="IndexField.ScriptExpression"/> against a read-only view
     /// of <paramref name="context"/>'s fields. On success, <see cref="ScriptRunResult.Value"/> holds the
     /// resolved value to assign to that field — the runner never mutates <paramref name="context"/> for
     /// a field expression, since other fields must stay read-only to it.</summary>
+    /// <param name="sharedSource">See <see cref="RunProfileScriptAsync"/>'s parameter of the same name.</param>
     Task<ScriptRunResult> RunFieldExpressionAsync(
         Guid scriptCacheKey,
         string expression,
         ScriptExecutionContext context,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string sharedSource = "");
 }

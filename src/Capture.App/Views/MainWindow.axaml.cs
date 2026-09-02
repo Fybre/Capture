@@ -91,6 +91,49 @@ public partial class MainWindow : Window
         await viewModel.InitializeAsync();
     }
 
+    // Enter commits the field being edited (already happens via the normal Text/SelectedDate/
+    // SelectedLookup bindings on every keystroke/selection) and moves focus to the next field's own
+    // input control, so a reviewer can walk down the whole panel — Enter, type, Enter, type — without
+    // reaching for the mouse. Tab already does this via ordinary focus traversal; this just makes Enter
+    // do it too, which reviewers doing sequential field-by-field entry reach for far more often.
+    private void OnFieldKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not Control { DataContext: IndexValueRow row })
+            return;
+
+        e.Handled = true;
+        FocusNextField(row);
+    }
+
+    private void FocusNextField(IndexValueRow current)
+    {
+        if (DataContext is not MainViewModel viewModel)
+            return;
+
+        var ordered = viewModel.ReviewBatchIndexes.Concat(viewModel.ReviewDocumentIndexes).ToList();
+        var index = ordered.IndexOf(current);
+        if (index < 0)
+            return;
+
+        for (var i = index + 1; i < ordered.Count; i++)
+        {
+            var target = this.GetVisualDescendants()
+                .OfType<Control>()
+                .FirstOrDefault(control =>
+                    ReferenceEquals(control.DataContext, ordered[i]) &&
+                    control is TextBox or CalendarDatePicker or ComboBox &&
+                    control.IsEffectivelyVisible);
+
+            if (target is null)
+                continue;
+
+            target.Focus();
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+            return;
+        }
+    }
+
     // Shared drag-to-move-batch wiring for the Inbox grid (Preview mode) and every
     // per-profile group grid in Table mode — dropping a document (or the whole current
     // multi-selection) onto another row moves it into that row's batch.

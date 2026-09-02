@@ -128,13 +128,6 @@
     <Setter Property="FontFamily" Value="{DynamicResource PlexMonoFontFamily}" />
   </Style>
 
-  <Style Selector="TextBlock.confidence-value">
-    <Setter Property="Foreground" Value="{DynamicResource FaintBrush}" />
-  </Style>
-  <Style Selector="TextBlock.confidence-value.low">
-    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
-  </Style>
-
   <Style Selector="TextBlock.eyebrow">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="SemiBold" />

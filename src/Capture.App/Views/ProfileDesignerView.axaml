@@ -361,6 +361,26 @@
 
                     <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                     <DockPanel LastChildFill="False">
+                        <TextBlock Text="Shared functions" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                        <Button Content="Pop out"
+                                Command="{Binding PopOutSharedScriptCommand}"
+                                Classes="ghost"
+                                DockPanel.Dock="Right"
+                                FontSize="12"
+                                Padding="8,3" />
+                    </DockPanel>
+                    <TextBlock Text="C# available to every script on this profile — profile-level scripts, Script field expressions, and Button field scripts — so a helper written here doesn't need to be copy-pasted into each one. Declare functions only; this text isn't run on its own."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <TextBox Text="{Binding SharedScriptSource}"
+                              Watermark="static string Clean(string s) =&gt; s.Trim().ToUpperInvariant();"
+                              AcceptsReturn="True"
+                              TextWrapping="NoWrap"
+                              Classes="mono"
+                              Height="90" />
+
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <DockPanel LastChildFill="False">
                         <TextBlock Text="Scripts" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />
                         <Button Content="+ Add" Command="{Binding AddScriptCommand}" Classes="ghost" DockPanel.Dock="Right" FontSize="12" Padding="8,3" />
                         <Button Content="Scripting help" Command="{Binding ShowScriptingHelpCommand}" Classes="ghost" DockPanel.Dock="Right" FontSize="12" Padding="8,3" Margin="0,0,6,0" />
@@ -556,10 +576,31 @@
                          Margin="8,0,8,8">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:FieldRow">
-                            <StackPanel Spacing="2" Margin="4,6">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
-                                <TextBlock Text="{Binding PageDisplay}" Classes="field-label" />
-                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto" Margin="4,6">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                    <TextBlock Text="{Binding PageDisplay}" Classes="field-label" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Vertical"
+                                            Spacing="1"
+                                            VerticalAlignment="Center"
+                                            Margin="6,0,0,0"
+                                            IsVisible="{Binding $parent[ListBoxItem].IsSelected}">
+                                    <Button Content="&#x25B2;"
+                                            Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).MoveFieldUpCommand}"
+                                            Classes="ghost"
+                                            Padding="4,1"
+                                            FontSize="9"
+                                            ToolTip.Tip="Move field up" />
+                                    <Button Content="&#x25BC;"
+                                            Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).MoveFieldDownCommand}"
+                                            Classes="ghost"
+                                            Padding="4,1"
+                                            FontSize="9"
+                                            ToolTip.Tip="Move field down" />
+                                </StackPanel>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>

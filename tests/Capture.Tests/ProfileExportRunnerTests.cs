@@ -85,10 +85,10 @@ public class ProfileExportRunnerTests
         public bool IsAvailable { get; set; } = true;
         public Func<FieldScript, ScriptExecutionContext, ScriptRunResult>? OnProfileScript { get; set; }
 
-        public Task<ScriptRunResult> RunProfileScriptAsync(FieldScript script, ScriptExecutionContext context, CancellationToken cancellationToken = default) =>
+        public Task<ScriptRunResult> RunProfileScriptAsync(FieldScript script, ScriptExecutionContext context, CancellationToken cancellationToken = default, string sharedSource = "") =>
             Task.FromResult(OnProfileScript?.Invoke(script, context) ?? ScriptRunResult.Ok(null, TimeSpan.Zero));
 
-        public Task<ScriptRunResult> RunFieldExpressionAsync(Guid scriptCacheKey, string expression, ScriptExecutionContext context, CancellationToken cancellationToken = default) =>
+        public Task<ScriptRunResult> RunFieldExpressionAsync(Guid scriptCacheKey, string expression, ScriptExecutionContext context, CancellationToken cancellationToken = default, string sharedSource = "") =>
             throw new NotSupportedException("Export triggers only run profile-level scripts.");
     }
 

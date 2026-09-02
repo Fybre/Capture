@@ -119,7 +119,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             if (value is null || value.IsManual)
                 continue;
 
-            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.ScriptExpression!, execContext, cancellationToken)
+            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.ScriptExpression!, execContext, cancellationToken, profile.SharedScriptSource)
                 .ConfigureAwait(false);
 
             if (!result.Success)
@@ -159,7 +159,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         var execContext = BuildExecutionContext(profile, results, lattices, context, document);
         foreach (var script in scripts)
         {
-            var result = await _scripts.RunProfileScriptAsync(script, execContext, cancellationToken).ConfigureAwait(false);
+            var result = await _scripts.RunProfileScriptAsync(script, execContext, cancellationToken, profile.SharedScriptSource).ConfigureAwait(false);
             if (!result.Success)
                 Trace.TraceError($"Script \"{script.Name}\" failed: {result.ErrorMessage}");
         }

@@ -35,6 +35,28 @@ public class ProfileApplicatorScriptTests
     }
 
     [Fact]
+    public async Task Both_profile_scripts_and_field_expressions_receive_the_profile_s_shared_source()
+    {
+        var fieldId = Guid.NewGuid();
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField { Name = "Total", Kind = FieldKind.Text },
+                new IndexField { Id = fieldId, Name = "Computed", Kind = FieldKind.Script, ScriptExpression = "irrelevant" }
+            ],
+            Scripts = [new FieldScript { Source = "irrelevant" }],
+            SharedScriptSource = "string Helper() => \"shared\";"
+        };
+        var runner = new FakeScriptRunner();
+
+        await new ProfileApplicator(scripts: runner).ApplyAsync(profile, []);
+
+        Assert.All(runner.ReceivedSharedSources, source => Assert.Equal(profile.SharedScriptSource, source));
+        Assert.Equal(2, runner.ReceivedSharedSources.Count); // one profile script + one field expression
+    }
+
+    [Fact]
     public async Task Scripts_see_document_level_facts_from_the_lattices_and_document_passed_to_ApplyAsync()
     {
         var lattice = new PageLattice
@@ -289,10 +311,18 @@ public class ProfileApplicatorScriptTests
 
         public Func<Guid, string, ScriptExecutionContext, ScriptRunResult>? OnFieldExpression { get; set; }
 
-        public Task<ScriptRunResult> RunProfileScriptAsync(FieldScript script, ScriptExecutionContext context, CancellationToken cancellationToken = default) =>
-            Task.FromResult(OnProfileScript?.Invoke(script, context) ?? ScriptRunResult.Ok(null, TimeSpan.Zero));
+        public List<string> ReceivedSharedSources { get; } = [];
 
-        public Task<ScriptRunResult> RunFieldExpressionAsync(Guid scriptCacheKey, string expression, ScriptExecutionContext context, CancellationToken cancellationToken = default) =>
-            Task.FromResult(OnFieldExpression?.Invoke(scriptCacheKey, expression, context) ?? ScriptRunResult.Ok(null, TimeSpan.Zero));
+        public Task<ScriptRunResult> RunProfileScriptAsync(FieldScript script, ScriptExecutionContext context, CancellationToken cancellationToken = default, string sharedSource = "")
+        {
+            ReceivedSharedSources.Add(sharedSource);
+            return Task.FromResult(OnProfileScript?.Invoke(script, context) ?? ScriptRunResult.Ok(null, TimeSpan.Zero));
+        }
+
+        public Task<ScriptRunResult> RunFieldExpressionAsync(Guid scriptCacheKey, string expression, ScriptExecutionContext context, CancellationToken cancellationToken = default, string sharedSource = "")
+        {
+            ReceivedSharedSources.Add(sharedSource);
+            return Task.FromResult(OnFieldExpression?.Invoke(scriptCacheKey, expression, context) ?? ScriptRunResult.Ok(null, TimeSpan.Zero));
+        }
     }
 }

@@ -31,7 +31,8 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
     public async Task<ScriptRunResult> RunProfileScriptAsync(
         FieldScript script,
         ScriptExecutionContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string sharedSource = "")
     {
         var stopwatch = Stopwatch.StartNew();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -39,7 +40,7 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
 
         try
         {
-            var compiled = _profileScriptCache.GetOrCompile(script.Id, script.Source, ProfileScriptOptions, typeof(ScriptGlobals));
+            var compiled = _profileScriptCache.GetOrCompile(script.Id, Combine(sharedSource, script.Source), ProfileScriptOptions, typeof(ScriptGlobals));
             var globals = new ScriptGlobals(context, _http, script.Name, cts.Token);
             await compiled.RunAsync(globals, cancellationToken: cts.Token).ConfigureAwait(false);
             return ScriptRunResult.Ok(null, stopwatch.Elapsed);
@@ -58,7 +59,8 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
         Guid scriptCacheKey,
         string expression,
         ScriptExecutionContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string sharedSource = "")
     {
         var stopwatch = Stopwatch.StartNew();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -66,7 +68,7 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
 
         try
         {
-            var compiled = _fieldExpressionCache.GetOrCompile(scriptCacheKey, expression, FieldExpressionOptions, typeof(ReadOnlyScriptGlobals));
+            var compiled = _fieldExpressionCache.GetOrCompile(scriptCacheKey, Combine(sharedSource, expression), FieldExpressionOptions, typeof(ReadOnlyScriptGlobals));
             var globals = new ReadOnlyScriptGlobals(context, _http, "field expression", cts.Token);
             var state = await compiled.RunAsync(globals, cancellationToken: cts.Token).ConfigureAwait(false);
             return ScriptRunResult.Ok(state.ReturnValue?.ToString() ?? string.Empty, stopwatch.Elapsed);
@@ -80,6 +82,13 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
             return ScriptRunResult.Failed(DescribeError(ex), stopwatch.Elapsed);
         }
     }
+
+    // Shared helper functions compile ahead of the script's own text, in the same top-level scope — a
+    // script can call them directly, no namespace/class qualifier needed. Compiled cache key already
+    // covers this full combined string (CompiledScriptCache hashes whatever source it's given), so
+    // editing the shared source correctly invalidates every script/expression that used the old text.
+    private static string Combine(string sharedSource, string source) =>
+        string.IsNullOrWhiteSpace(sharedSource) ? source : sharedSource + "\n" + source;
 
     // A compilation error's Diagnostics collection is far more useful to a script author than the
     // generic exception message ("script returned no diagnostics" territory) — surface it directly.

@@ -367,6 +367,15 @@ public sealed class IndexingProfile
     /// these are imperative and can write any field, not just their own.</summary>
     public List<FieldScript> Scripts { get; set; } = [];
 
+    /// <summary>C# helper functions (and any other top-level declarations) made available to every
+    /// script that runs against this profile — profile-level <see cref="Scripts"/>, every
+    /// <see cref="FieldKind.Script"/> field's <see cref="IndexField.ScriptExpression"/>, and every
+    /// <see cref="FieldKind.Button"/> field's <see cref="IndexField.ButtonScriptSource"/>. Compiled as a
+    /// prefix ahead of each script's own text (see <c>IFieldScriptRunner</c>'s <c>sharedSource</c>
+    /// parameter), so a helper declared here doesn't need to be copy-pasted into every script that
+    /// wants it.</summary>
+    public string SharedScriptSource { get; set; } = "";
+
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
 }

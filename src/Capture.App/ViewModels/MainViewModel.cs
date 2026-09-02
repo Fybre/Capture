@@ -1616,12 +1616,7 @@ public partial class MainViewModel : ViewModelBase
         if (Application.Current is not { } app)
             return;
 
-        app.RequestedThemeVariant = theme switch
-        {
-            AppTheme.Light => ThemeVariant.Light,
-            AppTheme.Dark => ThemeVariant.Dark,
-            _ => ThemeVariant.Default
-        };
+        app.RequestedThemeVariant = ThemeVariantMapper.Map(theme);
     }
 
     private void MoveWatchFile(string path, string? watchRoot, WatchFolderEntry? watchFolderEntry, bool success)
@@ -2221,7 +2216,7 @@ public partial class MainViewModel : ViewModelBase
                 TimeoutSeconds = field.ButtonTimeoutSeconds
             };
 
-            var result = await _scripts.RunProfileScriptAsync(script, context).ConfigureAwait(true);
+            var result = await _scripts.RunProfileScriptAsync(script, context, sharedSource: profile.SharedScriptSource).ConfigureAwait(true);
             if (!result.Success)
             {
                 Trace.TraceError($"Button script \"{field.Name}\" failed: {result.ErrorMessage}");
@@ -2247,6 +2242,46 @@ public partial class MainViewModel : ViewModelBase
         {
             row.IsRunning = false;
         }
+    }
+
+    /// <summary>Copies one Document-level field's current value into the same field on every other
+    /// currently-selected document — for correcting/setting a shared value (e.g. "Supplier") across a
+    /// batch of documents without opening each one individually. Batch-level fields are excluded: they
+    /// already propagate to every document in their batch automatically via PersistReviewAsync, so
+    /// "applying to the selection" would be redundant (and ambiguous across documents from different
+    /// batches).</summary>
+    [RelayCommand]
+    private async Task ApplyFieldToSelectionAsync(IndexValueRow row)
+    {
+        if (SelectedDocument is not { } source || row.IsBatch)
+            return;
+
+        var targets = SelectedDocuments.Where(item => item.Id != source.Id).ToList();
+        if (targets.Count == 0)
+            return;
+
+        var applied = 0;
+        foreach (var target in targets)
+        {
+            var match = target.DocumentIndexes.FirstOrDefault(item => item.FieldId == row.Value.FieldId);
+            if (match is null)
+                continue;
+
+            match.Value = row.Value.Value;
+            match.IsManual = true;
+            match.Confidence = 100;
+            match.ValidationError = IndexFormat.Validate(match.Value, match.Format, target.Locale);
+            await PersistReviewAsync(target).ConfigureAwait(true);
+            applied++;
+        }
+
+        StatusText = applied > 0
+            ? $"Applied \"{row.Name}\" to {applied} other document{(applied == 1 ? "" : "s")}"
+            : "No other selected documents have this field";
+        if (applied > 0)
+            _toasts.ShowSuccess(StatusText);
+        else
+            _toasts.ShowError(StatusText);
     }
 
     private static void ClearReview(ObservableCollection<IndexValueRow> rows)

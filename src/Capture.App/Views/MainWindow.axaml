@@ -27,15 +27,26 @@
                     Margin="0,0,0,8"
                     ToolTip.Tip="Click to highlight this field's zone in the preview">
                 <StackPanel Spacing="5">
-                    <Grid ColumnDefinitions="*,Auto,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" />
-                        <TextBlock Grid.Column="1"
+                        <Panel Grid.Column="1" IsVisible="{Binding !IsBatch}">
+                            <Button Content="&#x2398;"
+                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ApplyFieldToSelectionCommand}"
+                                    CommandParameter="{Binding}"
+                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).HasMultipleSelectedDocuments}"
+                                    Classes="ghost"
+                                    Padding="4,0"
+                                    Margin="0,0,4,0"
+                                    FontSize="12"
+                                    ToolTip.Tip="Copy this value into the same field on every other selected document" />
+                        </Panel>
+                        <TextBlock Grid.Column="2"
                                    Text="🔒"
                                    FontSize="11"
                                    Margin="0,0,6,0"
                                    IsVisible="{Binding IsReadOnly}"
                                    ToolTip.Tip="Read only" />
-                        <TextBlock Grid.Column="2"
+                        <TextBlock Grid.Column="3"
                                    Text="{Binding Flag}"
                                    Foreground="{DynamicResource WarnBrush}"
                                    IsVisible="{Binding HasFlag}"
@@ -45,17 +56,20 @@
                     <TextBox Text="{Binding Text}"
                              IsVisible="{Binding IsTextEntry}"
                              IsEnabled="{Binding !IsReadOnly}"
-                             Classes.invalid="{Binding HasFormatError}" />
+                             Classes.invalid="{Binding HasFormatError}"
+                             KeyDown="OnFieldKeyDown" />
                     <CalendarDatePicker SelectedDate="{Binding SelectedDate}"
                                         IsVisible="{Binding IsDate}"
                                         IsEnabled="{Binding !IsReadOnly}"
-                                        HorizontalAlignment="Stretch" />
+                                        HorizontalAlignment="Stretch"
+                                        KeyDown="OnFieldKeyDown" />
                     <ComboBox ItemsSource="{Binding LookupChoices}"
                               SelectedItem="{Binding SelectedLookup}"
                               IsVisible="{Binding IsLookup}"
                               IsEnabled="{Binding !IsReadOnly}"
                               PlaceholderText="Choose a value"
-                              HorizontalAlignment="Stretch">
+                              HorizontalAlignment="Stretch"
+                              KeyDown="OnFieldKeyDown">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:LookupChoice">
                                 <TextBlock Text="{Binding Display}" />
@@ -75,19 +89,13 @@
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                     </StackPanel>
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,1,0,0" IsVisible="{Binding !IsButton}">
-                        <ProgressBar Value="{Binding ConfidenceValue}"
-                                     Maximum="100"
-                                     Height="3"
-                                     Classes.low="{Binding HasFlag}"
-                                     VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1"
-                                   Classes="mono confidence-value"
-                                   Classes.low="{Binding HasFlag}"
-                                   Text="{Binding ConfidenceDisplay}"
-                                   FontSize="10.5"
-                                   Margin="8,0,0,0" />
-                    </Grid>
+                    <ProgressBar Value="{Binding ConfidenceValue}"
+                                 Maximum="100"
+                                 Height="3"
+                                 Margin="0,1,0,0"
+                                 Classes.low="{Binding HasFlag}"
+                                 IsVisible="{Binding !IsButton}"
+                                 ToolTip.Tip="{Binding ConfidenceDisplay}" />
                 </StackPanel>
             </Button>
         </DataTemplate>

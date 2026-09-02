@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -7,6 +8,9 @@ using Capture.App.Hosting;
 using Capture.App.Services;
 using Capture.App.ViewModels;
 using Capture.App.Views;
+using Capture.Core.Paths;
+using Capture.Core.Watch;
+using Capture.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Capture.App;
@@ -23,6 +27,12 @@ public partial class App : Application
         var services = new ServiceCollection()
             .AddCapture()
             .BuildServiceProvider();
+
+        // Applied synchronously, before the window is created, so the first frame already renders in
+        // the user's saved theme — MainViewModel.InitializeAsync (which loads the rest of WatchSettings
+        // and re-applies the theme anyway) only runs after the window's Opened event, which is too late
+        // to avoid a visible flash of the OS-default theme on a mismatched system.
+        RequestedThemeVariant = ThemeVariantMapper.Map(ReadThemePreference(services.GetRequiredService<IAppPaths>()));
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -55,5 +65,25 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // A synchronous, best-effort peek at just the Theme field — deliberately not going through
+    // IWatchSettingsStore.LoadAsync (async file I/O, plus OS-credential-store round-trips for the
+    // secret fields we don't need here). Any failure just means the window opens at the OS-default
+    // theme for one frame, which InitializeAsync corrects moments later anyway.
+    private static AppTheme ReadThemePreference(IAppPaths paths)
+    {
+        try
+        {
+            if (!File.Exists(paths.SettingsPath))
+                return AppTheme.System;
+
+            var settings = JsonSerializer.Deserialize<WatchSettings>(File.ReadAllText(paths.SettingsPath), LatticeJson.Options);
+            return settings?.Theme ?? AppTheme.System;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return AppTheme.System;
+        }
     }
 }

@@ -213,6 +213,25 @@ public class JsonProfileStoreTests
     }
 
     [Fact]
+    public async Task Roundtrips_a_profile_s_shared_script_source()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-shared-source-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        var store = new JsonProfileStore(paths);
+        var profile = new IndexingProfile
+        {
+            Name = "Shared helpers",
+            SharedScriptSource = "static string Shout(string s) => s.ToUpperInvariant() + \"!\";"
+        };
+
+        await store.SaveAsync(profile);
+        var loaded = await store.GetAsync(profile.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(profile.SharedScriptSource, loaded!.SharedScriptSource);
+    }
+
+    [Fact]
     public async Task An_old_profile_with_no_scripts_property_loads_with_an_empty_scripts_list()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-scripts-" + Guid.NewGuid().ToString("N")));
