@@ -23,6 +23,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private readonly IFileDialogService _dialogs;
     private readonly IThereforeCategoryPickerDialogService _thereforeCategoryPicker;
     private readonly IToastService _toasts;
+    private readonly IHelpWindowService _help;
     private readonly List<string> _pageImages = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
@@ -40,6 +41,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         IFileDialogService dialogs,
         IThereforeCategoryPickerDialogService thereforeCategoryPicker,
         IToastService toasts,
+        IHelpWindowService help,
         IBarcodeDecoder? barcodes = null,
         IAiExtractor? ai = null,
         IFieldScriptRunner? scripts = null)
@@ -52,6 +54,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _dialogs = dialogs;
         _thereforeCategoryPicker = thereforeCategoryPicker;
         _toasts = toasts;
+        _help = help;
         _barcodes = barcodes;
         _ai = ai;
         _scripts = scripts;
@@ -639,6 +642,13 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
     [RelayCommand]
     private void RemoveScript(ScriptRow row) => Scripts.Remove(row);
+
+    [RelayCommand]
+    private void ShowScriptingHelp()
+    {
+        if (_dialogs.Host is { } host)
+            _help.ShowScripting(host);
+    }
 
     /// <summary>Snapshots every field's current designer-preview value into real IndexValue objects — the
     /// same shape ProfileApplicator hands scripts at real import time, built from whatever the field

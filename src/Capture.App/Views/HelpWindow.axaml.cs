@@ -8,4 +8,6 @@ public partial class HelpWindow : Window
     {
         InitializeComponent();
     }
+
+    public void SelectScriptingTab() => Tabs.SelectedItem = ScriptingTab;
 }

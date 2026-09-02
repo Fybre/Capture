@@ -78,6 +78,18 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="TextAlignment" Value="Center" />
         </Style>
+        <Style Selector="Border.help-code">
+            <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,10" />
+        </Style>
+        <Style Selector="TextBlock.help-code">
+            <Setter Property="FontFamily" Value="{DynamicResource PlexMonoFontFamily}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="Auto,*" Background="{DynamicResource GroundBrush}">
@@ -96,7 +108,7 @@
             </Grid>
         </Border>
 
-        <TabControl Grid.Row="1" Classes="help-tabs" TabStripPlacement="Left" SelectedIndex="0">
+        <TabControl x:Name="Tabs" Grid.Row="1" Classes="help-tabs" TabStripPlacement="Left" SelectedIndex="0">
             <TabItem Header="Start here" Classes="help-nav">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
@@ -558,6 +570,81 @@
                         <TextBlock Text="Enable detailed activity logging in Settings when investigating imports, exports, watch folders, or errors. Reproduce the issue, use Open folder to locate the log, then disable continuous logging when it is no longer needed. Error messages also appear in the status bar and on affected documents."
                                    Classes="help-body" />
                         <Border Classes="help-tip"><TextBlock Text="When asking for support, include the Capture version from More › About Capture, your operating system, the exact action that failed, and the relevant diagnostic log. Remove or mask sensitive document data before sharing files." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="ScriptingTab" Header="Scripting" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="860" HorizontalAlignment="Left">
+                        <TextBlock Text="Scripting" Classes="help-title" />
+                        <TextBlock Text="Real C#, compiled and run with Roslyn, for logic a Text/Lookup default or a Script field's own expression can't express — branching, string manipulation, and REST calls against external systems."
+                                   Classes="help-lead" />
+                        <Border Classes="help-tip"><TextBlock Text="Off by default (Settings &gt; Allow profile scripts) — a script runs with the full trust of this computer, there is no sandboxing. &quot;Run test&quot; in the designer always works regardless, since it's a single-document action you take yourself; real import/export needs the setting turned on. Importing a profile that carries a script always asks first, regardless of that setting." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Two shapes" Classes="help-h2" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <Border Grid.Column="0" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Profile-level scripts" Classes="help-h3" /><TextBlock Text="Scripts section, left panel. Free-form, multiple statements, full read/write access to every field. Runs at a chosen moment: after fields are extracted, before export, or after export." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Column="1" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Script field kind" Classes="help-h3" /><TextBlock Text="A single expression on one field. Read-only over every other field and the document; the expression's result becomes this field's value. Can reference an earlier Script field's already-resolved result." Classes="help-note" /></StackPanel></Border>
+                        </Grid>
+
+                        <TextBlock Text="What a script can see" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="10">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Fields" Classes="help-h3" />
+                                    <TextBlock Text="Fields[&quot;Name&quot;] gets one field by name (case-insensitive), or loop over Fields directly. Each has .Value, .Confidence, and .IsManual. Profile-level scripts can set .Value/.Confidence; a Script field's own expression only reads — see IsManual below."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Document" Classes="help-h3" />
+                                    <TextBlock Text="Document.FileName, Document.FileExtension (e.g. &quot;.pdf&quot;), Document.PageCount, and Document.Text — the same full OCR/PDF text extraction sent to AI fields. Document.Text is empty for a BeforeExport/AfterExport script (no page text available at export time)."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Http" Classes="help-h3" />
+                                    <TextBlock Text="A ready-to-use HttpClient — await Http.GetStringAsync(url) etc. work directly, no setup needed. One shared client per app, not a new connection per script run."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Log" Classes="help-h3" />
+                                    <TextBlock Text="Log.Info(...) / Log.Warn(...) / Log.Error(...) write to the same debug log Settings &gt; diagnostic logging captures — useful for troubleshooting a script running during real import, where errors are logged rather than shown."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="ProfileName, DocumentNumber, BatchNumber, Timestamp, CancellationToken" Classes="help-h3" />
+                                    <TextBlock Text="The same document/batch context a Text field's default value template can reference."
+                                               Classes="help-note" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="IsManual is informational, not enforced by the script itself — a script's write to a field the indexer already edited manually is silently reverted afterward regardless, so checking it just avoids pointless work."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Examples" Classes="help-h2" />
+
+                        <TextBlock Text="Fill a blank field, combine two fields" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="if (Fields[&quot;Country&quot;].Value == &quot;&quot;)&#10;    Fields[&quot;Country&quot;].Value = &quot;Unknown&quot;;&#10;&#10;Fields[&quot;Full Name&quot;].Value = Fields[&quot;First Name&quot;].Value + &quot; &quot; + Fields[&quot;Last Name&quot;].Value;" /></Border>
+
+                        <TextBlock Text="React to the document itself" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="if (Document.Text.Contains(&quot;URGENT&quot;, StringComparison.OrdinalIgnoreCase))&#10;    Fields[&quot;Priority&quot;].Value = &quot;High&quot;;&#10;&#10;Log.Info($&quot;Processed a {Document.PageCount}-page {Document.FileExtension} document&quot;);" /></Border>
+
+                        <TextBlock Text="Look up a value with a REST call" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="var customerId = Fields[&quot;Customer Id&quot;].Value;&#10;var json = await Http.GetStringAsync($&quot;https://api.example.com/customers/{customerId}&quot;);&#10;using var doc = JsonDocument.Parse(json);&#10;Fields[&quot;Customer Name&quot;].Value = doc.RootElement.GetProperty(&quot;name&quot;).GetString() ?? &quot;&quot;;" /></Border>
+                        <TextBlock Text="System.Text.Json (JsonDocument, JsonSerializer) and System.Net.Http are available with no extra using statements. A failed or slow request just fails this script — see the timeout note below — it never crashes the import."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="A Script field's expression (result becomes the field's value)" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="Fields[&quot;Company Name&quot;].Value.ToUpperInvariant()" /></Border>
+                        <TextBlock Text="A field expression is read-only over Fields and Document — it can't write to another field, only return this field's own value. That restriction is enforced by the type the expression runs against, not just documentation."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Reliability" Classes="help-h2" />
+                        <TextBlock Text="Each script has its own timeout (default 10 seconds, adjustable per profile-level script). .NET's cancellation is cooperative — an await-heavy script like the REST example above stops cleanly on timeout, but a tight loop with no await inside it can't be preempted. A throwing or timed-out script is logged and skipped; it never blocks the document. Compiled scripts are cached, so a batch import doesn't recompile per document."
+                                   Classes="help-body" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

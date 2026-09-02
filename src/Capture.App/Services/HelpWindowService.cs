@@ -15,7 +15,11 @@ public sealed class HelpWindowService : IHelpWindowService
         _toasts = toasts;
     }
 
-    public void Show(object owner)
+    public void Show(object owner) => ShowInternal(owner, selectScripting: false);
+
+    public void ShowScripting(object owner) => ShowInternal(owner, selectScripting: true);
+
+    private void ShowInternal(object owner, bool selectScripting)
     {
         if (owner is not Window ownerWindow)
             return;
@@ -33,6 +37,8 @@ public sealed class HelpWindowService : IHelpWindowService
             window.Show(ownerWindow);
         }
 
+        if (selectScripting)
+            _window.SelectScriptingTab();
         _window.Activate();
     }
 }

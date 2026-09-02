@@ -124,6 +124,10 @@
     <Setter Property="FontFamily" Value="{DynamicResource PlexMonoFontFamily}" />
   </Style>
 
+  <Style Selector="TextBox.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource PlexMonoFontFamily}" />
+  </Style>
+
   <Style Selector="TextBlock.confidence-value">
     <Setter Property="Foreground" Value="{DynamicResource FaintBrush}" />
   </Style>

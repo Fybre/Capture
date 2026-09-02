@@ -22,6 +22,7 @@ public partial class ProfilesViewModel : ViewModelBase
     private readonly IThereforeCategoryPickerDialogService _thereforeCategoryPicker;
     private readonly IToastService _toasts;
     private readonly IConfirmDialogService _confirm;
+    private readonly IHelpWindowService _help;
     private readonly IFieldScriptRunner? _scriptRunner;
 
     public ProfilesViewModel(
@@ -34,6 +35,7 @@ public partial class ProfilesViewModel : ViewModelBase
         IThereforeCategoryPickerDialogService thereforeCategoryPicker,
         IToastService toasts,
         IConfirmDialogService confirm,
+        IHelpWindowService help,
         IFieldScriptRunner? scriptRunner = null)
     {
         _store = store;
@@ -45,6 +47,7 @@ public partial class ProfilesViewModel : ViewModelBase
         _thereforeCategoryPicker = thereforeCategoryPicker;
         _toasts = toasts;
         _confirm = confirm;
+        _help = help;
         _scriptRunner = scriptRunner;
     }
 
@@ -325,7 +328,7 @@ public partial class ProfilesViewModel : ViewModelBase
 
     private async Task OpenDesignerAsync(IndexingProfile profile, bool isNew)
     {
-        var designer = new ProfileDesignerViewModel(profile, isNew, _samples, _store, _redactionSets, _dialogs, _thereforeCategoryPicker, _toasts, _barcodes, _ai, _scriptRunner)
+        var designer = new ProfileDesignerViewModel(profile, isNew, _samples, _store, _redactionSets, _dialogs, _thereforeCategoryPicker, _toasts, _help, _barcodes, _ai, _scriptRunner)
         {
             CloseCommand = CloseDesignerCommand
         };
