@@ -101,6 +101,7 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             StartView = settings.StartView,
             Theme = settings.Theme,
             DebugMode = settings.DebugMode,
+            CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
             AiEndpoint = settings.AiEndpoint,
             AiApiKey = Protect("AiApiKey", settings.AiApiKey),
             AiModel = settings.AiModel,

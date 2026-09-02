@@ -89,6 +89,9 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _debugMode;
 
+    [ObservableProperty]
+    private bool _checkForUpdatesOnStartup = true;
+
     public string DebugLogPath => _paths.DebugLogPath;
 
     [RelayCommand]
@@ -326,6 +329,7 @@ public partial class SettingsViewModel : ViewModelBase
         StartView = settings.StartView;
         Theme = settings.Theme;
         DebugMode = settings.DebugMode;
+        CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
 
         WatchFolders.Clear();
         foreach (var entry in settings.WatchFolders)
@@ -682,6 +686,7 @@ public partial class SettingsViewModel : ViewModelBase
             StartView = StartView,
             Theme = Theme,
             DebugMode = DebugMode,
+            CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
             WatchFolders = WatchFolders.Select(row => row.ToModel()).ToList(),
             AiEndpoint = string.IsNullOrWhiteSpace(AiEndpoint) ? null : AiEndpoint.Trim(),
             AiApiKey = string.IsNullOrWhiteSpace(AiApiKey) ? null : AiApiKey.Trim(),
@@ -752,6 +757,7 @@ public partial class SettingsViewModel : ViewModelBase
             StartView = settings.StartView;
             Theme = settings.Theme;
             DebugMode = settings.DebugMode;
+            CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
 
             WatchFolders.Clear();
             foreach (var entry in settings.WatchFolders)

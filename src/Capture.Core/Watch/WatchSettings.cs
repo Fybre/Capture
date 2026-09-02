@@ -30,6 +30,12 @@ public sealed class WatchSettings
     public WorkspaceMode StartView { get; set; } = WorkspaceMode.Preview;
     public AppTheme Theme { get; set; } = AppTheme.System;
 
+    /// <summary>When true, MainViewModel asks IUpdateCheckService to compare the running version
+    /// against Fybre/Capture's latest GitHub release once per startup, and toasts if a newer one
+    /// exists. Best-effort and silent on failure (offline, rate-limited, etc.) — never blocks or
+    /// delays startup.</summary>
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
+
     /// <summary>When true, a detailed activity log (imports, exports, watch-folder activity, and
     /// errors) is written to a file for troubleshooting — see <c>IDebugLogService</c>.</summary>
     public bool DebugMode { get; set; }

@@ -18,4 +18,8 @@ public interface IToastService
     void ShowSuccess(string message);
 
     void ShowError(string message);
+
+    /// <summary>Neutral, non-error notice. <paramref name="onClick"/> (e.g. opening a URL) fires if
+    /// the user clicks the toast body before it expires.</summary>
+    void ShowInfo(string message, Action? onClick = null);
 }

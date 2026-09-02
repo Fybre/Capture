@@ -43,6 +43,10 @@
                         <TextBlock Text="System follows your OS's light/dark setting."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
+                        <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}" />
+                        <TextBlock Text="Checks GitHub for a newer release each time Capture starts. Only a version number is requested — no document or usage data is sent."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
                     </StackPanel>
                 </Border>
 

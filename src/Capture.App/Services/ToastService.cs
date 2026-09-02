@@ -32,13 +32,16 @@ public sealed class ToastService : IToastService
 
     public void ShowError(string message) => Show("Error", message, NotificationType.Error);
 
-    private void Show(string title, string message, NotificationType type)
+    public void ShowInfo(string message, Action? onClick = null) =>
+        Show("Notice", message, NotificationType.Information, onClick);
+
+    private void Show(string title, string message, NotificationType type, Action? onClick = null)
     {
         if (_hostStack.Count == 0)
             return;
 
         var active = _hostStack[^1];
         if (_managers.TryGetValue(active, out var manager))
-            manager.Show(new Notification(title, message, type));
+            manager.Show(new Notification(title, message, type, onClick: onClick));
     }
 }

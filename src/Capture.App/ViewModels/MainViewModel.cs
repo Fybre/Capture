@@ -55,6 +55,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly PresidioSidecarLauncher _presidioLauncher;
     private readonly IDebugLogService _debugLog;
     private readonly IToastService _toasts;
+    private readonly IUpdateCheckService _updateCheck;
     private readonly IReadOnlyList<IPostIndexStep> _postIndexSteps;
     private readonly Queue<(string Path, WatchFolderEntry Entry)> _watchQueue = new();
     private readonly HashSet<string> _watchQueued = new(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +103,7 @@ public partial class MainViewModel : ViewModelBase
         PresidioSidecarLauncher presidioLauncher,
         IDebugLogService debugLog,
         IToastService toasts,
+        IUpdateCheckService updateCheck,
         IEnumerable<IPostIndexStep>? postIndexSteps = null)
     {
         _paths = paths;
@@ -132,6 +134,7 @@ public partial class MainViewModel : ViewModelBase
         _presidioLauncher = presidioLauncher;
         _debugLog = debugLog;
         _toasts = toasts;
+        _updateCheck = updateCheck;
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
         SelectedDocuments.CollectionChanged += OnSelectedDocumentsChanged;
@@ -393,11 +396,28 @@ public partial class MainViewModel : ViewModelBase
 
             await ApplyWatchAsync().ConfigureAwait(true);
             ViewMode = _watchSettings.StartView;
+
+            // Fire-and-forget: a slow/offline/rate-limited GitHub check must never delay startup or
+            // the document list appearing. IUpdateCheckService swallows its own failures.
+            if (_watchSettings.CheckForUpdatesOnStartup)
+                _ = CheckForUpdatesAsync();
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
         }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var result = await _updateCheck.CheckForUpdateAsync().ConfigureAwait(true);
+        if (!result.IsUpdateAvailable)
+            return;
+
+        var releaseUrl = result.ReleaseUrl;
+        _toasts.ShowInfo(
+            $"Capture {result.LatestVersion} is available — click to view the release.",
+            releaseUrl is null ? null : () => Process.Start(new ProcessStartInfo(releaseUrl) { UseShellExecute = true }));
     }
 
     [RelayCommand(CanExecute = nameof(CanImport))]

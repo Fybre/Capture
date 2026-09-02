@@ -82,6 +82,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IAboutDialogService, AboutDialogService>();
         services.AddSingleton<IThereforeCategoryPickerDialogService, ThereforeCategoryPickerDialogService>();
         services.AddSingleton<IToastService, ToastService>();
+        services.AddSingleton<IUpdateCheckService, GitHubUpdateCheckService>();
         services.AddTransient<MainViewModel>();
         services.AddTransient<ProfilesViewModel>();
         services.AddTransient<BatchProfilesViewModel>();
