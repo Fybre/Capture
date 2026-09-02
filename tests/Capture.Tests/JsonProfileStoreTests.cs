@@ -180,6 +180,39 @@ public class JsonProfileStoreTests
     }
 
     [Fact]
+    public async Task Roundtrips_a_button_kind_field()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-button-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        var store = new JsonProfileStore(paths);
+        var profile = new IndexingProfile
+        {
+            Name = "Buttoned",
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "Lookup customer",
+                    Kind = FieldKind.Button,
+                    ButtonLabel = "Look up customer",
+                    ButtonScriptSource = "Fields[\"Customer Name\"].Value = \"ACME\";",
+                    ButtonTimeoutSeconds = 20
+                }
+            ]
+        };
+
+        await store.SaveAsync(profile);
+        var loaded = await store.GetAsync(profile.Id);
+
+        Assert.NotNull(loaded);
+        var field = Assert.Single(loaded!.Fields);
+        Assert.Equal(FieldKind.Button, field.Kind);
+        Assert.Equal("Look up customer", field.ButtonLabel);
+        Assert.Equal("Fields[\"Customer Name\"].Value = \"ACME\";", field.ButtonScriptSource);
+        Assert.Equal(20, field.ButtonTimeoutSeconds);
+    }
+
+    [Fact]
     public async Task An_old_profile_with_no_scripts_property_loads_with_an_empty_scripts_list()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-scripts-" + Guid.NewGuid().ToString("N")));

@@ -25,6 +25,29 @@ public class RoslynFieldScriptRunnerTests
     }
 
     [Fact]
+    public async Task A_profile_script_can_write_to_several_fields_other_than_a_single_one_of_its_own()
+    {
+        // Mirrors the Button field use case: read one field, write several others — a profile-level
+        // script isn't tied to "its own" field the way a Script-kind expression is.
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var context = Context(
+            new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Customer Id", Value = "42" },
+            new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Customer Name", Value = "" },
+            new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Customer Country", Value = "" });
+        var script = new FieldScript
+        {
+            Name = "Look up customer",
+            Source = "var id = Fields[\"Customer Id\"].Value; Fields[\"Customer Name\"].Value = $\"Customer {id}\"; Fields[\"Customer Country\"].Value = \"AU\";"
+        };
+
+        var result = await runner.RunProfileScriptAsync(script, context);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("Customer 42", context.Values.Single(v => v.FieldName == "Customer Name").Value);
+        Assert.Equal("AU", context.Values.Single(v => v.FieldName == "Customer Country").Value);
+    }
+
+    [Fact]
     public async Task Scripts_can_read_document_level_facts()
     {
         var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());

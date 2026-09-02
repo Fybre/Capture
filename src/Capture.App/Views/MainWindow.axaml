@@ -62,7 +62,20 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,1,0,0">
+                    <StackPanel IsVisible="{Binding IsButton}" Spacing="4">
+                        <Button Content="{Binding ButtonContent}"
+                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RunButtonFieldCommand}"
+                                CommandParameter="{Binding}"
+                                IsEnabled="{Binding CanRunButton}"
+                                ToolTip.Tip="{Binding ButtonTooltip}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <TextBlock Text="{Binding ButtonStatus}"
+                                   IsVisible="{Binding ButtonStatus, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,1,0,0" IsVisible="{Binding !IsButton}">
                         <ProgressBar Value="{Binding ConfidenceValue}"
                                      Maximum="100"
                                      Height="3"

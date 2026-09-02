@@ -73,14 +73,9 @@ public sealed class ProfileExportRunner
             Timestamp = DateTimeOffset.Now,
             Values = values,
             // Full extracted text isn't available at export time (no PageLattice access here) — only
-            // at AfterFieldsPopulated. FileName/extension/page count still come from the real document.
-            Document = new ScriptDocumentInfo
-            {
-                FileName = document.OriginalFileName,
-                FileExtension = Path.GetExtension(document.OriginalFileName).ToLowerInvariant(),
-                PageCount = document.PageCount,
-                Text = string.Empty
-            }
+            // at AfterFieldsPopulated. FileName/extension/page count still come from the real document;
+            // ScriptDocumentInfo.From([], document) leaves Text empty for a lattice-less caller.
+            Document = ScriptDocumentInfo.From([], document)
         };
 
         foreach (var script in scripts)

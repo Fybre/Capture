@@ -229,15 +229,16 @@
                                    Classes="help-body" />
 
                         <TextBlock Text="Field types" Classes="help-h2" />
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                             <Border Grid.Row="0" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Text and Lookup" Classes="help-h3" /><TextBlock Text="Manual entry, optional computed defaults, or a controlled list of display/export values." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Row="0" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Zone" Classes="help-h3" /><TextBlock Text="Draw a fixed rectangle where the value appears on a consistent layout." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Row="1" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Key/value" Classes="help-h3" /><TextBlock Text="Find a label pattern and extract a nearby value; optionally restrict the search area." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Row="1" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Regex" Classes="help-h3" /><TextBlock Text="Match text with a regular expression; capture group 1 supplies the value when present." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Row="2" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Barcode" Classes="help-h3" /><TextBlock Text="Decode a chosen page or zone, optionally filtering by format or value pattern." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Row="2" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="AI" Classes="help-h3" /><TextBlock Text="Extract a configured catalog type or describe a custom value in a prompt." Classes="help-note" /></StackPanel></Border>
-                            <Border Grid.Row="3" Grid.Column="0" Classes="help-card"><StackPanel Spacing="4"><TextBlock Text="Batch separator value" Classes="help-h3" /><TextBlock Text="Copies the barcode or regex value that caused the batch boundary into an index field." Classes="help-note" /></StackPanel></Border>
-                            <Border Grid.Row="3" Grid.Column="1" Classes="help-card"><StackPanel Spacing="4"><TextBlock Text="Script" Classes="help-h3" /><TextBlock Text="A C# expression, read-only over every other field and the document (Document.Text, PageCount, ...), whose result becomes this field's value. Requires &quot;Allow profile scripts&quot; in Settings." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="3" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Batch separator value" Classes="help-h3" /><TextBlock Text="Copies the barcode or regex value that caused the batch boundary into an index field." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="3" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Script" Classes="help-h3" /><TextBlock Text="A C# expression, read-only over every other field and the document (Document.Text, PageCount, ...), whose result becomes this field's value. Requires &quot;Allow profile scripts&quot; in Settings." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="4" Grid.ColumnSpan="2" Classes="help-card"><StackPanel Spacing="4"><TextBlock Text="Button" Classes="help-h3" /><TextBlock Text="A button in the review panel; clicking it runs an attached C# script with full read/write access to every field. Requires &quot;Allow profile scripts&quot; in Settings." Classes="help-note" /></StackPanel></Border>
                         </Grid>
 
                         <TextBlock Text="Field options" Classes="help-h2" />
@@ -325,6 +326,7 @@
                             <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Lookup" Classes="help-h3" /><TextBlock Text="Each option has display text for the reviewer and a stored export value. For example, display Approved while exporting A. A default option is optional. &quot;Auto-fill from another field&quot; can also compute a default: enter a template like {Company Name} (same syntax as a Text field's default value), and it is matched case-insensitively against the display text above to fill in that option's export value — falling back to the fixed default option when nothing matches." Classes="help-body" /></StackPanel></Border>
                             <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Batch separator value" Classes="help-h3" /><TextBlock Text="No zone or pattern is needed. The value comes from the barcode or regex match that triggered the current batch boundary." Classes="help-body" /></StackPanel></Border>
                             <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Script" Classes="help-h3" /><TextBlock Text="Enter a C# expression, e.g. Fields[&quot;Company Name&quot;].Value.ToUpperInvariant() — other fields are read-only to it, and its result becomes this field's value. A later Script field (by position in the field list) can reference an earlier one's already-resolved result. &quot;Run test&quot; works even if scripting is off in Settings, since it's a single-document action you take yourself; real import/export needs &quot;Allow profile scripts&quot; turned on." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Button" Classes="help-h3" /><TextBlock Text="Enter a button label and an imperative script — unlike a Script field's expression, it can write to any field, e.g. filling several fields from one REST call. It only runs when a reviewer clicks it in the review panel. &quot;Run test&quot; here always works; a real reviewer's click needs &quot;Allow profile scripts&quot; turned on in Settings." Classes="help-body" /></StackPanel></Border>
                         </StackPanel>
 
                         <TextBlock Text="Profile-level scripts" Classes="help-h2" />
@@ -582,10 +584,11 @@
                                    Classes="help-lead" />
                         <Border Classes="help-tip"><TextBlock Text="Off by default (Settings &gt; Allow profile scripts) — a script runs with the full trust of this computer, there is no sandboxing. &quot;Run test&quot; in the designer always works regardless, since it's a single-document action you take yourself; real import/export needs the setting turned on. Importing a profile that carries a script always asks first, regardless of that setting." Classes="help-note" /></Border>
 
-                        <TextBlock Text="Two shapes" Classes="help-h2" />
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <TextBlock Text="Three shapes" Classes="help-h2" />
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
                             <Border Grid.Column="0" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Profile-level scripts" Classes="help-h3" /><TextBlock Text="Scripts section, left panel. Free-form, multiple statements, full read/write access to every field. Runs at a chosen moment: after fields are extracted, before export, or after export." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Column="1" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Script field kind" Classes="help-h3" /><TextBlock Text="A single expression on one field. Read-only over every other field and the document; the expression's result becomes this field's value. Can reference an earlier Script field's already-resolved result." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Column="2" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Button field kind" Classes="help-h3" /><TextBlock Text="Renders as a button in the review panel instead of a value control. Like a profile-level script — imperative, full read/write over every field — but only runs when someone clicks it, not automatically." Classes="help-note" /></StackPanel></Border>
                         </Grid>
 
                         <TextBlock Text="What a script can see" Classes="help-h2" />
@@ -639,6 +642,12 @@
                         <TextBlock Text="A Script field's expression (result becomes the field's value)" Classes="help-h3" />
                         <Border Classes="help-code"><TextBlock Classes="help-code" Text="Fields[&quot;Company Name&quot;].Value.ToUpperInvariant()" /></Border>
                         <TextBlock Text="A field expression is read-only over Fields and Document — it can't write to another field, only return this field's own value. That restriction is enforced by the type the expression runs against, not just documentation."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="A Button field that looks up and fills several fields" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="var customerId = Fields[&quot;Customer Id&quot;].Value;&#10;var json = await Http.GetStringAsync($&quot;https://api.example.com/customers/{customerId}&quot;);&#10;using var doc = JsonDocument.Parse(json);&#10;var root = doc.RootElement;&#10;Fields[&quot;Customer Name&quot;].Value = root.GetProperty(&quot;name&quot;).GetString() ?? &quot;&quot;;&#10;Fields[&quot;Customer Country&quot;].Value = root.GetProperty(&quot;country&quot;).GetString() ?? &quot;&quot;;&#10;Fields[&quot;Lookup customer&quot;].Value = $&quot;Found: {root.GetProperty(&quot;name&quot;).GetString()}&quot;;" /></Border>
+                        <TextBlock Text="Unlike a Script field's expression, a Button field's script is imperative and can write to any field — here it fills two others from one REST call, plus a status note on the button's own field, shown under the button after it runs. It only runs when someone clicks it, and (unlike Run test) needs &quot;Allow profile scripts&quot; turned on for a real reviewer to click it."
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
 

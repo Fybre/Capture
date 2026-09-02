@@ -84,6 +84,10 @@
                                 Command="{Binding AddScriptFieldCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
+                        <Button Content="Button"
+                                Command="{Binding AddButtonFieldCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
                         <Button Command="{Binding AddBatchSeparatorValueCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center">
@@ -791,6 +795,38 @@
                         <Button Grid.Column="0"
                                 Content="Run test"
                                 Command="{Binding RunFieldScriptCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Grid.Column="1"
+                                Content="Scripting help"
+                                Command="{Binding ShowScriptingHelpCommand}"
+                                Classes="ghost"
+                                Margin="6,0,0,0" />
+                    </Grid>
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsButton}">
+                    <TextBlock Text="Renders as a button in the review panel instead of a value control. Unlike a Script field's expression, its script is imperative and can write to any field — but only runs when someone clicks it, not automatically."
+                               TextWrapping="Wrap"
+                               Classes="hint"
+                               Margin="0,8,0,0" />
+                    <TextBlock Text="Button label" Classes="field-label" Margin="0,4,0,0" />
+                    <TextBox Text="{Binding SelectedField.ButtonLabel}" Watermark="{Binding SelectedField.Name}" />
+                    <TextBlock Text="Script" Classes="field-label" Margin="0,4,0,0" />
+                    <TextBox Text="{Binding SelectedField.ButtonScriptSource}"
+                              Watermark="Fields[&quot;Total&quot;].Value = &quot;42&quot;;"
+                              AcceptsReturn="True"
+                              TextWrapping="NoWrap"
+                              Classes="mono"
+                              Height="90" />
+                    <TextBlock Text="Timeout (seconds)" Classes="field-label" Margin="0,4,0,0" />
+                    <NumericUpDown Value="{Binding SelectedField.ButtonTimeoutSeconds}" Minimum="1" Maximum="120" />
+                    <TextBlock Text="Requires &quot;Allow profile scripts&quot; in Settings for real reviewers to click it — off by default, since it runs with full access to this computer. &quot;Run test&quot; below always works regardless, since it's a single-document action you take yourself."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Button Grid.Column="0"
+                                Content="Run test"
+                                Command="{Binding RunButtonFieldTestCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
                         <Button Grid.Column="1"

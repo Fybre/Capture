@@ -12,11 +12,12 @@ public sealed partial class IndexValueRow : ObservableObject
     private readonly int _threshold;
     private bool _suppress;
 
-    public IndexValueRow(IndexValue value, int threshold, string? locale)
+    public IndexValueRow(IndexValue value, int threshold, string? locale, bool scriptingAvailable = false)
     {
         Value = value;
         _threshold = threshold;
         Locale = locale;
+        ScriptingAvailable = scriptingAvailable;
         _text = value.Value;
         LookupChoices = value.LookupOptions
             .Select(option => new LookupChoice(option.Key, option.Value))
@@ -46,7 +47,36 @@ public sealed partial class IndexValueRow : ObservableObject
 
     public bool IsDate => !IsLookup && Value.Format == FieldFormat.Date;
 
-    public bool IsTextEntry => !IsLookup && !IsDate;
+    public bool IsButton => Value.Kind == FieldKind.Button;
+
+    public bool IsTextEntry => !IsLookup && !IsDate && !IsButton;
+
+    public string ButtonLabel => string.IsNullOrEmpty(Value.ButtonLabel) ? Value.FieldName : Value.ButtonLabel;
+
+    /// <summary>Whatever the button's script last wrote to this field's own value, if anything —
+    /// shown as a small persistent status line under the button (unlike a toast, this survives after
+    /// the notification fades). Not the button's clickable state — see <see cref="ScriptingAvailable"/>.</summary>
+    public string ButtonStatus => Value.Value;
+
+    /// <summary>False when scripting is off in Settings (WatchSettings.AllowFieldScripts) — greys the
+    /// button out with an explanatory tooltip instead of only failing after a click. Set once at row
+    /// construction from MainViewModel, which already knows this.</summary>
+    public bool ScriptingAvailable { get; }
+
+    public string ButtonTooltip => ScriptingAvailable
+        ? "Runs this button's script against the current document"
+        : "Scripting is off — turn on \"Allow profile scripts\" in Settings";
+
+    /// <summary>True while this row's button script is running — disables the button and swaps its
+    /// label to a "Running…" state.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRunButton))]
+    [NotifyPropertyChangedFor(nameof(ButtonContent))]
+    private bool _isRunning;
+
+    public bool CanRunButton => ScriptingAvailable && !IsRunning;
+
+    public string ButtonContent => IsRunning ? "Running…" : ButtonLabel;
 
     /// <summary>Invoked when this row is clicked in the review list — MainViewModel wires this to
     /// select the row and highlight its zone in the preview, the reverse of clicking the highlight
@@ -138,6 +168,24 @@ public sealed partial class IndexValueRow : ObservableObject
         OnPropertyChanged(nameof(ConfidenceDisplay));
         OnPropertyChanged(nameof(ConfidenceValue));
         Changed?.Invoke();
+    }
+
+    /// <summary>Re-syncs this row's cached display state from <see cref="Value"/> — needed after
+    /// something outside the normal Commit() path (a button script) mutates Value.Value/Confidence
+    /// directly, since Value itself doesn't raise property-change notifications the UI could bind to.</summary>
+    public void Refresh()
+    {
+        _suppress = true;
+        Text = Value.Value;
+        SelectedLookup = LookupChoices.FirstOrDefault(option => string.Equals(option.Value, Value.Value, StringComparison.Ordinal));
+        SelectedDate = ParseDate(Value.Value);
+        _suppress = false;
+        OnPropertyChanged(nameof(Flag));
+        OnPropertyChanged(nameof(HasFlag));
+        OnPropertyChanged(nameof(HasFormatError));
+        OnPropertyChanged(nameof(ConfidenceDisplay));
+        OnPropertyChanged(nameof(ConfidenceValue));
+        OnPropertyChanged(nameof(ButtonStatus));
     }
 
     private DateTime? ParseDate(string value) =>

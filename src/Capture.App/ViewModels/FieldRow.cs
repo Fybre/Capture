@@ -20,6 +20,9 @@ public sealed partial class FieldRow : ObservableObject
         _defaultValueTemplate = field.DefaultValueTemplate ?? string.Empty;
         _lookupKeyTemplate = field.LookupKeyTemplate ?? string.Empty;
         _scriptExpression = field.ScriptExpression ?? string.Empty;
+        _buttonLabel = field.ButtonLabel ?? string.Empty;
+        _buttonScriptSource = field.ButtonScriptSource;
+        _buttonTimeoutSeconds = field.ButtonTimeoutSeconds;
         _level = field.Level;
         _keyPattern = field.KeyPattern ?? string.Empty;
         _valuePattern = field.ValuePattern ?? string.Empty;
@@ -61,6 +64,8 @@ public sealed partial class FieldRow : ObservableObject
 
     public bool IsScript => Field.Kind == FieldKind.Script;
 
+    public bool IsButton => Field.Kind == FieldKind.Button;
+
     public bool IsPatternField => IsKeyValue || IsRegex;
 
     /// <summary>Barcode, Key/value, and Regex all share the same First/Number/Any page-scope selector.
@@ -82,6 +87,7 @@ public sealed partial class FieldRow : ObservableObject
         FieldKind.Text => "Text",
         FieldKind.Lookup => "Lookup",
         FieldKind.Script => "Script",
+        FieldKind.Button => "Button",
         _ => "Zone"
     };
 
@@ -153,6 +159,18 @@ public sealed partial class FieldRow : ObservableObject
     /// <summary>Only meaningful when <see cref="IsScript"/> — see <see cref="IndexField.ScriptExpression"/>.</summary>
     [ObservableProperty]
     private string _scriptExpression;
+
+    /// <summary>Only meaningful when <see cref="IsButton"/> — see <see cref="IndexField.ButtonLabel"/>.</summary>
+    [ObservableProperty]
+    private string _buttonLabel;
+
+    /// <summary>Only meaningful when <see cref="IsButton"/> — see <see cref="IndexField.ButtonScriptSource"/>.</summary>
+    [ObservableProperty]
+    private string _buttonScriptSource;
+
+    /// <summary>Only meaningful when <see cref="IsButton"/> — see <see cref="IndexField.ButtonTimeoutSeconds"/>.</summary>
+    [ObservableProperty]
+    private int _buttonTimeoutSeconds;
 
     [ObservableProperty]
     private string _liveValue;
@@ -232,6 +250,13 @@ public sealed partial class FieldRow : ObservableObject
 
     partial void OnScriptExpressionChanged(string value) =>
         Field.ScriptExpression = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    partial void OnButtonLabelChanged(string value) =>
+        Field.ButtonLabel = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    partial void OnButtonScriptSourceChanged(string value) => Field.ButtonScriptSource = value;
+
+    partial void OnButtonTimeoutSecondsChanged(int value) => Field.ButtonTimeoutSeconds = Math.Max(1, value);
 
     partial void OnLevelChanged(IndexLevel value)
     {

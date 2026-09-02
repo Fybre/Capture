@@ -248,6 +248,39 @@ public class ProfileApplicatorScriptTests
         Assert.Equal("user override", values.Single().Value);
     }
 
+    [Fact]
+    public async Task Button_kind_fields_are_never_auto_extracted()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields = [new IndexField { Name = "Lookup", Kind = FieldKind.Button, ButtonScriptSource = "Fields[\"Lookup\"].Value = \"x\";" }]
+        };
+
+        // No runner at all — a Button field's own value only ever changes via an explicit button
+        // click (RunButtonFieldAsync/RunButtonFieldTestAsync), never automatically during ApplyAsync.
+        var values = await new ProfileApplicator().ApplyAsync(profile, []);
+
+        Assert.Equal(string.Empty, values.Single().Value);
+    }
+
+    [Fact]
+    public async Task Manual_edit_on_a_button_field_is_preserved_across_reapply()
+    {
+        var fieldId = Guid.NewGuid();
+        var profile = new IndexingProfile
+        {
+            Fields = [new IndexField { Id = fieldId, Name = "Lookup", Kind = FieldKind.Button, ButtonScriptSource = "..." }]
+        };
+        var existing = new[]
+        {
+            new IndexValue { FieldId = fieldId, FieldName = "Lookup", Value = "Customer ABC found", IsManual = true }
+        };
+
+        var values = await new ProfileApplicator().ApplyAsync(profile, [], existingValues: existing);
+
+        Assert.Equal("Customer ABC found", values.Single().Value);
+    }
+
     private sealed class FakeScriptRunner : IFieldScriptRunner
     {
         public bool IsAvailable { get; set; } = true;

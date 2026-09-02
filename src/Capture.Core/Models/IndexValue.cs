@@ -21,6 +21,11 @@ public sealed class IndexValue
     public FieldKind Kind { get; set; }
     public List<LookupOption> LookupOptions { get; set; } = [];
 
+    /// <summary>Only meaningful for <see cref="FieldKind.Button"/> — copied from
+    /// <c>IndexField.ButtonLabel</c> at extraction time so the review panel can render the button
+    /// without a separate profile lookup.</summary>
+    public string? ButtonLabel { get; set; }
+
     public bool IsMissing => Mandatory && string.IsNullOrWhiteSpace(Value);
 
     public bool IsLowConfidence(int threshold) =>

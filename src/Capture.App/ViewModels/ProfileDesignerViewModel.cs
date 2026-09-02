@@ -230,6 +230,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
     [NotifyCanExecuteChangedFor(nameof(RunScriptTestCommand))]
     [NotifyCanExecuteChangedFor(nameof(RunFieldScriptCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunButtonFieldTestCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -409,6 +410,21 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Fields.Add(row);
         SelectedField = row;
         StatusText = "Enter a C# expression — other fields are read-only, its result becomes this field's value";
+    }
+
+    [RelayCommand]
+    private void AddButtonField()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Button,
+            Format = FieldFormat.String
+        };
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Enter a button label and a script — unlike a Script field, it can write to any field, but only runs when clicked";
     }
 
     [RelayCommand]
@@ -680,7 +696,35 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     };
 
     [RelayCommand(CanExecute = nameof(CanRunScript))]
-    private async Task RunScriptTestAsync(ScriptRow row)
+    private Task RunScriptTestAsync(ScriptRow row) => RunImperativeScriptAsync(row.Script);
+
+    [RelayCommand(CanExecute = nameof(CanRunScript))]
+    private Task RunButtonFieldTestAsync()
+    {
+        if (SelectedField is not { IsButton: true } row)
+            return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(row.ButtonScriptSource))
+        {
+            StatusText = "Enter a script first";
+            return Task.CompletedTask;
+        }
+
+        // The real field's Id, not a fresh Guid, so the compiled-script cache is reused across repeated
+        // "Run test" clicks (same reasoning as the real review-panel button handler).
+        return RunImperativeScriptAsync(new FieldScript
+        {
+            Id = row.Id,
+            Name = row.Name,
+            Source = row.ButtonScriptSource,
+            TimeoutSeconds = row.ButtonTimeoutSeconds
+        });
+    }
+
+    /// <summary>Shared by RunScriptTestAsync (a profile-level FieldScript) and RunButtonFieldTestAsync
+    /// (an ephemeral FieldScript built from a Button field) — both run imperative, mutable-Fields
+    /// scripts against the designer's live sample state and reflect any mutation back into the visible
+    /// field rows the same way.</summary>
+    private async Task RunImperativeScriptAsync(FieldScript script)
     {
         if (_scripts is null)
             return;
@@ -690,7 +734,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         try
         {
             var values = BuildPreviewIndexValues();
-            var result = await _scripts.RunProfileScriptAsync(row.Script, BuildScriptPreviewContext(values)).ConfigureAwait(true);
+            var result = await _scripts.RunProfileScriptAsync(script, BuildScriptPreviewContext(values)).ConfigureAwait(true);
             if (!result.Success)
             {
                 StatusText = $"Script failed: {result.ErrorMessage}";
@@ -951,6 +995,14 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             // Evaluating a script needs the async runner (and every other field's current preview
             // value) — see RunFieldScriptAsync. Nothing to compute synchronously here.
             row.LiveFormat = "Script";
+            return;
+        }
+
+        if (row.IsButton)
+        {
+            // A Button field's value only ever changes via RunButtonFieldTestAsync/the real review
+            // panel's button click — there's nothing to extract automatically.
+            row.LiveFormat = "Button";
             return;
         }
 

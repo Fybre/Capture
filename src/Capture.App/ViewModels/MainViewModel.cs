@@ -16,6 +16,7 @@ using Capture.Core.Paths;
 using Capture.Core.Pipeline;
 using Capture.Core.Profiles;
 using Capture.Core.Redaction;
+using Capture.Core.Scripting;
 using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.Export;
@@ -56,6 +57,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IDebugLogService _debugLog;
     private readonly IToastService _toasts;
     private readonly IUpdateCheckService _updateCheck;
+    private readonly IFieldScriptRunner? _scripts;
     private readonly IReadOnlyList<IPostIndexStep> _postIndexSteps;
     private readonly Queue<(string Path, WatchFolderEntry Entry)> _watchQueue = new();
     private readonly HashSet<string> _watchQueued = new(StringComparer.OrdinalIgnoreCase);
@@ -104,6 +106,7 @@ public partial class MainViewModel : ViewModelBase
         IDebugLogService debugLog,
         IToastService toasts,
         IUpdateCheckService updateCheck,
+        IFieldScriptRunner? scripts = null,
         IEnumerable<IPostIndexStep>? postIndexSteps = null)
     {
         _paths = paths;
@@ -135,6 +138,7 @@ public partial class MainViewModel : ViewModelBase
         _debugLog = debugLog;
         _toasts = toasts;
         _updateCheck = updateCheck;
+        _scripts = scripts;
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
         SelectedDocuments.CollectionChanged += OnSelectedDocumentsChanged;
@@ -1750,10 +1754,11 @@ public partial class MainViewModel : ViewModelBase
         await _indexes.SaveBatchAsync(batchId, batchValues).ConfigureAwait(true);
     }
 
-    private async Task<IReadOnlyList<IndexValue>> ExtractAsync(
-        CaptureDocument document,
-        IndexingProfile profile,
-        string? batchSeparatorValue = null)
+    /// <summary>Every page's already-built lattice for a document — used both for real extraction
+    /// (ExtractAsync) and to build a script's Document.Text (RunButtonFieldAsync). Assumes lattices
+    /// already exist (built during import); a page with none simply isn't included, same as before this
+    /// was extracted into its own method.</summary>
+    private async Task<List<PageLattice>> LoadAllLatticesAsync(CaptureDocument document)
     {
         var lattices = new List<PageLattice>();
         for (var page = 1; page <= document.PageCount; page++)
@@ -1762,6 +1767,16 @@ public partial class MainViewModel : ViewModelBase
             if (lattice is not null)
                 lattices.Add(lattice);
         }
+
+        return lattices;
+    }
+
+    private async Task<IReadOnlyList<IndexValue>> ExtractAsync(
+        CaptureDocument document,
+        IndexingProfile profile,
+        string? batchSeparatorValue = null)
+    {
+        var lattices = await LoadAllLatticesAsync(document).ConfigureAwait(true);
 
         DefaultValueContext? context = null;
         var existingValues = new List<IndexValue>(await _indexes.GetAsync(document.Id).ConfigureAwait(true));
@@ -2134,12 +2149,104 @@ public partial class MainViewModel : ViewModelBase
 
     private IndexValueRow CreateReviewRow(DocumentRow document, IndexValue value)
     {
-        var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale)
+        var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale, _scripts?.IsAvailable ?? false)
         {
             Changed = () => _ = PersistReviewAsync(document)
         };
         row.Selected = () => SelectedIndex = row;
         return row;
+    }
+
+    /// <summary>Runs a Button field's attached script — the review panel's on-demand counterpart to
+    /// AfterFieldsPopulated profile scripts. Full read/write over every field on the document (unlike a
+    /// Script-kind field's own read-only expression), gated on WatchSettings.AllowFieldScripts exactly
+    /// like real import/export, since this is running someone else's (the profile author's) script for
+    /// whoever happens to be reviewing, not the author testing their own work interactively — that
+    /// interactive exception is the Designer's "Run test" only.</summary>
+    [RelayCommand]
+    private async Task RunButtonFieldAsync(IndexValueRow row)
+    {
+        if (SelectedDocument is not { } documentRow || row.Value.Kind != FieldKind.Button)
+            return;
+
+        if (_scripts is null || !_scripts.IsAvailable)
+        {
+            StatusText = "Scripting is off — turn on \"Allow profile scripts\" in Settings";
+            _toasts.ShowError(StatusText);
+            return;
+        }
+
+        var document = documentRow.Document;
+        var profile = document.ProfileId is { } profileId ? Profiles.FirstOrDefault(item => item.Id == profileId) : null;
+        var field = profile?.Fields.FirstOrDefault(item => item.Id == row.Value.FieldId);
+        if (field is null || string.IsNullOrWhiteSpace(field.ButtonScriptSource))
+        {
+            StatusText = "This button has no script configured";
+            _toasts.ShowError(StatusText);
+            return;
+        }
+
+        row.IsRunning = true;
+        try
+        {
+            var lattices = await LoadAllLatticesAsync(document).ConfigureAwait(true);
+            DefaultValueContext? defaultContext = null;
+            if (document.BatchId is { } batchId)
+            {
+                defaultContext = new DefaultValueContext
+                {
+                    BatchNumber = await _store.GetBatchNumberAsync(batchId).ConfigureAwait(true),
+                    DocumentNumber = await _store.GetDocumentNumberInBatchAsync(batchId, document.Id).ConfigureAwait(true),
+                    Timestamp = DateTimeOffset.Now
+                };
+            }
+
+            var context = new ScriptExecutionContext
+            {
+                ProfileName = profile!.Name,
+                DocumentNumber = defaultContext?.DocumentNumber ?? 1,
+                BatchNumber = defaultContext?.BatchNumber ?? 1,
+                Timestamp = DateTimeOffset.Now,
+                Values = documentRow.Indexes,
+                Document = ScriptDocumentInfo.From(lattices, document)
+            };
+
+            // The real field's Id, not a fresh Guid — so RoslynFieldScriptRunner's compiled-script
+            // cache (keyed on id + source hash) is actually reused across repeated clicks.
+            var script = new FieldScript
+            {
+                Id = field.Id,
+                Name = field.Name,
+                Source = field.ButtonScriptSource,
+                TimeoutSeconds = field.ButtonTimeoutSeconds
+            };
+
+            var result = await _scripts.RunProfileScriptAsync(script, context).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                Trace.TraceError($"Button script \"{field.Name}\" failed: {result.ErrorMessage}");
+                StatusText = $"Script failed: {result.ErrorMessage}";
+                _toasts.ShowError(StatusText);
+                return;
+            }
+
+            await PersistReviewAsync(documentRow).ConfigureAwait(true);
+            // A button script can write to any field, not just its own — refresh every currently
+            // visible row's cached display state rather than tracking which ones actually changed.
+            foreach (var visibleRow in ReviewBatchIndexes.Concat(ReviewDocumentIndexes))
+                visibleRow.Refresh();
+            StatusText = "Script ran successfully";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            row.IsRunning = false;
+        }
     }
 
     private static void ClearReview(ObservableCollection<IndexValueRow> rows)

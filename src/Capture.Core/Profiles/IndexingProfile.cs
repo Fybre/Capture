@@ -25,7 +25,13 @@ public enum FieldKind
     /// <summary>Computed by evaluating <see cref="IndexField.ScriptExpression"/> (C# via Roslyn
     /// scripting) once fields have been extracted — read-only access to every other field's resolved
     /// value, own value = the expression's result. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
-    Script = 9
+    Script = 9,
+
+    /// <summary>Renders as a button in the review panel instead of a value control. Running its
+    /// <see cref="IndexField.ButtonScriptSource"/> — full read/write over every field, the same shape as
+    /// a profile-level <see cref="FieldScript"/> — is the only way this field's value ever changes; it
+    /// is never extracted or computed automatically. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
+    Button = 10
 }
 
 public enum ScriptTrigger
@@ -203,6 +209,20 @@ public sealed class IndexField
     /// write any field); this is deliberate so a field expression can't reach into and mutate unrelated
     /// fields as a side effect. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
     public string? ScriptExpression { get; set; }
+
+    /// <summary>Only meaningful for <see cref="FieldKind.Button"/>. The button's text; falls back to
+    /// <see cref="Name"/> when blank.</summary>
+    public string? ButtonLabel { get; set; }
+
+    /// <summary>Only meaningful for <see cref="FieldKind.Button"/>. Imperative C#, run only when the
+    /// button is clicked — same execution shape as a profile-level <see cref="FieldScript"/> (full
+    /// read/write over every field, an <c>Http</c> client, <c>Document</c>), unlike
+    /// <see cref="ScriptExpression"/>, which is read-only over other fields. Requires
+    /// <c>WatchSettings.AllowFieldScripts</c>.</summary>
+    public string ButtonScriptSource { get; set; } = string.Empty;
+
+    /// <summary>Only meaningful for <see cref="FieldKind.Button"/>. Mirrors <see cref="FieldScript.TimeoutSeconds"/>.</summary>
+    public int ButtonTimeoutSeconds { get; set; } = 10;
 }
 
 /// <summary>Profile-level redaction configuration — PII detected by the bundled Presidio sidecar and/or

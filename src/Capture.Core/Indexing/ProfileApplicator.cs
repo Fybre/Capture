@@ -186,15 +186,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         BatchNumber = context?.BatchNumber ?? 1,
         Timestamp = context?.Timestamp ?? DateTimeOffset.Now,
         Values = results,
-        Document = BuildDocumentInfo(lattices, document)
-    };
-
-    private static ScriptDocumentInfo BuildDocumentInfo(IReadOnlyList<PageLattice> lattices, CaptureDocument? document) => new()
-    {
-        FileName = document?.OriginalFileName ?? string.Empty,
-        FileExtension = string.IsNullOrEmpty(document?.OriginalFileName) ? string.Empty : Path.GetExtension(document.OriginalFileName).ToLowerInvariant(),
-        PageCount = document?.PageCount ?? lattices.Count,
-        Text = DocumentText.FromLattices(lattices)
+        Document = ScriptDocumentInfo.From(lattices, document)
     };
 
     private static void ApplyDefaults(
@@ -209,7 +201,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         // a script's own output) would get silently reset on the next reprocess. This is also the
         // structural guarantee that a profile-level script (which runs earlier, in FillFieldScriptsAsync/
         // RunProfileScriptsAsync above) can never permanently clobber a manually-entered value.
-        foreach (var field in profile.Fields.Where(field => field.Kind is FieldKind.Text or FieldKind.Lookup or FieldKind.Script))
+        foreach (var field in profile.Fields.Where(field => field.Kind is FieldKind.Text or FieldKind.Lookup or FieldKind.Script or FieldKind.Button))
         {
             var existing = existingValues?.FirstOrDefault(item => item.FieldId == field.Id);
             if (existing is not { IsManual: true })
@@ -337,6 +329,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             Sensitive = field.Sensitive,
             Kind = field.Kind,
             LookupOptions = field.LookupOptions.Select(CloneLookupOption).ToList(),
+            ButtonLabel = field.ButtonLabel,
             PageNumber = field.PageNumber
         };
 
