@@ -145,6 +145,22 @@ public class RoslynFieldScriptRunnerTests
     }
 
     [Fact]
+    public async Task Field_expression_can_self_reference_via_the_bare_Value_shorthand()
+    {
+        // scriptCacheKey doubling as the field's own id (every real caller passes IndexField.Id) is what
+        // lets RunFieldExpressionAsync resolve "Value" here without the expression needing to spell out
+        // its own field name via Fields["A"].
+        var fieldId = Guid.NewGuid();
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var context = Context(new IndexValue { FieldId = fieldId, FieldName = "A", Value = "hello" });
+
+        var result = await runner.RunFieldExpressionAsync(fieldId, "Value.ToUpperInvariant()", context);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("HELLO", result.Value);
+    }
+
+    [Fact]
     public async Task Field_expression_cannot_write_other_fields()
     {
         // ReadOnlyScriptFieldAccessor has no setters at all, so this is a compile error, not a runtime

@@ -53,3 +53,37 @@ public sealed class BatchProfile
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>Governs batching when nothing tells <see cref="BatchAllocator"/> what to do — a manual
+/// import with no BatchProfile selected in the toolbar, or a watch folder with none configured. See
+/// <c>WatchSettings.NoBatchProfileBehavior</c> (the setting) and <see cref="BatchProfileResolver"/> (where
+/// it's applied).</summary>
+public enum NoBatchProfileBehavior
+{
+    /// <summary>Start a new batch for every imported file, as if <see cref="BatchTrigger.NewBatchPerFile"/>
+    /// had been selected.</summary>
+    NewBatchPerFile = 0,
+
+    /// <summary>Keep adding to whichever batch is already open, as if <see cref="BatchTrigger.Manual"/>
+    /// had been selected — the same batch until the app restarts, or forever for a watch folder (see
+    /// <c>IDocumentStore.GetLatestBatchForFolderAsync</c>).</summary>
+    AddToOpenBatch = 1
+}
+
+/// <summary>Resolves what <see cref="BatchAllocator"/> should actually treat as the batch profile for an
+/// import — reusing <see cref="BatchProfile"/>/<see cref="BatchTrigger"/> wholesale for the no-selection
+/// case instead of teaching <see cref="BatchAllocator"/> a second, parallel notion of "no profile
+/// behavior". A real selected/configured profile always wins outright.</summary>
+public static class BatchProfileResolver
+{
+    // A fixed, never-persisted instance — nothing ever gives this Id significance (it's not saved to
+    // the profile store), so reusing one avoids an allocation per import for the common case.
+    private static readonly BatchProfile ImplicitNewBatchPerFile = new()
+    {
+        Name = "(no batch profile — new batch per file)",
+        Trigger = BatchTrigger.NewBatchPerFile
+    };
+
+    public static BatchProfile? Resolve(BatchProfile? selected, NoBatchProfileBehavior noProfileBehavior) =>
+        selected ?? (noProfileBehavior == NoBatchProfileBehavior.NewBatchPerFile ? ImplicitNewBatchPerFile : null);
+}

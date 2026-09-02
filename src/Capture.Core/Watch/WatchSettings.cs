@@ -1,3 +1,4 @@
+using Capture.Core.Batches;
 using Capture.Core.Indexing;
 
 namespace Capture.Core.Watch;
@@ -52,6 +53,10 @@ public sealed class WatchSettings
 
     public Guid? LastImportProfileId { get; set; }
     public Guid? LastBatchProfileId { get; set; }
+
+    /// <summary>How to batch documents when a manual import has no BatchProfile selected, or a watch
+    /// folder has none configured — see <see cref="NoBatchProfileBehavior"/>.</summary>
+    public NoBatchProfileBehavior NoBatchProfileBehavior { get; set; } = NoBatchProfileBehavior.NewBatchPerFile;
 
     public int ScanDpi { get; set; } = 200;
 

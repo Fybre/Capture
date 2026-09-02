@@ -75,6 +75,8 @@ public partial class SettingsViewModel : ViewModelBase
 
     public IReadOnlyList<AppTheme> ThemeOptions { get; } = Enum.GetValues<AppTheme>();
 
+    public IReadOnlyList<NoBatchProfileBehavior> NoBatchProfileBehaviorOptions { get; } = Enum.GetValues<NoBatchProfileBehavior>();
+
     public ObservableCollection<IndexingProfile> Profiles { get; } = [];
 
     public ObservableCollection<BatchProfile> BatchProfiles { get; } = [];
@@ -88,6 +90,9 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private AppTheme _theme = AppTheme.System;
+
+    [ObservableProperty]
+    private NoBatchProfileBehavior _noBatchProfileBehavior = NoBatchProfileBehavior.NewBatchPerFile;
 
     [ObservableProperty]
     private bool _debugMode;
@@ -334,6 +339,7 @@ public partial class SettingsViewModel : ViewModelBase
         var settings = await _store.LoadAsync();
         StartView = settings.StartView;
         Theme = settings.Theme;
+        NoBatchProfileBehavior = settings.NoBatchProfileBehavior;
         DebugMode = settings.DebugMode;
         CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
         AllowFieldScripts = settings.AllowFieldScripts;
@@ -692,6 +698,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             StartView = StartView,
             Theme = Theme,
+            NoBatchProfileBehavior = NoBatchProfileBehavior,
             DebugMode = DebugMode,
             CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
             AllowFieldScripts = AllowFieldScripts,
@@ -789,6 +796,7 @@ public partial class SettingsViewModel : ViewModelBase
 
             StartView = settings.StartView;
             Theme = settings.Theme;
+            NoBatchProfileBehavior = settings.NoBatchProfileBehavior;
             DebugMode = settings.DebugMode;
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
             AllowFieldScripts = settings.AllowFieldScripts;

@@ -551,7 +551,7 @@
                         <TextBlock Text="Settings controls startup appearance, automation, external services, redaction sets, scanner defaults, the AI field catalog, and diagnostic logging."
                                    Classes="help-lead" />
                         <TextBlock Text="Important settings" Classes="help-h2" />
-                        <TextBlock Text="Startup chooses Preview or Table mode and the application theme. &quot;Check for updates on startup&quot; (off by default) asks GitHub once per launch whether a newer release exists and shows a dismissible notice if so — it only sends a version number. A &quot;Check for updates&quot; button in Help &gt; About works on demand regardless of that setting. &quot;Allow profile scripts&quot; (off by default) turns on the C# scripts described under Field configuration &gt; Script/Profile-level scripts — importing a profile that contains one always asks first, regardless of this setting. AI extraction selects a cloud, local, or disabled provider and configures its model and document-text limit. Therefore configuration is shared by all Therefore exports. Redaction sets group the PII types offered in profiles and Redact now. Settings can be exported for backup and imported on another installation — by default your AI API key and Therefore password/bearer token are replaced with a placeholder rather than included; tick &quot;Include credentials&quot; (and confirm) only when you actually want them in the file."
+                        <TextBlock Text="Startup chooses Preview or Table mode and the application theme. &quot;When no batch profile is selected&quot; controls what happens to batching for a manual import with no batch profile chosen, or a watch folder with none configured: &quot;New batch per file&quot; (default) starts a fresh batch per imported file; &quot;Add to open batch&quot; keeps appending to whichever batch is already open — for a watch folder, every file it ever imports. &quot;Check for updates on startup&quot; (off by default) asks GitHub once per launch whether a newer release exists and shows a dismissible notice if so — it only sends a version number. A &quot;Check for updates&quot; button in Help &gt; About works on demand regardless of that setting. &quot;Allow profile scripts&quot; (off by default) turns on the C# scripts described under Field configuration &gt; Script/Profile-level scripts — importing a profile that contains one always asks first, regardless of this setting. AI extraction selects a cloud, local, or disabled provider and configures its model and document-text limit. Therefore configuration is shared by all Therefore exports. Redaction sets group the PII types offered in profiles and Redact now. Settings can be exported for backup and imported on another installation — by default your AI API key and Therefore password/bearer token are replaced with a placeholder rather than included; tick &quot;Include credentials&quot; (and confirm) only when you actually want them in the file."
                                    Classes="help-body" />
                         <TextBlock Text="AI field catalog" Classes="help-h2" />
                         <TextBlock Text="The catalog is a JSON file containing reusable AI field types such as invoice number or supplier name. Open its folder from Settings, edit or extend the file carefully, then Reload catalog. Custom AI prompts on a profile can be used when a value does not warrant a catalog entry."
@@ -584,14 +584,27 @@
                                    Classes="help-lead" />
                         <Border Classes="help-tip"><TextBlock Text="Off by default (Settings &gt; Allow profile scripts) — a script runs with the full trust of this computer, there is no sandboxing. &quot;Run test&quot; in the designer always works regardless, since it's a single-document action you take yourself; real import/export needs the setting turned on. Importing a profile that carries a script always asks first, regardless of that setting." Classes="help-note" /></Border>
 
-                        <TextBlock Text="Three shapes" Classes="help-h2" />
-                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                        <TextBlock Text="Four shapes" Classes="help-h2" />
+                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
                             <Border Grid.Column="0" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Profile-level scripts" Classes="help-h3" /><TextBlock Text="Scripts section, left panel. Free-form, multiple statements, full read/write access to every field. Runs at a chosen moment: after fields are extracted, before export, or after export." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Column="1" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Script field kind" Classes="help-h3" /><TextBlock Text="A single expression on one field. Read-only over every other field and the document; the expression's result becomes this field's value. Can reference an earlier Script field's already-resolved result." Classes="help-note" /></StackPanel></Border>
                             <Border Grid.Column="2" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Button field kind" Classes="help-h3" /><TextBlock Text="Renders as a button in the review panel instead of a value control. Like a profile-level script — imperative, full read/write over every field — but only runs when someone clicks it, not automatically." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Column="3" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Post-process script" Classes="help-h3" /><TextBlock Text="Field properties panel, below any field's own configuration (every kind except Script, Button, and the batch separator field). A single expression, same read-only shape as a Script field, but it runs after that field's own value is already extracted — for cleaning up what extraction alone can't, like stray OCR noise." Classes="help-note" /></StackPanel></Border>
                         </Grid>
 
-                        <Border Classes="help-tip"><TextBlock Text="Shared functions (Scripts section, above the script list) are C# available to all three shapes above on this profile — write a helper once there instead of pasting it into every script/expression that needs it. Declare functions only; the box itself isn't run." Classes="help-note" /></Border>
+                        <Border Classes="help-tip"><TextBlock Text="Shared functions (Scripts section, above the script list) are C# available to all four shapes above on this profile — write a helper once there instead of pasting it into every script/expression that needs it. Declare functions only; the box itself isn't run." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Run order" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="1. Each field's own extraction (zone OCR, key/value, regex, barcode) &#8594; 2. AI fields &#8594; 3. Script fields, in field-list order &#8594; 4. Profile-level AfterFieldsPopulated scripts &#8594; 5. Text/Lookup default templates, and preserving any manually-edited field &#8594; 6. Post-process scripts, in field-list order."
+                                           TextWrapping="Wrap"
+                                           Classes="help-body" />
+                                <TextBlock Text="Post-process runs dead last, on purpose, so it always sees a field's true final value — but that cuts both ways: nothing earlier in this list (a Script field, a profile-level script, another field's default template) ever sees a Post-process result, since those have all already run by the time it fires. A Script field's result, by contrast, is visible to everything after it — later Script fields, profile-level scripts, and Post-process scripts alike. If a computed value needs to feed other fields or scripts in the same pass, it needs to be a Script field, not a Post-process script."
+                                           TextWrapping="Wrap"
+                                           Classes="help-note" />
+                            </StackPanel>
+                        </Border>
 
                         <TextBlock Text="What a script can see" Classes="help-h2" />
                         <Border Classes="help-card">
@@ -599,6 +612,11 @@
                                 <StackPanel Spacing="3">
                                     <TextBlock Text="Fields" Classes="help-h3" />
                                     <TextBlock Text="Fields[&quot;Name&quot;] gets one field by name (case-insensitive), or loop over Fields directly. Each has .Value, .Confidence, and .IsManual. Profile-level scripts can set .Value/.Confidence; a Script field's own expression only reads — see IsManual below."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Value (Script fields and Post-process scripts only)" Classes="help-h3" />
+                                    <TextBlock Text="Shorthand for this field's own pre-evaluation value — the same as Fields[&quot;this field's own name&quot;].Value, without needing to spell out (and keep in sync with) the field's own name. Not available to profile-level or Button field scripts, which write with Fields[...] = ... instead of reading Value."
                                                Classes="help-note" />
                                 </StackPanel>
                                 <StackPanel Spacing="3">
@@ -627,6 +645,18 @@
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
 
+                        <TextBlock Text="Available namespaces" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="System, System.Linq, System.Text, System.Text.Json, System.Text.RegularExpressions, System.Net.Http, and System.Threading.Tasks are already imported — no using statement needed for anything in those, e.g. Regex.Replace(...), Enumerable.Select/Where(...), JsonDocument/JsonSerializer, or async/await itself."
+                                           TextWrapping="Wrap"
+                                           Classes="help-body" />
+                                <TextBlock Text="You can add your own using statement at the top of a script/expression for anything else — but only for a namespace from an assembly Capture already loads into the script (the ones above, plus whatever mscorlib/System.Private.CoreLib provides). A using for a namespace from an assembly that isn't referenced won't resolve; that needs a Capture code change, not just a using line."
+                                           TextWrapping="Wrap"
+                                           Classes="help-note" />
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Text="Examples" Classes="help-h2" />
 
                         <TextBlock Text="Fill a blank field, combine two fields" Classes="help-h3" />
@@ -637,13 +667,19 @@
 
                         <TextBlock Text="Look up a value with a REST call" Classes="help-h3" />
                         <Border Classes="help-code"><TextBlock Classes="help-code" Text="var customerId = Fields[&quot;Customer Id&quot;].Value;&#10;var json = await Http.GetStringAsync($&quot;https://api.example.com/customers/{customerId}&quot;);&#10;using var doc = JsonDocument.Parse(json);&#10;Fields[&quot;Customer Name&quot;].Value = doc.RootElement.GetProperty(&quot;name&quot;).GetString() ?? &quot;&quot;;" /></Border>
-                        <TextBlock Text="System.Text.Json (JsonDocument, JsonSerializer) and System.Net.Http are available with no extra using statements. A failed or slow request just fails this script — see the timeout note below — it never crashes the import."
+                        <TextBlock Text="A failed or slow request just fails this script — see the timeout note below — it never crashes the import."
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
 
                         <TextBlock Text="A Script field's expression (result becomes the field's value)" Classes="help-h3" />
                         <Border Classes="help-code"><TextBlock Classes="help-code" Text="Fields[&quot;Company Name&quot;].Value.ToUpperInvariant()" /></Border>
                         <TextBlock Text="A field expression is read-only over Fields and Document — it can't write to another field, only return this field's own value. That restriction is enforced by the type the expression runs against, not just documentation."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="A post-process script cleaning up a Zonal field's OCR text" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="Value.Replace(&quot; . &quot;, &quot; &quot;).Trim()" /></Border>
+                        <TextBlock Text="Runs after this field's own extraction (zone OCR, key/value, regex, barcode, AI — whatever the field's Kind produces). Value is this field's own pre-cleanup result. Useful when a scan's OCR introduces noise (stray punctuation, doubled whitespace) that the extraction step itself has no way to filter out."
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
 

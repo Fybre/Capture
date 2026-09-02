@@ -232,6 +232,34 @@ public class JsonProfileStoreTests
     }
 
     [Fact]
+    public async Task Roundtrips_a_field_s_post_process_script()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-postprocess-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        var store = new JsonProfileStore(paths);
+        var profile = new IndexingProfile
+        {
+            Name = "Cleaned",
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "Customer",
+                    Kind = FieldKind.Zonal,
+                    PostProcessScript = "Fields[\"Customer\"].Value.Replace(\" . \", \" \")"
+                }
+            ]
+        };
+
+        await store.SaveAsync(profile);
+        var loaded = await store.GetAsync(profile.Id);
+
+        Assert.NotNull(loaded);
+        var field = Assert.Single(loaded!.Fields);
+        Assert.Equal("Fields[\"Customer\"].Value.Replace(\" . \", \" \")", field.PostProcessScript);
+    }
+
+    [Fact]
     public async Task An_old_profile_with_no_scripts_property_loads_with_an_empty_scripts_list()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-scripts-" + Guid.NewGuid().ToString("N")));

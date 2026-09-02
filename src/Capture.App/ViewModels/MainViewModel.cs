@@ -288,6 +288,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MarkSelectedReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(MergeSelectedDocumentsCommand))]
@@ -352,6 +353,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
     [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MarkSelectedReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportAllCommand))]
@@ -955,6 +957,81 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Table mode's bulk counterpart to MarkReadyCommand — that one only ever acts on
+    /// SelectedDocument, so from Table mode (typically multiple documents selected, none of them
+    /// "open" for review) there was previously no way to mark anything ready at all. Deliberately mirrors
+    /// MarkReadyAsync's own leniency: it overrides low-confidence flagging (never checked here, same as
+    /// there) so the indexer can consciously accept a shaky-but-plausible batch without opening each
+    /// document, but still skips a document with a missing mandatory field — marking that Ready would
+    /// hide genuinely absent data, not just a confidence judgement call.</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnSelected))]
+    private async Task MarkSelectedReadyAsync()
+    {
+        var rows = GetActingRows();
+        if (rows.Count == 0)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var marked = 0;
+            var skipped = 0;
+            foreach (var row in rows)
+            {
+                var indexable = row.Indexes.Where(index => !index.HideFromIndexing && !index.IsReadOnly).ToList();
+                if (indexable.Count == 0 || indexable.Any(index => index.IsMissing))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var document = row.Document;
+                document.Status = DocumentStatus.Ready;
+                await _store.UpdateAsync(document).ConfigureAwait(true);
+                row.NotifyIndexes();
+                marked++;
+
+                // Same as MarkReadyAsync: reaching Ready by bulk override should trigger the same
+                // post-index steps (redaction, etc.) as reaching it any other way.
+                if (document.ProfileId is { } profileId
+                    && await _profileStore.GetAsync(profileId).ConfigureAwait(true) is { } profile)
+                {
+                    var indexes = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
+                    var batchValues = document.BatchId is { } batchId
+                        ? await _indexes.GetBatchAsync(batchId).ConfigureAwait(true)
+                        : [];
+                    await RunPostIndexStepsAsync(document, batchValues.Concat(indexes).ToList(), profile).ConfigureAwait(true);
+                }
+            }
+
+            if (SelectedDocument is not null && rows.Contains(SelectedDocument))
+            {
+                await LoadRedactionCandidatesAsync(SelectedDocument).ConfigureAwait(true);
+                RefreshIndexHighlights();
+                ApplyRedactionsCommand.NotifyCanExecuteChanged();
+            }
+
+            RefreshDocumentGroups();
+            StatusText = skipped == 0
+                ? $"Marked {marked} document(s) ready"
+                : $"Marked {marked} document(s) ready — {skipped} skipped (missing a required field)";
+
+            if (marked > 0)
+                _toasts.ShowSuccess(StatusText);
+            else
+                _toasts.ShowError(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task OpenProfilesAsync()
     {
@@ -1271,6 +1348,7 @@ public partial class MainViewModel : ViewModelBase
         RemoveSelectedCommand.NotifyCanExecuteChanged();
         MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
         RedactSelectedCommand.NotifyCanExecuteChanged();
+        MarkSelectedReadyCommand.NotifyCanExecuteChanged();
         ExportCommand.NotifyCanExecuteChanged();
     }
 
@@ -1337,11 +1415,12 @@ public partial class MainViewModel : ViewModelBase
         {
             profile ??= SelectedImportProfile;
 
-            var batchProfile = watchFolderEntry is not null
+            var selectedBatchProfile = watchFolderEntry is not null
                 ? (watchFolderEntry.BatchProfileId is { } bpId
                     ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
                     : null)
                 : SelectedBatchProfile;
+            var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
             var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
             var resumeBatch = watchFolderEntry is null && keepsBatchOpen
                 ? _lastManualBatch
@@ -1471,7 +1550,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var profile = SelectedImportProfile;
-            var batchProfile = SelectedBatchProfile;
+            var batchProfile = BatchProfileResolver.Resolve(SelectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
             var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
             var resumeBatch = keepsBatchOpen ? _lastManualBatch : null;
             var allocator = await BatchAllocator.CreateAsync(_store, batchProfile, watchFolderEntryId: null, resumeBatch)
@@ -2627,6 +2706,7 @@ public partial class MainViewModel : ViewModelBase
         RemoveSelectedCommand.NotifyCanExecuteChanged();
         MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
         RedactSelectedCommand.NotifyCanExecuteChanged();
+        MarkSelectedReadyCommand.NotifyCanExecuteChanged();
         ExportCommand.NotifyCanExecuteChanged();
     }
 }

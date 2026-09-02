@@ -72,6 +72,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _removeAfterExport = profile.RemoveAfterExport;
         _sampleFileName = profile.SampleFileName;
         _sharedScriptSource = profile.SharedScriptSource;
+        _autoReadyThreshold = profile.AutoReadyThreshold;
         foreach (var field in profile.Fields)
             Fields.Add(Wrap(field));
         RefreshBarcodeFieldOptions();
@@ -197,6 +198,11 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _redactionBypassScoreThreshold = 100;
+
+    /// <summary>See <see cref="IndexingProfile.AutoReadyThreshold"/> — the confidence percentage below
+    /// which a field is flagged for review and the document held out of Ready status.</summary>
+    [ObservableProperty]
+    private int _autoReadyThreshold = 80;
 
     [ObservableProperty]
     private string _name;
@@ -732,6 +738,17 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task PopOutPostProcessScriptAsync()
+    {
+        if (SelectedField is not { AllowsPostProcessScript: true } row || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Post-process script — {row.Name}", row.PostProcessScript);
+        if (edited is not null)
+            row.PostProcessScript = edited;
+    }
+
+    [RelayCommand]
     private async Task PopOutButtonScriptAsync()
     {
         if (SelectedField is not { IsButton: true } row || _dialogs.Host is not { } host)
@@ -893,6 +910,47 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanRunScript))]
+    private async Task RunPostProcessScriptTestAsync()
+    {
+        if (SelectedField is not { AllowsPostProcessScript: true } row || _scripts is null)
+            return;
+        if (string.IsNullOrWhiteSpace(row.PostProcessScript))
+        {
+            StatusText = "Enter an expression first";
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = "Running post-process script…";
+        try
+        {
+            // Same snapshot RunFieldScriptAsync uses — row.LiveValue is this field's own current
+            // (pre-cleanup) preview value, exactly what the real pipeline hands a PostProcessScript.
+            var context = BuildScriptPreviewContext(BuildPreviewIndexValues());
+            var result = await _scripts.RunFieldExpressionAsync(row.Id, row.PostProcessScript, context, sharedSource: SharedScriptSource).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                StatusText = $"Script failed: {result.ErrorMessage}";
+                _toasts.ShowError(StatusText);
+                return;
+            }
+
+            row.LiveValue = result.Value ?? string.Empty;
+            StatusText = "Script ran successfully";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private bool CanRunScript() => !IsBusy && _scripts is not null;
 
     [RelayCommand]
@@ -936,6 +994,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private async Task SaveAsync()
     {
         Profile.Name = string.IsNullOrWhiteSpace(Name) ? "Untitled profile" : Name.Trim();
+        Profile.AutoReadyThreshold = Math.Clamp(AutoReadyThreshold, 0, 100);
         Profile.Separation = new DocumentSeparation
         {
             Trigger = SeparationTrigger,

@@ -223,6 +223,19 @@ public sealed class IndexField
 
     /// <summary>Only meaningful for <see cref="FieldKind.Button"/>. Mirrors <see cref="FieldScript.TimeoutSeconds"/>.</summary>
     public int ButtonTimeoutSeconds { get; set; } = 10;
+
+    /// <summary>Available on any field kind except <see cref="FieldKind.Script"/>,
+    /// <see cref="FieldKind.Button"/>, and <see cref="FieldKind.BatchSeparatorValue"/>. C# evaluated via
+    /// Roslyn once this field's own value has already been extracted/computed by whatever its
+    /// <see cref="Kind"/> normally does (zone OCR text, a key/value or regex match, an AI result, a
+    /// barcode, ...) — the expression's result replaces that value, so it's the place for cleanup a
+    /// field's own extraction mechanism can't express (stripping OCR noise, normalizing whitespace,
+    /// re-casing). Same read-only-over-every-field shape as <see cref="ScriptExpression"/> (this field's
+    /// own pre-cleanup value is readable the same way, via <c>Fields["ThisField'sName"].Value</c>);
+    /// distinct from it in that it runs as a second pass after normal extraction rather than being the
+    /// only source of the field's value. Skipped for a field the reviewer has manually edited, same as
+    /// every other automatic pipeline step. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
+    public string? PostProcessScript { get; set; }
 }
 
 /// <summary>Profile-level redaction configuration — PII detected by the bundled Presidio sidecar and/or

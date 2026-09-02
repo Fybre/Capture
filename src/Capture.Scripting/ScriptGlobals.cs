@@ -47,7 +47,7 @@ public sealed class ScriptGlobals
 /// documented convention.</summary>
 public sealed class ReadOnlyScriptGlobals
 {
-    internal ReadOnlyScriptGlobals(ScriptExecutionContext context, HttpClient http, string scriptName, CancellationToken cancellationToken)
+    internal ReadOnlyScriptGlobals(ScriptExecutionContext context, HttpClient http, string scriptName, string selfValue, CancellationToken cancellationToken)
     {
         Fields = new ScriptFieldCollection<ReadOnlyScriptFieldAccessor>(context.Values, v => new ReadOnlyScriptFieldAccessor(v));
         Document = context.Document;
@@ -57,10 +57,19 @@ public sealed class ReadOnlyScriptGlobals
         Timestamp = context.Timestamp;
         Http = http;
         Log = new ScriptLog(scriptName);
+        Value = selfValue;
         CancellationToken = cancellationToken;
     }
 
     public ScriptFieldCollection<ReadOnlyScriptFieldAccessor> Fields { get; }
+
+    /// <summary>Shorthand for this field's own pre-evaluation value — identical to looking it up via
+    /// <c>Fields["ThisField'sOwnName"]</c>.Value, without needing to spell out (and keep in sync with)
+    /// the field's own name. Roslyn scripting resolves globals members as bare identifiers, not through
+    /// <c>this</c> (the script's compiler-generated class doesn't inherit from the globals type), so
+    /// scripts reference it as plain <c>Value</c>, the same way they already use <c>Document</c> or
+    /// <c>Http</c>.</summary>
+    public string Value { get; }
 
     public ScriptDocumentInfo Document { get; }
 

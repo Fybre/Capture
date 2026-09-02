@@ -111,6 +111,7 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars,
             LastImportProfileId = settings.LastImportProfileId,
             LastBatchProfileId = settings.LastBatchProfileId,
+            NoBatchProfileBehavior = settings.NoBatchProfileBehavior,
             ThereforeBaseUrl = settings.ThereforeBaseUrl,
             ThereforeTenantName = settings.ThereforeTenantName,
             ThereforeAuthMethod = settings.ThereforeAuthMethod,

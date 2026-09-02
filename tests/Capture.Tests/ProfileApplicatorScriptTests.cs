@@ -303,6 +303,121 @@ public class ProfileApplicatorScriptTests
         Assert.Equal("Customer ABC found", values.Single().Value);
     }
 
+    [Fact]
+    public async Task Post_process_script_rewrites_a_field_s_own_extracted_value()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "Customer",
+                    Kind = FieldKind.Zonal,
+                    PostProcessScript = "Fields[\"Customer\"].Value.Replace(\" . \", \" \")"
+                }
+            ]
+        };
+        // Real extraction leaves this field blank (no lattices supplied) — what matters here is that
+        // ApplyPostProcessScriptsAsync calls RunFieldExpressionAsync with this field's PostProcessScript
+        // and writes whatever the runner returns back into the field's own value.
+        var runner = new FakeScriptRunner
+        {
+            OnFieldExpression = (_, _, _) => ScriptRunResult.Ok("Sumisho Coal Australia Holdings Pty Ltd", TimeSpan.Zero)
+        };
+
+        var values = await new ProfileApplicator(scripts: runner).ApplyAsync(profile, []);
+
+        Assert.Equal("Sumisho Coal Australia Holdings Pty Ltd", values.Single().Value);
+    }
+
+    [Fact]
+    public async Task Post_process_script_runs_after_a_text_field_s_default_template_so_it_sees_the_resolved_value()
+    {
+        var fieldId = Guid.NewGuid();
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Id = fieldId,
+                    Name = "Greeting",
+                    Kind = FieldKind.Text,
+                    DefaultValueTemplate = "hello",
+                    PostProcessScript = "irrelevant"
+                }
+            ]
+        };
+        string? seenPreCleanupValue = null;
+        var runner = new FakeScriptRunner
+        {
+            OnFieldExpression = (_, _, ctx) =>
+            {
+                seenPreCleanupValue = ctx.Values.Single(v => v.FieldId == fieldId).Value;
+                return ScriptRunResult.Ok("HELLO", TimeSpan.Zero);
+            }
+        };
+
+        var values = await new ProfileApplicator(scripts: runner).ApplyAsync(profile, []);
+
+        Assert.Equal("hello", seenPreCleanupValue); // the template's resolved value, not blank
+        Assert.Equal("HELLO", values.Single().Value);
+    }
+
+    [Fact]
+    public async Task Post_process_script_is_skipped_on_a_manually_edited_field()
+    {
+        var fieldId = Guid.NewGuid();
+        var profile = new IndexingProfile
+        {
+            Fields = [new IndexField { Id = fieldId, Name = "Notes", Kind = FieldKind.Text, PostProcessScript = "irrelevant" }]
+        };
+        var runner = new FakeScriptRunner
+        {
+            OnFieldExpression = (_, _, _) => throw new InvalidOperationException("should not run on a manual value")
+        };
+        var existing = new[]
+        {
+            new IndexValue { FieldId = fieldId, FieldName = "Notes", Value = "user typed this", IsManual = true }
+        };
+
+        var values = await new ProfileApplicator(scripts: runner).ApplyAsync(profile, [], existingValues: existing);
+
+        Assert.Equal("user typed this", values.Single().Value);
+    }
+
+    [Theory]
+    [InlineData(FieldKind.Script)]
+    [InlineData(FieldKind.Button)]
+    [InlineData(FieldKind.BatchSeparatorValue)]
+    public async Task Post_process_script_never_runs_for_kinds_with_their_own_script_semantics(FieldKind kind)
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "Field",
+                    Kind = kind,
+                    ScriptExpression = kind == FieldKind.Script ? "\"x\"" : null,
+                    ButtonScriptSource = kind == FieldKind.Button ? "..." : "",
+                    PostProcessScript = "irrelevant"
+                }
+            ]
+        };
+        var runner = new FakeScriptRunner
+        {
+            OnFieldExpression = (_, expression, _) => expression == "irrelevant"
+                ? throw new InvalidOperationException("PostProcessScript must not run for this kind")
+                : ScriptRunResult.Ok("x", TimeSpan.Zero)
+        };
+
+        // Should not throw — confirms ApplyPostProcessScriptsAsync's Kind filter excludes this field.
+        await new ProfileApplicator(scripts: runner).ApplyAsync(profile, []);
+    }
+
     private sealed class FakeScriptRunner : IFieldScriptRunner
     {
         public bool IsAvailable { get; set; } = true;

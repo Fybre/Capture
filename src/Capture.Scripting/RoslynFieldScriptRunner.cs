@@ -69,7 +69,11 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
         try
         {
             var compiled = _fieldExpressionCache.GetOrCompile(scriptCacheKey, Combine(sharedSource, expression), FieldExpressionOptions, typeof(ReadOnlyScriptGlobals));
-            var globals = new ReadOnlyScriptGlobals(context, _http, "field expression", cts.Token);
+            // scriptCacheKey doubles as the id of the field this expression belongs to (every real
+            // caller passes that field's own IndexField.Id) — used here to resolve its own
+            // pre-evaluation value for the Value shorthand, not just as a compile-cache key.
+            var selfValue = context.Values.FirstOrDefault(v => v.FieldId == scriptCacheKey)?.Value ?? string.Empty;
+            var globals = new ReadOnlyScriptGlobals(context, _http, "field expression", selfValue, cts.Token);
             var state = await compiled.RunAsync(globals, cancellationToken: cts.Token).ConfigureAwait(false);
             return ScriptRunResult.Ok(state.ReturnValue?.ToString() ?? string.Empty, stopwatch.Elapsed);
         }

@@ -33,6 +33,11 @@ public interface IFieldScriptRunner
     /// of <paramref name="context"/>'s fields. On success, <see cref="ScriptRunResult.Value"/> holds the
     /// resolved value to assign to that field — the runner never mutates <paramref name="context"/> for
     /// a field expression, since other fields must stay read-only to it.</summary>
+    /// <param name="scriptCacheKey">Doubles as the id of the field this expression belongs to: every
+    /// real caller passes that field's own <see cref="IndexField.Id"/>, both to key the compiled-script
+    /// cache and to resolve the field's own pre-evaluation value (looked up in
+    /// <paramref name="context"/>'s <c>Values</c> by matching <c>FieldId</c>) for the expression's
+    /// <c>Value</c> shorthand.</param>
     /// <param name="sharedSource">See <see cref="RunProfileScriptAsync"/>'s parameter of the same name.</param>
     Task<ScriptRunResult> RunFieldExpressionAsync(
         Guid scriptCacheKey,

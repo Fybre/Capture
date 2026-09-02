@@ -117,6 +117,13 @@
                                Classes="hint" />
 
                     <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <TextBlock Text="Auto-ready confidence threshold" Classes="field-label" />
+                    <NumericUpDown Value="{Binding AutoReadyThreshold}" Minimum="0" Maximum="100" />
+                    <TextBlock Text="A field below this confidence percentage is flagged for review, and the whole document is held out of Ready status until it's addressed. Doesn't apply to read-only or manually-edited fields."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                     <TextBlock Text="Page separation" Classes="field-label" />
                     <ComboBox ItemsSource="{Binding SeparationTriggerOptions}"
                               SelectedItem="{Binding SeparationTrigger}"
@@ -894,6 +901,39 @@
                         <Button Grid.Column="0"
                                 Content="Run test"
                                 Command="{Binding RunButtonFieldTestCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        <Button Grid.Column="1"
+                                Content="Scripting help"
+                                Command="{Binding ShowScriptingHelpCommand}"
+                                Classes="ghost"
+                                Margin="6,0,0,0" />
+                    </Grid>
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.AllowsPostProcessScript}">
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,8,0,0" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="Post-process script" Classes="field-label" Margin="0,4,0,0" VerticalAlignment="Bottom" />
+                        <Button Grid.Column="1"
+                                Content="Pop out"
+                                Command="{Binding PopOutPostProcessScriptCommand}"
+                                Classes="ghost"
+                                FontSize="12"
+                                Padding="8,3" />
+                    </Grid>
+                    <TextBlock Text="Optional. Runs after this field's own value is extracted, and can rewrite it — for cleanup an expression on the extraction itself can't do (stripping OCR noise, normalizing whitespace). Read-only, same as a Script field's expression: Value is a shorthand for this field's own pre-cleanup value, and the result you return replaces it. Leave blank to skip."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <TextBox Text="{Binding SelectedField.PostProcessScript}"
+                              Watermark="Value.Replace(&quot; . &quot;, &quot; &quot;)"
+                              AcceptsReturn="True"
+                              TextWrapping="NoWrap"
+                              Classes="mono"
+                              Height="70" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Button Grid.Column="0"
+                                Content="Run test"
+                                Command="{Binding RunPostProcessScriptTestCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
                         <Button Grid.Column="1"

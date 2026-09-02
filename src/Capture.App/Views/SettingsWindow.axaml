@@ -43,6 +43,19 @@
                         <TextBlock Text="System follows your OS's light/dark setting."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
+                        <TextBlock Text="When no batch profile is selected" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding NoBatchProfileBehaviorOptions}"
+                                  SelectedItem="{Binding NoBatchProfileBehavior}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="batches:NoBatchProfileBehavior">
+                                    <TextBlock Text="{Binding Converter={x:Static conv:NoBatchProfileBehaviorDisplayConverter.Instance}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Applies to a manual import with no batch profile chosen in the toolbar, and to a watch folder with none configured. &quot;New batch per file&quot; starts a fresh batch for every imported file. &quot;Add to open batch&quot; keeps appending to whichever batch is already open, the same batch until you start a new one — for a watch folder, that means every file it ever imports lands in one continuously-growing batch."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
                         <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}" />
                         <TextBlock Text="Checks GitHub for a newer release each time Capture starts. Only a version number is requested — no document or usage data is sent."
                                    TextWrapping="Wrap"

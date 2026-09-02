@@ -48,6 +48,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         await FillFieldScriptsAsync(profile, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
         await RunProfileScriptsAsync(profile, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
         ApplyDefaults(profile, results, context, existingValues);
+        await ApplyPostProcessScriptsAsync(profile, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
         return results;
     }
 
@@ -131,6 +132,53 @@ public sealed class ProfileApplicator : IProfileApplicator
 
             value.Value = result.Value ?? string.Empty;
             value.Confidence = 100;
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+        }
+    }
+
+    // Deliberately the very last pipeline step (after ApplyDefaults) so a field's PostProcessScript
+    // always sees that field's real final pre-cleanup value regardless of Kind — a Zonal/KeyValue/
+    // Regex/Barcode/AI field's freshly re-extracted result, or a Text/Lookup field's resolved default
+    // template / preserved manual edit. The tradeoff: an earlier Script-kind field expression or
+    // profile-level script that reads this field's value (both of which run before ApplyDefaults) sees
+    // the pre-cleanup text, not the cleaned-up result — cleanup is a final display/export-facing pass,
+    // not an input to the rest of the extraction pipeline. Confidence is left untouched: cleanup doesn't
+    // change how much to trust the underlying OCR/extraction, just the text's presentation.
+    private async Task ApplyPostProcessScriptsAsync(
+        IndexingProfile profile,
+        List<IndexValue> results,
+        IReadOnlyList<PageLattice> lattices,
+        DefaultValueContext? context,
+        CaptureDocument? document,
+        CancellationToken cancellationToken)
+    {
+        if (_scripts is null || !_scripts.IsAvailable)
+            return;
+
+        var fields = profile.Fields
+            .Where(field => field.Kind is not (FieldKind.Script or FieldKind.Button or FieldKind.BatchSeparatorValue)
+                && !string.IsNullOrEmpty(field.PostProcessScript))
+            .ToList();
+        if (fields.Count == 0)
+            return;
+
+        var execContext = BuildExecutionContext(profile, results, lattices, context, document);
+        foreach (var field in fields)
+        {
+            var value = results.FirstOrDefault(item => item.FieldId == field.Id);
+            if (value is null || value.IsManual)
+                continue;
+
+            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.PostProcessScript!, execContext, cancellationToken, profile.SharedScriptSource)
+                .ConfigureAwait(false);
+
+            if (!result.Success)
+            {
+                Trace.TraceError($"Post-process script \"{field.Name}\" failed: {result.ErrorMessage}");
+                continue;
+            }
+
+            value.Value = result.Value ?? string.Empty;
             value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
         }
     }

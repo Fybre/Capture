@@ -20,6 +20,7 @@ public sealed partial class FieldRow : ObservableObject
         _defaultValueTemplate = field.DefaultValueTemplate ?? string.Empty;
         _lookupKeyTemplate = field.LookupKeyTemplate ?? string.Empty;
         _scriptExpression = field.ScriptExpression ?? string.Empty;
+        _postProcessScript = field.PostProcessScript ?? string.Empty;
         _buttonLabel = field.ButtonLabel ?? string.Empty;
         _buttonScriptSource = field.ButtonScriptSource;
         _buttonTimeoutSeconds = field.ButtonTimeoutSeconds;
@@ -65,6 +66,11 @@ public sealed partial class FieldRow : ObservableObject
     public bool IsScript => Field.Kind == FieldKind.Script;
 
     public bool IsButton => Field.Kind == FieldKind.Button;
+
+    /// <summary>Whether this field's Kind can have a <see cref="PostProcessScript"/> attached — every
+    /// kind except Script (already fully script-driven), Button (must only change on click), and
+    /// BatchSeparatorValue (a sentinel, not an extracted value).</summary>
+    public bool AllowsPostProcessScript => Field.Kind is not (FieldKind.Script or FieldKind.Button or FieldKind.BatchSeparatorValue);
 
     public bool IsPatternField => IsKeyValue || IsRegex;
 
@@ -160,6 +166,11 @@ public sealed partial class FieldRow : ObservableObject
     [ObservableProperty]
     private string _scriptExpression;
 
+    /// <summary>Only meaningful when <see cref="AllowsPostProcessScript"/> — see
+    /// <see cref="IndexField.PostProcessScript"/>.</summary>
+    [ObservableProperty]
+    private string _postProcessScript;
+
     /// <summary>Only meaningful when <see cref="IsButton"/> — see <see cref="IndexField.ButtonLabel"/>.</summary>
     [ObservableProperty]
     private string _buttonLabel;
@@ -250,6 +261,9 @@ public sealed partial class FieldRow : ObservableObject
 
     partial void OnScriptExpressionChanged(string value) =>
         Field.ScriptExpression = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    partial void OnPostProcessScriptChanged(string value) =>
+        Field.PostProcessScript = string.IsNullOrWhiteSpace(value) ? null : value;
 
     partial void OnButtonLabelChanged(string value) =>
         Field.ButtonLabel = string.IsNullOrWhiteSpace(value) ? null : value;

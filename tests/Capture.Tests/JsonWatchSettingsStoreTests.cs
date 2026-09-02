@@ -1,3 +1,4 @@
+using Capture.Core.Batches;
 using Capture.Core.Paths;
 using Capture.Core.Watch;
 using Capture.Storage;
@@ -19,6 +20,7 @@ public class JsonWatchSettingsStoreTests
         await store.SaveAsync(new WatchSettings
         {
             StartView = WorkspaceMode.Table,
+            NoBatchProfileBehavior = NoBatchProfileBehavior.AddToOpenBatch,
             WatchFolders =
             [
                 new WatchFolderEntry { Enabled = true, Folder = "/tmp/invoices", ProfileId = profileId, SettleMilliseconds = 1500 },
@@ -40,6 +42,7 @@ public class JsonWatchSettingsStoreTests
         var loaded = await store.LoadAsync();
 
         Assert.Equal(WorkspaceMode.Table, loaded.StartView);
+        Assert.Equal(NoBatchProfileBehavior.AddToOpenBatch, loaded.NoBatchProfileBehavior);
         Assert.Equal(2, loaded.WatchFolders.Count);
         Assert.True(loaded.WatchFolders[0].Enabled);
         Assert.Equal("/tmp/invoices", loaded.WatchFolders[0].Folder);
