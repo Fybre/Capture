@@ -567,7 +567,8 @@
                           VerticalAlignment="Stretch"
                           IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-             <ScrollViewer Grid.Row="2"
+             <ScrollViewer x:Name="FieldPropertiesScroll"
+                           Grid.Row="2"
                            Grid.Column="4"
                            IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}">
              <Panel Margin="16,12">

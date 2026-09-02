@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Capture.App.ViewModels;
@@ -9,6 +11,20 @@ public partial class ProfileDesignerView : UserControl
     public ProfileDesignerView()
     {
         InitializeComponent();
+
+        // Switching fields shouldn't leave the properties pane scrolled to wherever the previous
+        // field's (possibly much longer) panel left it — reset to the top so Name is visible again.
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is ProfileDesignerViewModel viewModel)
+                viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        };
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProfileDesignerViewModel.SelectedField))
+            FieldPropertiesScroll.Offset = new Vector(0, 0);
     }
 
     private void OnKeyPatternGotFocus(object? sender, GotFocusEventArgs e)

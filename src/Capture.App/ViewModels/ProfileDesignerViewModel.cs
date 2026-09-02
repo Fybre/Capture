@@ -329,7 +329,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Zonal),
             Kind = FieldKind.Zonal,
             Format = FieldFormat.String,
             PageNumber = CurrentPageNumber,
@@ -355,7 +355,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Zonal),
             Kind = FieldKind.Zonal,
             Format = FieldFormat.String,
             PageNumber = CurrentPageNumber
@@ -372,7 +372,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Text),
             Kind = FieldKind.Text,
             Format = FieldFormat.String
         };
@@ -387,7 +387,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Lookup),
             Kind = FieldKind.Lookup,
             Format = FieldFormat.String
         };
@@ -402,7 +402,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Script),
             Kind = FieldKind.Script,
             Format = FieldFormat.String
         };
@@ -417,7 +417,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Button),
             Kind = FieldKind.Button,
             Format = FieldFormat.String
         };
@@ -432,7 +432,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Barcode),
             Kind = FieldKind.Barcode,
             Format = FieldFormat.String,
             PageNumber = CurrentPageNumber,
@@ -451,7 +451,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.KeyValue),
             Kind = FieldKind.KeyValue,
             Format = FieldFormat.String,
             KeyPattern = string.Empty,
@@ -472,7 +472,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.Regex),
             Kind = FieldKind.Regex,
             Format = FieldFormat.String,
             ValuePattern = @"(.+)",
@@ -512,7 +512,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         var field = new IndexField
         {
-            Name = NextFieldName(),
+            Name = NextFieldName(FieldKind.BatchSeparatorValue),
             Kind = FieldKind.BatchSeparatorValue,
             Format = FieldFormat.String,
             PageNumber = CurrentPageNumber
@@ -1313,13 +1313,13 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         RefreshHighlights();
     }
 
-    private string NextFieldName()
+    private string NextFieldName(FieldKind kind)
     {
         var n = Fields.Count + 1;
         string name;
         do
         {
-            name = $"Field{n}";
+            name = $"Field{n}_{kind}";
             n++;
         } while (Fields.Any(row => string.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase)));
 
