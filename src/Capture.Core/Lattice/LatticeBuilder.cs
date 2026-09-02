@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Capture.Core.Import;
 using Capture.Core.Models;
 using Capture.Core.Paths;
@@ -41,8 +42,23 @@ public sealed class LatticeBuilder : ILatticeBuilder
                 var lattice = await BuildPageAsync(document, page, cancellationToken).ConfigureAwait(false);
                 await _store.SaveAsync(document.Id, lattice, cancellationToken).ConfigureAwait(false);
             }
-            catch
+            catch (OperationCanceledException)
             {
+                // The caller's own token fired — the page was never actually processed, so it must not
+                // be recorded as a successfully-processed empty page (that would look identical to a
+                // genuine "no text found" result). Propagate so the whole import is understood to have
+                // been interrupted, not silently completed.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A real extraction failure (missing Tesseract data, a corrupt image, a PDF rendering
+                // error, ...) must not look identical to a genuine "this page has no text" result — that
+                // silent conflation is exactly what let the tessdata/configs/tsv bug ship unnoticed
+                // earlier. ex.Message often carries real diagnostic detail already (e.g.
+                // TesseractCliOcrEngine surfaces Tesseract's own stderr) that would otherwise be thrown
+                // away here.
+                Trace.TraceError($"OCR/lattice build failed for document {document.Id} page {page.PageNumber}: {ex.Message}");
                 await _store.SaveAsync(document.Id, Empty(page), cancellationToken).ConfigureAwait(false);
             }
         }
