@@ -58,6 +58,14 @@ public sealed class WatchSettings
     /// folder has none configured — see <see cref="NoBatchProfileBehavior"/>.</summary>
     public NoBatchProfileBehavior NoBatchProfileBehavior { get; set; } = NoBatchProfileBehavior.NewBatchPerFile;
 
+    /// <summary>When true, MainViewModel deletes exported documents older than
+    /// <see cref="AutoDeleteExportedDocumentsAfterDays"/> at each app startup and whenever Settings is
+    /// saved — see <c>Store.DocumentCleanup</c>. Off by default; Settings' "Clean up now" button always
+    /// works regardless (and, unlike this, isn't limited by age at all).</summary>
+    public bool AutoDeleteExportedDocuments { get; set; }
+
+    public int AutoDeleteExportedDocumentsAfterDays { get; set; } = 30;
+
     public int ScanDpi { get; set; } = 200;
 
     // A plain bool rather than referencing Capture.Scanner's ScanColorMode enum — Capture.Core has no

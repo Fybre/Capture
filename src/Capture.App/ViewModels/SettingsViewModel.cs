@@ -7,6 +7,7 @@ using Capture.Core.Indexing;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
 using Capture.Core.Redaction;
+using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.LocalAi;
 using Capture.Scanner;
@@ -31,6 +32,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly ILocalAiModelDownloader _localAiModelDownloader;
     private readonly IToastService _toasts;
     private readonly IConfirmDialogService _confirm;
+    private readonly IDocumentStore _documents;
 
     /// <summary>Exposed so SettingsWindow's code-behind can attach/detach the nested Therefore
     /// connection dialog as a toast host — that window is opened directly from a Click handler with
@@ -49,7 +51,8 @@ public partial class SettingsViewModel : ViewModelBase
         IThereforeClient thereforeClient,
         ILocalAiModelDownloader localAiModelDownloader,
         IToastService toasts,
-        IConfirmDialogService confirm)
+        IConfirmDialogService confirm,
+        IDocumentStore documents)
     {
         _dialogs = dialogs;
         _store = store;
@@ -63,6 +66,7 @@ public partial class SettingsViewModel : ViewModelBase
         _localAiModelDownloader = localAiModelDownloader;
         _toasts = toasts;
         _confirm = confirm;
+        _documents = documents;
         WatchFolders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasWatchFolders));
         RefreshLocalAiModelStatus();
     }
@@ -82,6 +86,11 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<BatchProfile> BatchProfiles { get; } = [];
 
     public bool Saved { get; private set; }
+
+    /// <summary>True once CleanUpOldDocumentsAsync has actually deleted something — tells
+    /// MainViewModel (via SettingsDialogResult) that its own in-memory document list is now stale and
+    /// needs reloading, distinct from Saved (which only covers the Save button/WatchSettings).</summary>
+    public bool DocumentsChanged { get; private set; }
 
     public Action? Close { get; set; }
 
@@ -340,6 +349,8 @@ public partial class SettingsViewModel : ViewModelBase
         StartView = settings.StartView;
         Theme = settings.Theme;
         NoBatchProfileBehavior = settings.NoBatchProfileBehavior;
+        AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
+        CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
         DebugMode = settings.DebugMode;
         CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
         AllowFieldScripts = settings.AllowFieldScripts;
@@ -699,6 +710,8 @@ public partial class SettingsViewModel : ViewModelBase
             StartView = StartView,
             Theme = Theme,
             NoBatchProfileBehavior = NoBatchProfileBehavior,
+            AutoDeleteExportedDocuments = AutoDeleteExportedDocuments,
+            AutoDeleteExportedDocumentsAfterDays = Math.Max(1, CleanupOlderThanDays),
             DebugMode = DebugMode,
             CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
             AllowFieldScripts = AllowFieldScripts,
@@ -729,6 +742,52 @@ public partial class SettingsViewModel : ViewModelBase
     /// routine backup or "here's my config" share doesn't leak credentials by default.</summary>
     [ObservableProperty]
     private bool _includeCredentialsInExport;
+
+    /// <summary>See WatchSettings.AutoDeleteExportedDocuments — persisted, so MainViewModel can act on
+    /// it at startup/on save, distinct from the one-off "Clean up now" button below.</summary>
+    [ObservableProperty]
+    private bool _autoDeleteExportedDocuments;
+
+    [ObservableProperty]
+    private int _cleanupOlderThanDays = 30;
+
+    /// <summary>Deletes every already-exported document immediately, regardless of age — deliberately
+    /// never touches anything still needing attention (NeedsReview, Ready-but-not-yet-exported, Error,
+    /// Processing/Queued), since this runs against documents the reviewer isn't looking at one by one,
+    /// unlike the main window's own Remove action. Unlike AutoDeleteExportedDocuments/
+    /// CleanupOlderThanDays (age-gated, automatic), this is an immediate, unconditional sweep the
+    /// reviewer explicitly asks for.</summary>
+    [RelayCommand]
+    private async Task CleanUpOldDocumentsAsync()
+    {
+        var exported = DocumentCleanup.SelectExported(await _documents.GetAllAsync());
+
+        if (exported.Count == 0)
+        {
+            StatusText = "No exported documents to clean up";
+            _toasts.ShowSuccess(StatusText);
+            return;
+        }
+
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var confirmed = await _confirm.ConfirmAsync(
+            host,
+            "Delete all exported documents?",
+            $"This permanently deletes all {exported.Count} exported document(s), including their original files, regardless of how recent they are. Documents still needing review, or not yet exported, are never included. This can't be undone.",
+            confirmText: "Delete",
+            cancelText: "Cancel");
+        if (!confirmed)
+            return;
+
+        foreach (var document in exported)
+            await _documents.DeleteAsync(document.Id);
+
+        DocumentsChanged = true;
+        StatusText = $"Deleted {exported.Count} document(s)";
+        _toasts.ShowSuccess(StatusText);
+    }
 
     [RelayCommand]
     private async Task ExportSettingsAsync()
@@ -797,6 +856,8 @@ public partial class SettingsViewModel : ViewModelBase
             StartView = settings.StartView;
             Theme = settings.Theme;
             NoBatchProfileBehavior = settings.NoBatchProfileBehavior;
+            AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
+            CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
             DebugMode = settings.DebugMode;
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
             AllowFieldScripts = settings.AllowFieldScripts;

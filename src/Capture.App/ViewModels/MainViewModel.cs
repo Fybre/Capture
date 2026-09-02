@@ -376,6 +376,17 @@ public partial class MainViewModel : ViewModelBase
         _dialogs.Host = host;
     }
 
+    private async Task ReloadDocumentsAsync()
+    {
+        var documents = await _store.GetAllAsync().ConfigureAwait(true);
+        Documents.Clear();
+        SelectedDocuments.Clear();
+        foreach (var document in documents)
+            Documents.Add(await CreateRowAsync(document).ConfigureAwait(true));
+        RefreshBatchAccents();
+        RefreshDocumentGroups();
+    }
+
     public async Task InitializeAsync()
     {
         try
@@ -386,12 +397,7 @@ public partial class MainViewModel : ViewModelBase
             _watchSettings = await _watchStore.LoadAsync().ConfigureAwait(true);
             await LoadProfilesAsync().ConfigureAwait(true);
 
-            var documents = await _store.GetAllAsync().ConfigureAwait(true);
-            Documents.Clear();
-            foreach (var document in documents)
-                Documents.Add(await CreateRowAsync(document).ConfigureAwait(true));
-            RefreshBatchAccents();
-            RefreshDocumentGroups();
+            await ReloadDocumentsAsync().ConfigureAwait(true);
 
             StatusText = Documents.Count == 0
                 ? "Import a PDF or image to get started"
@@ -1060,10 +1066,16 @@ public partial class MainViewModel : ViewModelBase
         var host = _dialogs.Host;
         if (host is null)
             return;
-        if (await _settings.ShowAsync(host))
+        var result = await _settings.ShowAsync(host);
+        if (result.Saved)
             await ApplyWatchAsync();
         _dialogs.Host = host;
         await LoadProfilesAsync();
+        if (result.DocumentsChanged)
+        {
+            await ReloadDocumentsAsync();
+            SelectedDocument = Documents.FirstOrDefault();
+        }
     }
 
     [RelayCommand]
@@ -1688,6 +1700,31 @@ public partial class MainViewModel : ViewModelBase
         };
         ApplyTheme(_watchSettings.Theme);
         _debugLog.SetEnabled(_watchSettings.DebugMode);
+        await RunAutoCleanupIfEnabledAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Runs at each app startup and whenever Settings is saved (both via ApplyWatchAsync) — see
+    /// WatchSettings.AutoDeleteExportedDocuments. Distinct from Settings' "Clean up now" button
+    /// (SettingsViewModel.CleanUpOldDocumentsAsync), which is an immediate, unconditional, user-initiated
+    /// sweep rather than this age-gated automatic one.</summary>
+    private async Task RunAutoCleanupIfEnabledAsync()
+    {
+        if (!_watchSettings.AutoDeleteExportedDocuments)
+            return;
+
+        var stale = DocumentCleanup.SelectStale(
+            await _store.GetAllAsync().ConfigureAwait(true),
+            _watchSettings.AutoDeleteExportedDocumentsAfterDays,
+            DateTimeOffset.Now);
+        if (stale.Count == 0)
+            return;
+
+        foreach (var document in stale)
+            await _store.DeleteAsync(document.Id).ConfigureAwait(true);
+
+        Trace.TraceInformation(
+            $"Auto-cleanup removed {stale.Count} exported document(s) older than {_watchSettings.AutoDeleteExportedDocumentsAfterDays} day(s)");
+        await ReloadDocumentsAsync().ConfigureAwait(true);
     }
 
     private static void ApplyTheme(AppTheme theme)

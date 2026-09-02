@@ -21,6 +21,8 @@ public class JsonWatchSettingsStoreTests
         {
             StartView = WorkspaceMode.Table,
             NoBatchProfileBehavior = NoBatchProfileBehavior.AddToOpenBatch,
+            AutoDeleteExportedDocuments = true,
+            AutoDeleteExportedDocumentsAfterDays = 45,
             WatchFolders =
             [
                 new WatchFolderEntry { Enabled = true, Folder = "/tmp/invoices", ProfileId = profileId, SettleMilliseconds = 1500 },
@@ -43,6 +45,8 @@ public class JsonWatchSettingsStoreTests
 
         Assert.Equal(WorkspaceMode.Table, loaded.StartView);
         Assert.Equal(NoBatchProfileBehavior.AddToOpenBatch, loaded.NoBatchProfileBehavior);
+        Assert.True(loaded.AutoDeleteExportedDocuments);
+        Assert.Equal(45, loaded.AutoDeleteExportedDocumentsAfterDays);
         Assert.Equal(2, loaded.WatchFolders.Count);
         Assert.True(loaded.WatchFolders[0].Enabled);
         Assert.Equal("/tmp/invoices", loaded.WatchFolders[0].Folder);

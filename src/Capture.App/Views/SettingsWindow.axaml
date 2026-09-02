@@ -24,7 +24,7 @@
                     Margin="24,18,24,4" />
 
         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
+            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
 
                 <Border Grid.Row="0" Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
@@ -414,7 +414,29 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="7" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
+                <Border Grid.Row="7" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Storage" Classes="section-title" />
+                        <TextBlock Text="Capture keeps a full copy of every document you import — the original file plus everything generated for it — until you remove it, even after it's been exported. Over time that can add up to a lot of disk space."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <CheckBox Content="Automatically delete exported documents older than" IsChecked="{Binding AutoDeleteExportedDocuments}" />
+                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="24,0,0,0">
+                            <NumericUpDown Grid.Column="0" Value="{Binding CleanupOlderThanDays}" Minimum="1" Maximum="3650" Width="120" />
+                            <TextBlock Grid.Column="1" Text="day(s)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="Checked at startup and whenever Settings is saved. Only ever considers documents that have already been exported — anything still needing review, or not yet exported, is never touched regardless of age."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                        <Button Content="Clean up now" Command="{Binding CleanUpOldDocumentsCommand}" HorizontalAlignment="Left" />
+                        <TextBlock Text="Immediately deletes every already-exported document, regardless of age — not limited by the day count above. Asks for confirmation and shows how many documents matched before deleting anything."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="8" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Debug logging" Classes="section-title" />
                         <CheckBox Content="Write a detailed activity log to disk" IsChecked="{Binding DebugMode}" />
@@ -428,7 +450,7 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Grid.Row="8"
+                <TextBlock Grid.Row="9"
                            Text="{Binding StatusText}"
                            Foreground="{DynamicResource InkSoftBrush}"
                            Classes.critical="{Binding StatusIsError}"

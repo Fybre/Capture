@@ -16,10 +16,10 @@ public sealed class SettingsDialogService : ISettingsDialogService
         _toasts = toasts;
     }
 
-    public async Task<bool> ShowAsync(object owner)
+    public async Task<SettingsDialogResult> ShowAsync(object owner)
     {
         if (owner is not Window window)
-            return false;
+            return default;
 
         var viewModel = _services.GetRequiredService<SettingsViewModel>();
         var dialog = new SettingsWindow { DataContext = viewModel };
@@ -35,6 +35,6 @@ public sealed class SettingsDialogService : ISettingsDialogService
         {
             _toasts.DetachHost(dialog);
         }
-        return viewModel.Saved;
+        return new SettingsDialogResult(viewModel.Saved, viewModel.DocumentsChanged);
     }
 }

@@ -52,3 +52,27 @@ Name: "{autodesktop}\Capture"; Filename: "{app}\Capture.App.exe"; Tasks: desktop
 
 [Run]
 Filename: "{app}\Capture.App.exe"; Description: "Launch Capture"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Uninstalling only ever removes what [Files] installed under {app} — Inno Setup never touches
+// anything outside that unless told to. Capture's actual data (imported documents, profiles,
+// settings — see AppPaths.DefaultBaseDirectory) lives under {localappdata}\Capture instead, so it
+// silently survives an uninstall unless we offer to remove it here, explicitly and off by default
+// (MB_DEFBUTTON2 focuses "No"), since it's the user's real data, not disposable program state.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    DataDir := ExpandConstant('{localappdata}\Capture');
+    if DirExists(DataDir) then
+    begin
+      if MsgBox('Also remove your Capture data?' + #13#10#13#10 +
+          'This deletes every imported document, profile, and setting from:' + #13#10 + DataDir + #13#10#13#10 +
+          'This cannot be undone.',
+          mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        DelTree(DataDir, True, True, True);
+    end;
+  end;
+end;
