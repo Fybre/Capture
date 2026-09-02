@@ -84,6 +84,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IHelpWindowService, HelpWindowService>();
         services.AddSingleton<IAboutDialogService, AboutDialogService>();
         services.AddSingleton<IConfirmDialogService, ConfirmDialogService>();
+        services.AddSingleton<IScriptEditorDialogService, ScriptEditorDialogService>();
         services.AddSingleton<IThereforeCategoryPickerDialogService, ThereforeCategoryPickerDialogService>();
         services.AddSingleton<IToastService, ToastService>();
         services.AddSingleton<IUpdateCheckService, GitHubUpdateCheckService>();

@@ -25,6 +25,28 @@ public class RoslynFieldScriptRunnerTests
     }
 
     [Fact]
+    public async Task A_script_can_declare_and_call_its_own_local_function()
+    {
+        // Roslyn scripting compiles the script body as a class — a method declared anywhere in the
+        // script text becomes callable from later statements in that same run, no special syntax
+        // needed. This is native Roslyn behavior, not something RoslynFieldScriptRunner adds.
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var context = Context(new IndexValue { FieldId = Guid.NewGuid(), FieldName = "Full Name", Value = "" });
+        var script = new FieldScript
+        {
+            Source = """
+                string Combine(string first, string last) => $"{last}, {first}";
+                Fields["Full Name"].Value = Combine("Ada", "Lovelace");
+                """
+        };
+
+        var result = await runner.RunProfileScriptAsync(script, context);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("Lovelace, Ada", context.Values.Single().Value);
+    }
+
+    [Fact]
     public async Task A_profile_script_can_write_to_several_fields_other_than_a_single_one_of_its_own()
     {
         // Mirrors the Button field use case: read one field, write several others — a profile-level

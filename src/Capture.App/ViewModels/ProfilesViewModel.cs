@@ -23,6 +23,7 @@ public partial class ProfilesViewModel : ViewModelBase
     private readonly IToastService _toasts;
     private readonly IConfirmDialogService _confirm;
     private readonly IHelpWindowService _help;
+    private readonly IScriptEditorDialogService _scriptEditor;
     private readonly IFieldScriptRunner? _scriptRunner;
 
     public ProfilesViewModel(
@@ -36,6 +37,7 @@ public partial class ProfilesViewModel : ViewModelBase
         IToastService toasts,
         IConfirmDialogService confirm,
         IHelpWindowService help,
+        IScriptEditorDialogService scriptEditor,
         IFieldScriptRunner? scriptRunner = null)
     {
         _store = store;
@@ -48,6 +50,7 @@ public partial class ProfilesViewModel : ViewModelBase
         _toasts = toasts;
         _confirm = confirm;
         _help = help;
+        _scriptEditor = scriptEditor;
         _scriptRunner = scriptRunner;
     }
 
@@ -328,7 +331,7 @@ public partial class ProfilesViewModel : ViewModelBase
 
     private async Task OpenDesignerAsync(IndexingProfile profile, bool isNew)
     {
-        var designer = new ProfileDesignerViewModel(profile, isNew, _samples, _store, _redactionSets, _dialogs, _thereforeCategoryPicker, _toasts, _help, _barcodes, _ai, _scriptRunner)
+        var designer = new ProfileDesignerViewModel(profile, isNew, _samples, _store, _redactionSets, _dialogs, _thereforeCategoryPicker, _toasts, _help, _scriptEditor, _barcodes, _ai, _scriptRunner)
         {
             CloseCommand = CloseDesignerCommand
         };

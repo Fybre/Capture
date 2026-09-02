@@ -24,6 +24,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private readonly IThereforeCategoryPickerDialogService _thereforeCategoryPicker;
     private readonly IToastService _toasts;
     private readonly IHelpWindowService _help;
+    private readonly IScriptEditorDialogService _scriptEditor;
     private readonly List<string> _pageImages = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
@@ -42,6 +43,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         IThereforeCategoryPickerDialogService thereforeCategoryPicker,
         IToastService toasts,
         IHelpWindowService help,
+        IScriptEditorDialogService scriptEditor,
         IBarcodeDecoder? barcodes = null,
         IAiExtractor? ai = null,
         IFieldScriptRunner? scripts = null)
@@ -55,6 +57,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _thereforeCategoryPicker = thereforeCategoryPicker;
         _toasts = toasts;
         _help = help;
+        _scriptEditor = scriptEditor;
         _barcodes = barcodes;
         _ai = ai;
         _scripts = scripts;
@@ -664,6 +667,39 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         if (_dialogs.Host is { } host)
             _help.ShowScripting(host);
+    }
+
+    [RelayCommand]
+    private async Task PopOutScriptAsync(ScriptRow row)
+    {
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Script — {row.Name}", row.Source);
+        if (edited is not null)
+            row.Source = edited;
+    }
+
+    [RelayCommand]
+    private async Task PopOutFieldScriptAsync()
+    {
+        if (SelectedField is not { IsScript: true } row || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Script expression — {row.Name}", row.ScriptExpression);
+        if (edited is not null)
+            row.ScriptExpression = edited;
+    }
+
+    [RelayCommand]
+    private async Task PopOutButtonScriptAsync()
+    {
+        if (SelectedField is not { IsButton: true } row || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Button script — {row.Name}", row.ButtonScriptSource);
+        if (edited is not null)
+            row.ButtonScriptSource = edited;
     }
 
     /// <summary>Snapshots every field's current designer-preview value into real IndexValue objects — the

@@ -385,7 +385,16 @@
                                         <ComboBox ItemsSource="{Binding TriggerOptions}" SelectedItem="{Binding Trigger}" HorizontalAlignment="Stretch" />
                                         <TextBlock Text="Timeout (seconds)" Classes="field-label" Margin="0,4,0,0" />
                                         <NumericUpDown Value="{Binding TimeoutSeconds}" Minimum="1" Maximum="120" />
-                                        <TextBlock Text="Source" Classes="field-label" Margin="0,4,0,0" />
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Text="Source" Classes="field-label" Margin="0,4,0,0" VerticalAlignment="Bottom" />
+                                            <Button Grid.Column="1"
+                                                    Content="Pop out"
+                                                    Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).PopOutScriptCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Classes="ghost"
+                                                    FontSize="12"
+                                                    Padding="8,3" />
+                                        </Grid>
                                         <TextBox Text="{Binding Source}"
                                                   Watermark="Fields[&quot;Total&quot;].Value = &quot;42&quot;;"
                                                   AcceptsReturn="True"
@@ -782,7 +791,15 @@
                                TextWrapping="Wrap"
                                Classes="hint"
                                Margin="0,8,0,0" />
-                    <TextBlock Text="Expression" Classes="field-label" Margin="0,4,0,0" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="Expression" Classes="field-label" Margin="0,4,0,0" VerticalAlignment="Bottom" />
+                        <Button Grid.Column="1"
+                                Content="Pop out"
+                                Command="{Binding PopOutFieldScriptCommand}"
+                                Classes="ghost"
+                                FontSize="12"
+                                Padding="8,3" />
+                    </Grid>
                     <TextBox Text="{Binding SelectedField.ScriptExpression}"
                               Watermark="Fields[&quot;Company Name&quot;].Value.ToUpperInvariant()"
                               AcceptsReturn="True"
@@ -812,7 +829,15 @@
                                Margin="0,8,0,0" />
                     <TextBlock Text="Button label" Classes="field-label" Margin="0,4,0,0" />
                     <TextBox Text="{Binding SelectedField.ButtonLabel}" Watermark="{Binding SelectedField.Name}" />
-                    <TextBlock Text="Script" Classes="field-label" Margin="0,4,0,0" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="Script" Classes="field-label" Margin="0,4,0,0" VerticalAlignment="Bottom" />
+                        <Button Grid.Column="1"
+                                Content="Pop out"
+                                Command="{Binding PopOutButtonScriptCommand}"
+                                Classes="ghost"
+                                FontSize="12"
+                                Padding="8,3" />
+                    </Grid>
                     <TextBox Text="{Binding SelectedField.ButtonScriptSource}"
                               Watermark="Fields[&quot;Total&quot;].Value = &quot;42&quot;;"
                               AcceptsReturn="True"

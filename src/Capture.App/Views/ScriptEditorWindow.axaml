@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ae="using:AvaloniaEdit"
+        x:Class="Capture.App.Views.ScriptEditorWindow"
+        Icon="/Assets/capture.ico"
+        Width="860"
+        Height="620"
+        MinWidth="520"
+        MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+        <Border Grid.Row="0"
+                Padding="20,14,20,10"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                BorderThickness="0,0,0,1">
+            <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+        <Border Grid.Row="1" Margin="20,14" BorderBrush="{DynamicResource BorderBrush1}" BorderThickness="1">
+            <ae:TextEditor x:Name="Editor"
+                           FontFamily="{DynamicResource PlexMonoFontFamily}"
+                           FontSize="13"
+                           ShowLineNumbers="True"
+                           WordWrap="False" />
+        </Border>
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12"
+                Background="{DynamicResource Surface2Brush}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Cancel" MinWidth="88" IsCancel="True" Click="OnCancelClick" />
+                <Button Content="Save" MinWidth="88" IsDefault="True" Click="OnSaveClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

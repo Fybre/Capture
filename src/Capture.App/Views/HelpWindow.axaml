@@ -651,6 +651,16 @@
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
 
+                        <TextBlock Text="Writing a helper function" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="string Combine(string first, string last) =&gt; $&quot;{last}, {first}&quot;;&#10;Fields[&quot;Full Name&quot;].Value = Combine(Fields[&quot;First Name&quot;].Value, Fields[&quot;Last Name&quot;].Value);" /></Border>
+                        <TextBlock Text="A script is compiled as an ordinary C# class body, so it can declare its own local functions (or full methods) anywhere in the script text and call them from later statements in that same script — no special syntax needed. A function declared in one script isn't visible to another; each script/expression compiles on its own."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Editing" Classes="help-h2" />
+                        <TextBlock Text="Every script/expression box has a &quot;Pop out&quot; button that opens it in a larger, resizable window with C# syntax highlighting and line numbers — useful once a script grows past a few lines. Save there to write the edited text back; Cancel discards it."
+                                   Classes="help-body" />
+
                         <TextBlock Text="Reliability" Classes="help-h2" />
                         <TextBlock Text="Each script has its own timeout (default 10 seconds, adjustable per profile-level script). .NET's cancellation is cooperative — an await-heavy script like the REST example above stops cleanly on timeout, but a tight loop with no await inside it can't be preempted. A throwing or timed-out script is logged and skipped; it never blocks the document. Compiled scripts are cached, so a batch import doesn't recompile per document."
                                    Classes="help-body" />
