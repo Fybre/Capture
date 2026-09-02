@@ -244,7 +244,7 @@ public partial class ProfilesViewModel : ViewModelBase
                 // processes a document, if scripting is enabled — regardless of whether it's enabled
                 // right now, since it could be turned on later for an unrelated reason. Warn and require
                 // explicit confirmation per profile rather than failing the whole import outright.
-                var scriptNames = ScriptNamesIn(profile);
+                var scriptNames = ProfileScriptInventory.NamesIn(profile);
                 if (scriptNames.Count > 0 && _dialogs.Host is not null)
                 {
                     var list = string.Join(", ", scriptNames);
@@ -294,17 +294,6 @@ public partial class ProfilesViewModel : ViewModelBase
         {
             IsBusy = false;
         }
-    }
-
-    private static List<string> ScriptNamesIn(IndexingProfile profile)
-    {
-        var names = profile.Scripts
-            .Where(script => !string.IsNullOrWhiteSpace(script.Source))
-            .Select(script => script.Name)
-            .ToList();
-        if (profile.Fields.Any(field => field.Kind == FieldKind.Script && !string.IsNullOrWhiteSpace(field.ScriptExpression)))
-            names.Add("field expression(s)");
-        return names;
     }
 
     [RelayCommand]
