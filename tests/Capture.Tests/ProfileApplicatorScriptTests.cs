@@ -1,4 +1,5 @@
 using Capture.Core.Indexing;
+using Capture.Core.Lattice;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
 using Capture.Core.Scripting;
@@ -31,6 +32,39 @@ public class ProfileApplicatorScriptTests
         var values = await new ProfileApplicator(scripts: runner).ApplyAsync(profile, []);
 
         Assert.Equal("42", values.Single().Value);
+    }
+
+    [Fact]
+    public async Task Scripts_see_document_level_facts_from_the_lattices_and_document_passed_to_ApplyAsync()
+    {
+        var lattice = new PageLattice
+        {
+            PageNumber = 1,
+            Words = [new LatticeWord { Text = "Hello", Confidence = 95, X = 0.1f, Y = 0.1f, Width = 0.1f, Height = 0.04f }]
+        };
+        var document = new CaptureDocument { OriginalFileName = "invoice.PDF", StoredPath = "/tmp/invoice.pdf", PageCount = 1 };
+        var profile = new IndexingProfile
+        {
+            Fields = [new IndexField { Name = "Info", Kind = FieldKind.Text }],
+            Scripts = [new FieldScript { Source = "..." }]
+        };
+        ScriptDocumentInfo? seen = null;
+        var runner = new FakeScriptRunner
+        {
+            OnProfileScript = (_, ctx) =>
+            {
+                seen = ctx.Document;
+                return ScriptRunResult.Ok(null, TimeSpan.Zero);
+            }
+        };
+
+        await new ProfileApplicator(scripts: runner).ApplyAsync(profile, [lattice], document: document);
+
+        Assert.NotNull(seen);
+        Assert.Equal("invoice.PDF", seen!.FileName);
+        Assert.Equal(".pdf", seen.FileExtension); // lowercased regardless of the original casing
+        Assert.Equal(1, seen.PageCount);
+        Assert.Contains("Hello", seen.Text);
     }
 
     [Fact]

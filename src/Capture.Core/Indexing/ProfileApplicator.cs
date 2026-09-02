@@ -25,7 +25,8 @@ public sealed class ProfileApplicator : IProfileApplicator
         DefaultValueContext? context = null,
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
-        IReadOnlyList<IndexValue>? existingValues = null)
+        IReadOnlyList<IndexValue>? existingValues = null,
+        CaptureDocument? document = null)
     {
         var results = ExtractAll(profile, lattices, pages, batchSeparatorValue);
         ApplyDefaults(profile, results, context, existingValues);
@@ -39,12 +40,13 @@ public sealed class ProfileApplicator : IProfileApplicator
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
         IReadOnlyList<IndexValue>? existingValues = null,
+        CaptureDocument? document = null,
         CancellationToken cancellationToken = default)
     {
         var results = ExtractAll(profile, lattices, pages, batchSeparatorValue);
         await FillAiAsync(profile, lattices, results, cancellationToken).ConfigureAwait(false);
-        await FillFieldScriptsAsync(profile, results, context, cancellationToken).ConfigureAwait(false);
-        await RunProfileScriptsAsync(profile, results, context, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
+        await FillFieldScriptsAsync(profile, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+        await RunProfileScriptsAsync(profile, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
         ApplyDefaults(profile, results, context, existingValues);
         return results;
     }
@@ -98,7 +100,9 @@ public sealed class ProfileApplicator : IProfileApplicator
     private async Task FillFieldScriptsAsync(
         IndexingProfile profile,
         List<IndexValue> results,
+        IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context,
+        CaptureDocument? document,
         CancellationToken cancellationToken)
     {
         if (_scripts is null || !_scripts.IsAvailable)
@@ -108,7 +112,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         if (!scriptFields.Any())
             return;
 
-        var execContext = BuildExecutionContext(profile, results, context);
+        var execContext = BuildExecutionContext(profile, results, lattices, context, document);
         foreach (var field in scriptFields)
         {
             var value = results.FirstOrDefault(item => item.FieldId == field.Id);
@@ -139,7 +143,9 @@ public sealed class ProfileApplicator : IProfileApplicator
     private async Task RunProfileScriptsAsync(
         IndexingProfile profile,
         List<IndexValue> results,
+        IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context,
+        CaptureDocument? document,
         ScriptTrigger trigger,
         CancellationToken cancellationToken)
     {
@@ -150,7 +156,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         if (scripts.Count == 0)
             return;
 
-        var execContext = BuildExecutionContext(profile, results, context);
+        var execContext = BuildExecutionContext(profile, results, lattices, context, document);
         foreach (var script in scripts)
         {
             var result = await _scripts.RunProfileScriptAsync(script, execContext, cancellationToken).ConfigureAwait(false);
@@ -168,13 +174,27 @@ public sealed class ProfileApplicator : IProfileApplicator
         }
     }
 
-    private static ScriptExecutionContext BuildExecutionContext(IndexingProfile profile, List<IndexValue> results, DefaultValueContext? context) => new()
+    private static ScriptExecutionContext BuildExecutionContext(
+        IndexingProfile profile,
+        List<IndexValue> results,
+        IReadOnlyList<PageLattice> lattices,
+        DefaultValueContext? context,
+        CaptureDocument? document) => new()
     {
         ProfileName = profile.Name,
         DocumentNumber = context?.DocumentNumber ?? 1,
         BatchNumber = context?.BatchNumber ?? 1,
         Timestamp = context?.Timestamp ?? DateTimeOffset.Now,
-        Values = results
+        Values = results,
+        Document = BuildDocumentInfo(lattices, document)
+    };
+
+    private static ScriptDocumentInfo BuildDocumentInfo(IReadOnlyList<PageLattice> lattices, CaptureDocument? document) => new()
+    {
+        FileName = document?.OriginalFileName ?? string.Empty,
+        FileExtension = string.IsNullOrEmpty(document?.OriginalFileName) ? string.Empty : Path.GetExtension(document.OriginalFileName).ToLowerInvariant(),
+        PageCount = document?.PageCount ?? lattices.Count,
+        Text = DocumentText.FromLattices(lattices)
     };
 
     private static void ApplyDefaults(

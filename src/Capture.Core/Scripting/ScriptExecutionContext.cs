@@ -18,4 +18,9 @@ public sealed class ScriptExecutionContext
     /// expressions never write here; the runner returns their result instead (see
     /// <see cref="IFieldScriptRunner.RunFieldExpressionAsync"/>).</summary>
     public required IReadOnlyList<IndexValue> Values { get; init; }
+
+    /// <summary>Document-level facts (file name/extension, page count, full extracted text) — read-only
+    /// regardless of whether the running script itself is a mutable profile-level script or a read-only
+    /// field expression, since there's nothing meaningful to write back to it.</summary>
+    public required ScriptDocumentInfo Document { get; init; }
 }

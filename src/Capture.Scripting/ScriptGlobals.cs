@@ -10,6 +10,7 @@ public sealed class ScriptGlobals
     internal ScriptGlobals(ScriptExecutionContext context, HttpClient http, string scriptName, CancellationToken cancellationToken)
     {
         Fields = new ScriptFieldCollection<ScriptFieldAccessor>(context.Values, v => new ScriptFieldAccessor(v));
+        Document = context.Document;
         ProfileName = context.ProfileName;
         DocumentNumber = context.DocumentNumber;
         BatchNumber = context.BatchNumber;
@@ -20,6 +21,8 @@ public sealed class ScriptGlobals
     }
 
     public ScriptFieldCollection<ScriptFieldAccessor> Fields { get; }
+
+    public ScriptDocumentInfo Document { get; }
 
     public string ProfileName { get; }
 
@@ -47,6 +50,7 @@ public sealed class ReadOnlyScriptGlobals
     internal ReadOnlyScriptGlobals(ScriptExecutionContext context, HttpClient http, string scriptName, CancellationToken cancellationToken)
     {
         Fields = new ScriptFieldCollection<ReadOnlyScriptFieldAccessor>(context.Values, v => new ReadOnlyScriptFieldAccessor(v));
+        Document = context.Document;
         ProfileName = context.ProfileName;
         DocumentNumber = context.DocumentNumber;
         BatchNumber = context.BatchNumber;
@@ -57,6 +61,8 @@ public sealed class ReadOnlyScriptGlobals
     }
 
     public ScriptFieldCollection<ReadOnlyScriptFieldAccessor> Fields { get; }
+
+    public ScriptDocumentInfo Document { get; }
 
     public string ProfileName { get; }
 

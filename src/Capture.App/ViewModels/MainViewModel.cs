@@ -1777,7 +1777,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
-        return await _applicator.ApplyAsync(profile, lattices, context, pages, batchSeparatorValue, existingValues)
+        return await _applicator.ApplyAsync(profile, lattices, context, pages, batchSeparatorValue, existingValues, document)
             .ConfigureAwait(true);
     }
 

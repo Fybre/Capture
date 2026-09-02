@@ -360,7 +360,7 @@
                         <TextBlock Text="Scripts" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />
                         <Button Content="+ Add" Command="{Binding AddScriptCommand}" Classes="ghost" DockPanel.Dock="Right" FontSize="12" Padding="8,3" />
                     </DockPanel>
-                    <TextBlock Text="C# that runs after this profile's fields are extracted, with full read/write access to every field — for cross-field logic a Text/Lookup default or a Script field's own expression can't do, including REST calls."
+                    <TextBlock Text="C# that runs after this profile's fields are extracted, with full read/write access to every field — for cross-field logic a Text/Lookup default or a Script field's own expression can't do, including REST calls. Document exposes the current document: FileName, FileExtension, PageCount, and Text (its full extracted OCR/PDF text)."
                                TextWrapping="Wrap"
                                Classes="hint" />
                     <TextBlock Text="Off by default in Settings — a script runs with full access to this computer. &quot;Run test&quot; below always works regardless, since it's a single-document action you take yourself."
@@ -783,7 +783,7 @@
                               TextWrapping="NoWrap"
                               Classes="mono"
                               Height="70" />
-                    <TextBlock Text="Fields[&quot;Other Field&quot;].Value reads another field. A later Script field (by position in the list on the left) can reference an earlier one's result — earlier fields resolve first."
+                    <TextBlock Text="Fields[&quot;Other Field&quot;].Value reads another field. A later Script field (by position in the list on the left) can reference an earlier one's result — earlier fields resolve first. Document exposes the current document: FileName, FileExtension, PageCount, and Text (its full extracted OCR/PDF text)."
                                TextWrapping="Wrap"
                                Classes="hint" />
                     <Button Content="Run test"

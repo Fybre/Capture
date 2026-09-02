@@ -12,7 +12,8 @@ public interface IProfileApplicator
         DefaultValueContext? context = null,
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
-        IReadOnlyList<IndexValue>? existingValues = null);
+        IReadOnlyList<IndexValue>? existingValues = null,
+        CaptureDocument? document = null);
 
     Task<IReadOnlyList<IndexValue>> ApplyAsync(
         IndexingProfile profile,
@@ -21,5 +22,6 @@ public interface IProfileApplicator
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
         IReadOnlyList<IndexValue>? existingValues = null,
+        CaptureDocument? document = null,
         CancellationToken cancellationToken = default);
 }

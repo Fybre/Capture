@@ -659,7 +659,14 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         DocumentNumber = 1,
         BatchNumber = 1,
         Timestamp = DateTimeOffset.Now,
-        Values = values
+        Values = values,
+        Document = new ScriptDocumentInfo
+        {
+            FileName = SampleFileName ?? string.Empty,
+            FileExtension = string.IsNullOrEmpty(SampleFileName) ? string.Empty : Path.GetExtension(SampleFileName).ToLowerInvariant(),
+            PageCount = _pageImages.Count,
+            Text = DocumentText.FromLattices(_lattices.Values)
+        }
     };
 
     [RelayCommand(CanExecute = nameof(CanRunScript))]

@@ -29,7 +29,7 @@ public sealed class ProfileExportRunner
         // a value here reshapes only what gets written out, not the stored/reviewed document (unlike
         // ProfileApplicator's AfterFieldsPopulated scripts, which legitimately mutate persisted data).
         var snapshot = indexValues.Select(Clone).ToList();
-        await RunScriptsAsync(profile, snapshot, ScriptTrigger.BeforeExport, cancellationToken).ConfigureAwait(false);
+        await RunScriptsAsync(profile, document, snapshot, ScriptTrigger.BeforeExport, cancellationToken).ConfigureAwait(false);
 
         var results = new List<ExportResult>();
         foreach (var definition in profile.Exports.Where(item => item.Enabled))
@@ -51,12 +51,12 @@ public sealed class ProfileExportRunner
 
         // AfterExport scripts are side-effect-only (a webhook, an audit log entry) — any field write
         // here is discarded along with the rest of this method's local `snapshot`.
-        await RunScriptsAsync(profile, snapshot, ScriptTrigger.AfterExport, cancellationToken).ConfigureAwait(false);
+        await RunScriptsAsync(profile, document, snapshot, ScriptTrigger.AfterExport, cancellationToken).ConfigureAwait(false);
 
         return results;
     }
 
-    private async Task RunScriptsAsync(IndexingProfile profile, List<IndexValue> values, ScriptTrigger trigger, CancellationToken cancellationToken)
+    private async Task RunScriptsAsync(IndexingProfile profile, CaptureDocument document, List<IndexValue> values, ScriptTrigger trigger, CancellationToken cancellationToken)
     {
         if (_scripts is null || !_scripts.IsAvailable)
             return;
@@ -71,7 +71,16 @@ public sealed class ProfileExportRunner
             DocumentNumber = 1,
             BatchNumber = 1,
             Timestamp = DateTimeOffset.Now,
-            Values = values
+            Values = values,
+            // Full extracted text isn't available at export time (no PageLattice access here) — only
+            // at AfterFieldsPopulated. FileName/extension/page count still come from the real document.
+            Document = new ScriptDocumentInfo
+            {
+                FileName = document.OriginalFileName,
+                FileExtension = Path.GetExtension(document.OriginalFileName).ToLowerInvariant(),
+                PageCount = document.PageCount,
+                Text = string.Empty
+            }
         };
 
         foreach (var script in scripts)

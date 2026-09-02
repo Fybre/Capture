@@ -25,6 +25,21 @@ public class RoslynFieldScriptRunnerTests
     }
 
     [Fact]
+    public async Task Scripts_can_read_document_level_facts()
+    {
+        var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
+        var context = Context();
+
+        var result = await runner.RunFieldExpressionAsync(
+            Guid.NewGuid(),
+            "$\"{Document.FileName}|{Document.FileExtension}|{Document.PageCount}|{Document.Text}\"",
+            context);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("sample.pdf|.pdf|1|sample text", result.Value);
+    }
+
+    [Fact]
     public async Task Field_expression_returns_its_result_without_mutating_anything()
     {
         var runner = new RoslynFieldScriptRunner(new AlwaysAllowed(), new HttpClient());
@@ -134,7 +149,8 @@ public class RoslynFieldScriptRunnerTests
         DocumentNumber = 1,
         BatchNumber = 1,
         Timestamp = DateTimeOffset.UtcNow,
-        Values = values
+        Values = values,
+        Document = new ScriptDocumentInfo { FileName = "sample.pdf", FileExtension = ".pdf", PageCount = 1, Text = "sample text" }
     };
 
     private sealed class AlwaysAllowed : IWatchSettingsStore
