@@ -83,7 +83,7 @@
     <_TesseractPackageFiles Include="$(TesseractLocalFeedDir)\Capture.Tesseract.Binaries.*.nupkg" Condition="Exists('$(TesseractLocalFeedDir)')" />
   </ItemGroup>
   <ItemGroup Condition="'@(_TesseractPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
-    <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.2" />
+    <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.3" />
   </ItemGroup>
 
   <!-- CaptureScanHelperMac is a small native Swift helper that talks to Apple's ImageCaptureCore
