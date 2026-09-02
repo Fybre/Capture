@@ -49,6 +49,16 @@
                            Classes="hint"
                            FontSize="12.5"
                            HorizontalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+                    <Button Classes="license-link" Tag="https://github.com/Fybre/Capture" Click="OnLinkClick">
+                        <TextBlock Text="View on GitHub" FontSize="12.5" />
+                    </Button>
+                    <Button x:Name="CheckForUpdatesButton"
+                            Classes="license-link"
+                            Click="OnCheckForUpdatesClick">
+                        <TextBlock Text="Check for updates" FontSize="12.5" />
+                    </Button>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -69,7 +79,7 @@
                                TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="Licensed under the" Classes="hint" FontSize="11.5" />
-                        <Button Classes="license-link" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLicenseLinkClick">
+                        <Button Classes="license-link" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLinkClick">
                             <TextBlock Text="Apache License, Version 2.0" FontSize="11.5" />
                         </Button>
                     </StackPanel>
@@ -85,67 +95,67 @@
 
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
                             <TextBlock Grid.Row="0" Text="Avalonia UI 11.3.6" />
-                            <Button Grid.Row="0" Grid.Column="1" Classes="license-link" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="0" Grid.Column="1" Classes="license-link" Tag="https://opensource.org/license/mit" Click="OnLinkClick">
                                 <TextBlock Text="MIT" />
                             </Button>
 
                             <TextBlock Grid.Row="1" Text="CommunityToolkit.Mvvm 8.4.2" Margin="0,7,0,0" />
-                            <Button Grid.Row="1" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="1" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLinkClick">
                                 <TextBlock Text="MIT" />
                             </Button>
 
                             <TextBlock Grid.Row="2" Text="Microsoft .NET extensions and data libraries" Margin="0,7,0,0" />
-                            <Button Grid.Row="2" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="2" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLinkClick">
                                 <TextBlock Text="MIT" />
                             </Button>
 
                             <TextBlock Grid.Row="3" Text="SQLite (via Microsoft.Data.Sqlite)" Margin="0,7,0,0" />
-                            <Button Grid.Row="3" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://www.sqlite.org/copyright.html" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="3" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://www.sqlite.org/copyright.html" Click="OnLinkClick">
                                 <TextBlock Text="Public domain" />
                             </Button>
 
                             <TextBlock Grid.Row="4" Text="PdfPig 0.1.16" Margin="0,7,0,0" />
-                            <Button Grid.Row="4" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="4" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLinkClick">
                                 <TextBlock Text="Apache 2.0" />
                             </Button>
 
                             <TextBlock Grid.Row="5" Text="PDFtoImage 5.1.1" Margin="0,7,0,0" />
-                            <Button Grid.Row="5" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="5" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLinkClick">
                                 <TextBlock Text="MIT" />
                             </Button>
 
                             <TextBlock Grid.Row="6" Text="SkiaSharp 3.119.1" Margin="0,7,0,0" />
-                            <Button Grid.Row="6" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="6" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLinkClick">
                                 <TextBlock Text="MIT" />
                             </Button>
 
                             <TextBlock Grid.Row="7" Text="ZXing.Net 0.16.9" Margin="0,7,0,0" />
-                            <Button Grid.Row="7" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="7" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://www.apache.org/licenses/LICENSE-2.0" Click="OnLinkClick">
                                 <TextBlock Text="Apache 2.0" />
                             </Button>
 
                             <TextBlock Grid.Row="8" Text="LLamaSharp and llama.cpp / ggml (local AI extraction)" Margin="0,7,0,0" TextWrapping="Wrap" />
-                            <Button Grid.Row="8" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="8" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://opensource.org/license/mit" Click="OnLinkClick">
                                 <TextBlock Text="MIT" />
                             </Button>
 
                             <TextBlock Grid.Row="9" Text="Tesseract OCR and Leptonica" Margin="0,7,0,0" />
-                            <Button Grid.Row="9" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://github.com/Fybre/tesseract-app/blob/main/licenses/THIRD-PARTY-NOTICES.md" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="9" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://github.com/Fybre/tesseract-app/blob/main/licenses/THIRD-PARTY-NOTICES.md" Click="OnLinkClick">
                                 <TextBlock Text="Apache 2.0 / BSD" />
                             </Button>
 
                             <TextBlock Grid.Row="10" Text="Microsoft Presidio, spaCy, and packaged sidecar dependencies" Margin="0,7,0,0" TextWrapping="Wrap" />
-                            <Button Grid.Row="10" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://github.com/Fybre/presidio-app" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="10" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://github.com/Fybre/presidio-app" Click="OnLinkClick">
                                 <TextBlock Text="MIT / BSD / Apache 2.0" />
                             </Button>
 
                             <TextBlock Grid.Row="11" Text="IBM Plex and Inter typefaces" Margin="0,7,0,0" />
-                            <Button Grid.Row="11" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://openfontlicense.org" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="11" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://openfontlicense.org" Click="OnLinkClick">
                                 <TextBlock Text="SIL OFL 1.1" />
                             </Button>
 
                             <TextBlock Grid.Row="12" Text="Additional vcpkg-built image/compression/TLS libraries bundled with Tesseract (zlib, libpng, libjpeg-turbo, libtiff, and others)" Margin="0,7,0,0" TextWrapping="Wrap" />
-                            <Button Grid.Row="12" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://github.com/Fybre/tesseract-app/blob/main/licenses/THIRD-PARTY-NOTICES.md" Click="OnLicenseLinkClick">
+                            <Button Grid.Row="12" Grid.Column="1" Classes="license-link" Margin="18,7,0,0" Tag="https://github.com/Fybre/tesseract-app/blob/main/licenses/THIRD-PARTY-NOTICES.md" Click="OnLinkClick">
                                 <TextBlock Text="BSD / MIT / zlib" />
                             </Button>
                         </Grid>

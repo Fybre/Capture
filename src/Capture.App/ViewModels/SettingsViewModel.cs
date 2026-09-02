@@ -90,7 +90,7 @@ public partial class SettingsViewModel : ViewModelBase
     private bool _debugMode;
 
     [ObservableProperty]
-    private bool _checkForUpdatesOnStartup = true;
+    private bool _checkForUpdatesOnStartup;
 
     public string DebugLogPath => _paths.DebugLogPath;
 
