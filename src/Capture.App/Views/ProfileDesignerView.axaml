@@ -705,6 +705,13 @@
                     <Button Content="Clear default"
                             Command="{Binding SelectedField.ClearLookupDefaultCommand}"
                             HorizontalAlignment="Right" />
+                    <TextBlock Text="Auto-fill from another field (optional)" Classes="field-label" Margin="0,6,0,0" />
+                    <TextBox Text="{Binding SelectedField.LookupKeyTemplate}"
+                              Watermark="e.g. {Company Name}"
+                              AcceptsReturn="False" />
+                    <TextBlock Text="Resolves the same way as a Text field's default value, then matches the result against this field's display text above (case-insensitive) and fills in that option's export value. Falls back to the fixed default above when nothing matches."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
                 </StackPanel>
                 <TextBlock Text="Extracted value" Classes="field-label" Margin="0,12,0,0" />
                 <TextBlock Text="{Binding SelectedField.LiveFormat}"

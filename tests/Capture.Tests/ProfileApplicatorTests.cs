@@ -282,6 +282,113 @@ public class ProfileApplicatorTests
     }
 
     [Fact]
+    public void Lookup_key_template_matches_another_fields_value_case_insensitively()
+    {
+        var lattice = new PageLattice
+        {
+            PageNumber = 1,
+            Words = [Word("acme", 0.10f, 0.10f), Word("inc", 0.20f, 0.10f)]
+        };
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Name = "Company Name",
+                    Kind = FieldKind.Zonal,
+                    Zone = new ZoneRect { PageNumber = 1, X = 0.05f, Y = 0.05f, Width = 0.5f, Height = 0.1f }
+                },
+                new IndexField
+                {
+                    Name = "Customer Id",
+                    Kind = FieldKind.Lookup,
+                    LookupOptions = [new LookupOption { Key = "ACME INC", Value = "customer01" }],
+                    LookupKeyTemplate = "{Company Name}"
+                }
+            ]
+        };
+
+        var values = new ProfileApplicator().Apply(profile, [lattice]);
+
+        var customerId = values.Single(v => v.FieldName == "Customer Id");
+        Assert.Equal("customer01", customerId.Value);
+        Assert.Equal(100, customerId.Confidence);
+    }
+
+    [Fact]
+    public void Lookup_key_template_falls_back_to_the_fixed_default_when_nothing_matches()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField { Name = "Company Name", Kind = FieldKind.Text, DefaultValueTemplate = "Unknown Corp" },
+                new IndexField
+                {
+                    Name = "Customer Id",
+                    Kind = FieldKind.Lookup,
+                    LookupOptions = [new LookupOption { Key = "ACME INC", Value = "customer01" }],
+                    LookupDefaultValue = "customer01",
+                    LookupKeyTemplate = "{Company Name}"
+                }
+            ]
+        };
+
+        var values = new ProfileApplicator().Apply(profile, []);
+
+        // "Company Name" itself has a computed default, so it's excluded from the token dictionary —
+        // {Company Name} resolves blank, no option matches, and the fixed LookupDefaultValue stands.
+        var customerId = values.Single(v => v.FieldName == "Customer Id");
+        Assert.Equal("customer01", customerId.Value);
+    }
+
+    [Fact]
+    public void Lookup_key_template_does_not_override_a_manually_chosen_value_on_reapply()
+    {
+        var profile = new IndexingProfile
+        {
+            Fields =
+            [
+                new IndexField
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Company Name",
+                    Kind = FieldKind.Zonal,
+                    Zone = new ZoneRect { PageNumber = 1, X = 0.05f, Y = 0.05f, Width = 0.5f, Height = 0.1f }
+                },
+                new IndexField
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Customer Id",
+                    Kind = FieldKind.Lookup,
+                    LookupOptions =
+                    [
+                        new LookupOption { Key = "ACME INC", Value = "customer01" },
+                        new LookupOption { Key = "OTHER CO", Value = "customer99" }
+                    ],
+                    LookupKeyTemplate = "{Company Name}"
+                }
+            ]
+        };
+        var lattice = new PageLattice
+        {
+            PageNumber = 1,
+            Words = [Word("acme", 0.10f, 0.10f), Word("inc", 0.20f, 0.10f)]
+        };
+
+        var existing = new[]
+        {
+            new IndexValue { FieldId = profile.Fields[1].Id, FieldName = "Customer Id", Value = "customer99", IsManual = true, Confidence = 100 }
+        };
+        var values = new ProfileApplicator().Apply(profile, [lattice], existingValues: existing);
+
+        var customerId = values.Single(v => v.FieldName == "Customer Id");
+        Assert.Equal("customer99", customerId.Value);
+        Assert.True(customerId.IsManual);
+    }
+
+    [Fact]
     public void Barcode_field_with_number_scope_only_reads_its_configured_page()
     {
         var field = new IndexField { Kind = FieldKind.Barcode, PageScope = PageScope.Number, PageNumber = 2 };

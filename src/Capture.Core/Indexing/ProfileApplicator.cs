@@ -91,9 +91,10 @@ public sealed class ProfileApplicator : IProfileApplicator
         DefaultValueContext? context,
         IReadOnlyList<IndexValue>? existingValues)
     {
-        // A profile re-application re-extracts generated fields, but Text fields are entered by the
-        // indexer. Preserve those edits whether or not the field also has a default template.
-        foreach (var field in profile.Fields.Where(field => field.Kind == FieldKind.Text))
+        // A profile re-application re-extracts generated fields, but Text/Lookup fields are entered or
+        // chosen by the indexer. Preserve those edits whether or not the field also has a computed
+        // default — otherwise a manual override would get silently reset on the next reprocess.
+        foreach (var field in profile.Fields.Where(field => field.Kind is FieldKind.Text or FieldKind.Lookup))
         {
             var existing = existingValues?.FirstOrDefault(item => item.FieldId == field.Id);
             if (existing is not { IsManual: true })
@@ -109,19 +110,21 @@ public sealed class ProfileApplicator : IProfileApplicator
             value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
         }
 
-        var defaultFieldIds = profile.Fields
-            .Where(field => field.Kind == FieldKind.Text && !string.IsNullOrEmpty(field.DefaultValueTemplate))
+        var templatedFieldIds = profile.Fields
+            .Where(field =>
+                (field.Kind == FieldKind.Text && !string.IsNullOrEmpty(field.DefaultValueTemplate)) ||
+                (field.Kind == FieldKind.Lookup && !string.IsNullOrEmpty(field.LookupKeyTemplate)))
             .Select(field => field.Id)
             .ToHashSet();
-        if (defaultFieldIds.Count == 0)
+        if (templatedFieldIds.Count == 0)
             return;
 
-        // A default can't reference another field that itself has a default (no chaining, no cycle
-        // detection needed) — simply never offer those fields' values for lookup.
+        // A default can't reference another field that itself has a computed default (no chaining, no
+        // cycle detection needed) — simply never offer those fields' values for lookup.
         var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in results)
         {
-            if (!defaultFieldIds.Contains(item.FieldId))
+            if (!templatedFieldIds.Contains(item.FieldId))
                 fields[item.FieldName] = item.Value ?? string.Empty;
         }
 
@@ -136,15 +139,18 @@ public sealed class ProfileApplicator : IProfileApplicator
 
         foreach (var field in profile.Fields)
         {
-            if (!defaultFieldIds.Contains(field.Id))
+            if (!templatedFieldIds.Contains(field.Id))
                 continue;
 
             var value = results.FirstOrDefault(item => item.FieldId == field.Id);
-            if (value is null)
+            if (value is null || value.IsManual)
                 continue;
 
-            if (value.IsManual)
+            if (field.Kind == FieldKind.Lookup)
+            {
+                ApplyLookupKeyTemplate(field, value, evalContext, profile.Locale);
                 continue;
+            }
 
             if (!DefaultValueTemplateEvaluator.TryEvaluate(
                     field.DefaultValueTemplate,
@@ -162,6 +168,40 @@ public sealed class ProfileApplicator : IProfileApplicator
             value.Confidence = 100;
             value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
         }
+    }
+
+    // Resolves LookupKeyTemplate (same token syntax as a Text field's DefaultValueTemplate) and
+    // matches the result case-insensitively against this field's LookupOptions keys. No match (or a
+    // template that resolves blank, e.g. the referenced field hasn't been extracted yet) leaves
+    // `value` exactly as Extract() left it — the static LookupDefaultValue fallback, or blank.
+    private static void ApplyLookupKeyTemplate(
+        IndexField field,
+        IndexValue value,
+        DefaultValueContext evalContext,
+        string? locale)
+    {
+        if (!DefaultValueTemplateEvaluator.TryEvaluate(
+                field.LookupKeyTemplate,
+                evalContext,
+                out var resolvedKey,
+                out var templateError))
+        {
+            value.ValidationError = templateError;
+            return;
+        }
+
+        resolvedKey = resolvedKey.Trim();
+        if (resolvedKey.Length == 0)
+            return;
+
+        var match = field.LookupOptions.FirstOrDefault(
+            option => string.Equals(option.Key.Trim(), resolvedKey, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+            return;
+
+        value.Value = match.Value;
+        value.Confidence = 100;
+        value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
     }
 
     private IndexValue Extract(

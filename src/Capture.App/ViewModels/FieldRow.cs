@@ -18,6 +18,7 @@ public sealed partial class FieldRow : ObservableObject
         _hidden = field.HideFromIndexing;
         _isReadOnly = field.IsReadOnly;
         _defaultValueTemplate = field.DefaultValueTemplate ?? string.Empty;
+        _lookupKeyTemplate = field.LookupKeyTemplate ?? string.Empty;
         _level = field.Level;
         _keyPattern = field.KeyPattern ?? string.Empty;
         _valuePattern = field.ValuePattern ?? string.Empty;
@@ -141,6 +142,10 @@ public sealed partial class FieldRow : ObservableObject
     [ObservableProperty]
     private LookupOptionRow? _selectedDefaultLookupOption;
 
+    /// <summary>Only meaningful when <see cref="IsLookup"/> — see <see cref="IndexField.LookupKeyTemplate"/>.</summary>
+    [ObservableProperty]
+    private string _lookupKeyTemplate;
+
     [ObservableProperty]
     private string _liveValue;
 
@@ -213,6 +218,9 @@ public sealed partial class FieldRow : ObservableObject
 
     partial void OnDefaultValueTemplateChanged(string value) =>
         Field.DefaultValueTemplate = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    partial void OnLookupKeyTemplateChanged(string value) =>
+        Field.LookupKeyTemplate = string.IsNullOrWhiteSpace(value) ? null : value;
 
     partial void OnLevelChanged(IndexLevel value)
     {

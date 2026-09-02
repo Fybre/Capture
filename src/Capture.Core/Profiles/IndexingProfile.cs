@@ -149,6 +149,15 @@ public sealed class IndexField
 
     /// <summary>The export value of the lookup option selected by default, or null for no default.</summary>
     public string? LookupDefaultValue { get; set; }
+
+    /// <summary>Only meaningful for <see cref="FieldKind.Lookup"/>. A template evaluated the same way
+    /// as a Text field's <see cref="DefaultValueTemplate"/> (so it can reference another field via
+    /// <c>{OtherField}</c>) — the resolved text is matched case-insensitively against this field's
+    /// <see cref="LookupOptions"/> keys, and the matching option's value becomes this field's default.
+    /// Takes precedence over <see cref="LookupDefaultValue"/> when it resolves to a match on this
+    /// document; when it doesn't (no match, or the referenced field is blank), <see cref="LookupDefaultValue"/>
+    /// is used instead, if set.</summary>
+    public string? LookupKeyTemplate { get; set; }
 }
 
 /// <summary>Profile-level redaction configuration — PII detected by the bundled Presidio sidecar and/or
