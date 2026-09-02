@@ -431,10 +431,13 @@
                 BorderBrush="{DynamicResource BorderBrush1}"
                 Background="{DynamicResource Surface2Brush}">
             <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8"
-                            ToolTip.Tip="Exported settings include your AI API key in plain text — share the file only with people you trust.">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8">
                     <Button Content="Import settings…" Command="{Binding ImportSettingsCommand}" />
                     <Button Content="Export settings…" Command="{Binding ExportSettingsCommand}" />
+                    <CheckBox Content="Include credentials"
+                              IsChecked="{Binding IncludeCredentialsInExport}"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="Off by default: an export replaces your AI API key and Therefore password/bearer token with a placeholder, so a routine backup or config share doesn't leak them. Turn this on (and confirm) only when you actually want those credentials in the exported file, e.g. your own encrypted backup." />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                     <Button Content="Cancel" Command="{Binding CancelCommand}" />

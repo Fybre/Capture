@@ -30,6 +30,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IThereforeClient _thereforeClient;
     private readonly ILocalAiModelDownloader _localAiModelDownloader;
     private readonly IToastService _toasts;
+    private readonly IConfirmDialogService _confirm;
 
     /// <summary>Exposed so SettingsWindow's code-behind can attach/detach the nested Therefore
     /// connection dialog as a toast host — that window is opened directly from a Click handler with
@@ -47,7 +48,8 @@ public partial class SettingsViewModel : ViewModelBase
         IAppPaths paths,
         IThereforeClient thereforeClient,
         ILocalAiModelDownloader localAiModelDownloader,
-        IToastService toasts)
+        IToastService toasts,
+        IConfirmDialogService confirm)
     {
         _dialogs = dialogs;
         _store = store;
@@ -60,6 +62,7 @@ public partial class SettingsViewModel : ViewModelBase
         _thereforeClient = thereforeClient;
         _localAiModelDownloader = localAiModelDownloader;
         _toasts = toasts;
+        _confirm = confirm;
         WatchFolders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasWatchFolders));
         RefreshLocalAiModelStatus();
     }
@@ -714,11 +717,36 @@ public partial class SettingsViewModel : ViewModelBase
         return true;
     }
 
+    /// <summary>Off by default — see ExportSettingsAsync. A settings export normally carries
+    /// placeholders instead of the AI API key / Therefore password / Therefore bearer token, so a
+    /// routine backup or "here's my config" share doesn't leak credentials by default.</summary>
+    [ObservableProperty]
+    private bool _includeCredentialsInExport;
+
     [RelayCommand]
     private async Task ExportSettingsAsync()
     {
         if (!TryBuildSettings(out var settings))
             return;
+
+        if (IncludeCredentialsInExport)
+        {
+            var confirmed = _dialogs.Host is not { } host
+                || await _confirm.ConfirmAsync(
+                    host,
+                    "Export credentials in plain text?",
+                    "This file will contain your AI API key and/or Therefore password/bearer token, unencrypted. Anyone who gets this file can use them. Only proceed if you're sending it somewhere you trust (e.g. your own backup), not a general config share.",
+                    confirmText: "Include credentials",
+                    cancelText: "Cancel");
+            if (!confirmed)
+                return;
+        }
+        else
+        {
+            settings.AiApiKey = CredentialRedaction.Redact(settings.AiApiKey);
+            settings.ThereforePassword = CredentialRedaction.Redact(settings.ThereforePassword);
+            settings.ThereforeBearerToken = CredentialRedaction.Redact(settings.ThereforeBearerToken);
+        }
 
         var path = await _dialogs.PickSaveJsonFileAsync("Export settings", "capture-settings.json");
         if (string.IsNullOrWhiteSpace(path))
@@ -770,7 +798,7 @@ public partial class SettingsViewModel : ViewModelBase
                 WatchFolders.Add(WrapEntry(entry));
 
             AiEndpoint = settings.AiEndpoint ?? "https://api.openai.com/v1";
-            AiApiKey = settings.AiApiKey ?? string.Empty;
+            AiApiKey = CredentialRedaction.PreserveIfRedacted(settings.AiApiKey, AiApiKey);
             AiModel = string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel;
             AiMaxDocumentChars = settings.AiMaxDocumentChars > 0 ? settings.AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars;
             AiProvider = settings.AiProvider;
@@ -780,8 +808,8 @@ public partial class SettingsViewModel : ViewModelBase
             ThereforeTenantName = settings.ThereforeTenantName ?? string.Empty;
             ThereforeAuthMethod = settings.ThereforeAuthMethod;
             ThereforeUsername = settings.ThereforeUsername ?? string.Empty;
-            ThereforePassword = settings.ThereforePassword ?? string.Empty;
-            ThereforeBearerToken = settings.ThereforeBearerToken ?? string.Empty;
+            ThereforePassword = CredentialRedaction.PreserveIfRedacted(settings.ThereforePassword, ThereforePassword);
+            ThereforeBearerToken = CredentialRedaction.PreserveIfRedacted(settings.ThereforeBearerToken, ThereforeBearerToken);
 
             ScanGrayscale = settings.ScanGrayscale;
             SelectedScanSource = settings.ScanSource == ScanInputSource.Feeder ? ScanSourceKind.Feeder : ScanSourceKind.Flatbed;
