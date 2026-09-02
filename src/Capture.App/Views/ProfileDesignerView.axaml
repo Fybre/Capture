@@ -80,6 +80,10 @@
                                 Command="{Binding AddAiCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
+                        <Button Content="Script"
+                                Command="{Binding AddScriptFieldCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
                         <Button Command="{Binding AddBatchSeparatorValueCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center">
@@ -349,6 +353,60 @@
                     <CheckBox Content="Remove from inbox after export" IsChecked="{Binding RemoveAfterExport}" />
                     <TextBlock Text="Once every enabled export succeeds, the document is deleted instead of being marked Exported."
                                TextWrapping="Wrap"
+                               Classes="hint" />
+
+                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                    <DockPanel LastChildFill="False">
+                        <TextBlock Text="Scripts" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                        <Button Content="+ Add" Command="{Binding AddScriptCommand}" Classes="ghost" DockPanel.Dock="Right" FontSize="12" Padding="8,3" />
+                    </DockPanel>
+                    <TextBlock Text="C# that runs after this profile's fields are extracted, with full read/write access to every field — for cross-field logic a Text/Lookup default or a Script field's own expression can't do, including REST calls."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <TextBlock Text="Off by default in Settings — a script runs with full access to this computer. &quot;Run test&quot; below always works regardless, since it's a single-document action you take yourself."
+                               TextWrapping="Wrap"
+                               Classes="hint"
+                               IsVisible="{Binding !IsScriptingAvailable}" />
+                    <ItemsControl ItemsSource="{Binding Scripts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ScriptRow">
+                                <Border Classes="card" Padding="10" Margin="0,4">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnDefinitions="Auto,*">
+                                            <CheckBox Grid.Column="0" IsChecked="{Binding Enabled}" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Enabled" />
+                                            <TextBox Grid.Column="1" Text="{Binding Name}" Watermark="Script name" />
+                                        </Grid>
+                                        <TextBlock Text="Runs" Classes="field-label" Margin="0,4,0,0" />
+                                        <ComboBox ItemsSource="{Binding TriggerOptions}" SelectedItem="{Binding Trigger}" HorizontalAlignment="Stretch" />
+                                        <TextBlock Text="Timeout (seconds)" Classes="field-label" Margin="0,4,0,0" />
+                                        <NumericUpDown Value="{Binding TimeoutSeconds}" Minimum="1" Maximum="120" />
+                                        <TextBlock Text="Source" Classes="field-label" Margin="0,4,0,0" />
+                                        <TextBox Text="{Binding Source}"
+                                                  Watermark="Fields[&quot;Total&quot;].Value = &quot;42&quot;;"
+                                                  AcceptsReturn="True"
+                                                  TextWrapping="NoWrap"
+                                                  Classes="mono"
+                                                  Height="90" />
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <Button Grid.Column="0"
+                                                    Content="Run test"
+                                                    Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).RunScriptTestCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Center" />
+                                            <Button Grid.Column="1"
+                                                    Content="Remove"
+                                                    Command="{Binding $parent[UserControl].((vm:ProfileDesignerViewModel)DataContext).RemoveScriptCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Margin="6,0,0,0" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="No scripts configured yet."
+                               IsVisible="{Binding HasNoScripts}"
                                Classes="hint" />
                 </StackPanel>
             </ScrollViewer>
@@ -712,6 +770,26 @@
                     <TextBlock Text="Resolves the same way as a Text field's default value, then matches the result against this field's display text above (case-insensitive) and fills in that option's export value. Falls back to the fixed default above when nothing matches."
                                TextWrapping="Wrap"
                                Classes="hint" />
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsScript}">
+                    <TextBlock Text="This field's value is a single C# expression — other fields are read-only to it; its result becomes this field's value."
+                               TextWrapping="Wrap"
+                               Classes="hint"
+                               Margin="0,8,0,0" />
+                    <TextBlock Text="Expression" Classes="field-label" Margin="0,4,0,0" />
+                    <TextBox Text="{Binding SelectedField.ScriptExpression}"
+                              Watermark="Fields[&quot;Company Name&quot;].Value.ToUpperInvariant()"
+                              AcceptsReturn="True"
+                              TextWrapping="NoWrap"
+                              Classes="mono"
+                              Height="70" />
+                    <TextBlock Text="Fields[&quot;Other Field&quot;].Value reads another field. A later Script field (by position in the list on the left) can reference an earlier one's result — earlier fields resolve first."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                    <Button Content="Run test"
+                            Command="{Binding RunFieldScriptCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
                 </StackPanel>
                 <TextBlock Text="Extracted value" Classes="field-label" Margin="0,12,0,0" />
                 <TextBlock Text="{Binding SelectedField.LiveFormat}"

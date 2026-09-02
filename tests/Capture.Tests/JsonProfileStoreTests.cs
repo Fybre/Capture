@@ -139,6 +139,69 @@ public class JsonProfileStoreTests
     }
 
     [Fact]
+    public async Task Roundtrips_profile_level_scripts_and_a_script_kind_field()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-scripts-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        var store = new JsonProfileStore(paths);
+        var profile = new IndexingProfile
+        {
+            Name = "Scripted",
+            Fields =
+            [
+                new IndexField { Name = "Computed", Kind = FieldKind.Script, ScriptExpression = "Fields[\"Other\"].Value.ToUpperInvariant()" }
+            ],
+            Scripts =
+            [
+                new FieldScript
+                {
+                    Name = "Enrich",
+                    Enabled = true,
+                    Trigger = ScriptTrigger.AfterFieldsPopulated,
+                    Source = "Fields[\"Computed\"].Value = \"x\";",
+                    TimeoutSeconds = 15
+                }
+            ]
+        };
+
+        await store.SaveAsync(profile);
+        var loaded = await store.GetAsync(profile.Id);
+
+        Assert.NotNull(loaded);
+        var field = Assert.Single(loaded!.Fields);
+        Assert.Equal(FieldKind.Script, field.Kind);
+        Assert.Equal("Fields[\"Other\"].Value.ToUpperInvariant()", field.ScriptExpression);
+
+        var script = Assert.Single(loaded.Scripts);
+        Assert.Equal("Enrich", script.Name);
+        Assert.True(script.Enabled);
+        Assert.Equal(ScriptTrigger.AfterFieldsPopulated, script.Trigger);
+        Assert.Equal(15, script.TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task An_old_profile_with_no_scripts_property_loads_with_an_empty_scripts_list()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-scripts-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        var store = new JsonProfileStore(paths);
+        var id = Guid.NewGuid();
+
+        await WriteLegacyProfileJsonAsync(paths, id, """
+            {
+              "id": "REPLACE_ID",
+              "name": "Pre-scripting profile",
+              "fields": []
+            }
+            """);
+
+        var loaded = await store.GetAsync(id);
+
+        Assert.NotNull(loaded);
+        Assert.Empty(loaded!.Scripts);
+    }
+
+    [Fact]
     public async Task Migrates_legacy_split_on_blank_pages_into_separation()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-blank-" + Guid.NewGuid().ToString("N")));

@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Capture.Core\Capture.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Microsoft.CodeAnalysis.CSharp.Scripting is pure-managed (no native binaries) — deliberately
+       chosen over any embedded-JS-via-native-binary alternative to avoid repeating the macOS
+       codesign/notarization pain already hit bundling native Tesseract/Presidio binaries. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.11.0" />
+  </ItemGroup>
+
+</Project>

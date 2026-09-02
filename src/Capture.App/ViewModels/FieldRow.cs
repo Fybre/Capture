@@ -19,6 +19,7 @@ public sealed partial class FieldRow : ObservableObject
         _isReadOnly = field.IsReadOnly;
         _defaultValueTemplate = field.DefaultValueTemplate ?? string.Empty;
         _lookupKeyTemplate = field.LookupKeyTemplate ?? string.Empty;
+        _scriptExpression = field.ScriptExpression ?? string.Empty;
         _level = field.Level;
         _keyPattern = field.KeyPattern ?? string.Empty;
         _valuePattern = field.ValuePattern ?? string.Empty;
@@ -58,6 +59,8 @@ public sealed partial class FieldRow : ObservableObject
 
     public bool IsLookup => Field.Kind == FieldKind.Lookup;
 
+    public bool IsScript => Field.Kind == FieldKind.Script;
+
     public bool IsPatternField => IsKeyValue || IsRegex;
 
     /// <summary>Barcode, Key/value, and Regex all share the same First/Number/Any page-scope selector.
@@ -78,6 +81,7 @@ public sealed partial class FieldRow : ObservableObject
         FieldKind.BatchSeparatorValue => "Batch separator value",
         FieldKind.Text => "Text",
         FieldKind.Lookup => "Lookup",
+        FieldKind.Script => "Script",
         _ => "Zone"
     };
 
@@ -145,6 +149,10 @@ public sealed partial class FieldRow : ObservableObject
     /// <summary>Only meaningful when <see cref="IsLookup"/> — see <see cref="IndexField.LookupKeyTemplate"/>.</summary>
     [ObservableProperty]
     private string _lookupKeyTemplate;
+
+    /// <summary>Only meaningful when <see cref="IsScript"/> — see <see cref="IndexField.ScriptExpression"/>.</summary>
+    [ObservableProperty]
+    private string _scriptExpression;
 
     [ObservableProperty]
     private string _liveValue;
@@ -221,6 +229,9 @@ public sealed partial class FieldRow : ObservableObject
 
     partial void OnLookupKeyTemplateChanged(string value) =>
         Field.LookupKeyTemplate = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    partial void OnScriptExpressionChanged(string value) =>
+        Field.ScriptExpression = string.IsNullOrWhiteSpace(value) ? null : value;
 
     partial void OnLevelChanged(IndexLevel value)
     {

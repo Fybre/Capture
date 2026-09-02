@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
+using Capture.Core.Scripting;
 
 namespace Capture.Export;
 
@@ -10,10 +11,12 @@ namespace Capture.Export;
 public sealed class ProfileExportRunner
 {
     private readonly IReadOnlyDictionary<ExportType, IExportWriter> _writers;
+    private readonly IFieldScriptRunner? _scripts;
 
-    public ProfileExportRunner(IEnumerable<IExportWriter> writers)
+    public ProfileExportRunner(IEnumerable<IExportWriter> writers, IFieldScriptRunner? scripts = null)
     {
         _writers = writers.ToDictionary(writer => writer.Type);
+        _scripts = scripts;
     }
 
     public async Task<IReadOnlyList<ExportResult>> RunAsync(
@@ -22,6 +25,12 @@ public sealed class ProfileExportRunner
         IReadOnlyList<IndexValue> indexValues,
         CancellationToken cancellationToken = default)
     {
+        // BeforeExport/AfterExport scripts operate on a clone, never the caller's own list — mutating
+        // a value here reshapes only what gets written out, not the stored/reviewed document (unlike
+        // ProfileApplicator's AfterFieldsPopulated scripts, which legitimately mutate persisted data).
+        var snapshot = indexValues.Select(Clone).ToList();
+        await RunScriptsAsync(profile, snapshot, ScriptTrigger.BeforeExport, cancellationToken).ConfigureAwait(false);
+
         var results = new List<ExportResult>();
         foreach (var definition in profile.Exports.Where(item => item.Enabled))
         {
@@ -32,7 +41,7 @@ public sealed class ProfileExportRunner
             }
 
             Trace.TraceInformation($"Export \"{definition.Name}\" ({definition.Type}) starting for document {document.Id}");
-            var context = new ExportDocumentContext(document, profile.Fields, indexValues);
+            var context = new ExportDocumentContext(document, profile.Fields, snapshot);
             var result = await writer.ExportAsync(definition, context, cancellationToken).ConfigureAwait(false);
             Trace.TraceInformation(result.Success
                 ? $"Export \"{definition.Name}\" succeeded for document {document.Id}: {result.Message}"
@@ -40,6 +49,56 @@ public sealed class ProfileExportRunner
             results.Add(result);
         }
 
+        // AfterExport scripts are side-effect-only (a webhook, an audit log entry) — any field write
+        // here is discarded along with the rest of this method's local `snapshot`.
+        await RunScriptsAsync(profile, snapshot, ScriptTrigger.AfterExport, cancellationToken).ConfigureAwait(false);
+
         return results;
     }
+
+    private async Task RunScriptsAsync(IndexingProfile profile, List<IndexValue> values, ScriptTrigger trigger, CancellationToken cancellationToken)
+    {
+        if (_scripts is null || !_scripts.IsAvailable)
+            return;
+
+        var scripts = profile.Scripts.Where(script => script.Enabled && script.Trigger == trigger && !string.IsNullOrEmpty(script.Source));
+        if (!scripts.Any())
+            return;
+
+        var context = new ScriptExecutionContext
+        {
+            ProfileName = profile.Name,
+            DocumentNumber = 1,
+            BatchNumber = 1,
+            Timestamp = DateTimeOffset.Now,
+            Values = values
+        };
+
+        foreach (var script in scripts)
+        {
+            var result = await _scripts.RunProfileScriptAsync(script, context, cancellationToken).ConfigureAwait(false);
+            if (!result.Success)
+                Trace.TraceError($"Export script \"{script.Name}\" ({trigger}) failed: {result.ErrorMessage}");
+        }
+    }
+
+    private static IndexValue Clone(IndexValue source) => new()
+    {
+        FieldId = source.FieldId,
+        FieldName = source.FieldName,
+        Format = source.Format,
+        Level = source.Level,
+        Mandatory = source.Mandatory,
+        Value = source.Value,
+        Confidence = source.Confidence,
+        IsManual = source.IsManual,
+        PageNumber = source.PageNumber,
+        Bounds = source.Bounds,
+        ValidationError = source.ValidationError,
+        HideFromIndexing = source.HideFromIndexing,
+        IsReadOnly = source.IsReadOnly,
+        Sensitive = source.Sensitive,
+        Kind = source.Kind,
+        LookupOptions = source.LookupOptions
+    };
 }

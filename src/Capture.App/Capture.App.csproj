@@ -41,6 +41,7 @@
     <ProjectReference Include="..\Capture.Export\Capture.Export.csproj" />
     <ProjectReference Include="..\Capture.Therefore\Capture.Therefore.csproj" />
     <ProjectReference Include="..\Capture.LocalAi\Capture.LocalAi.csproj" />
+    <ProjectReference Include="..\Capture.Scripting\Capture.Scripting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

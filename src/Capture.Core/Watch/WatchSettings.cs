@@ -37,6 +37,15 @@ public sealed class WatchSettings
     /// always available regardless of this setting.</summary>
     public bool CheckForUpdatesOnStartup { get; set; }
 
+    /// <summary>When true, indexing profiles' C# scripts (<see cref="Capture.Core.Profiles.FieldScript"/>
+    /// and <see cref="Capture.Core.Profiles.IndexField.ScriptExpression"/>) run during real import/
+    /// export. Off by default: a script runs with the full trust of this process — there is no
+    /// sandboxing — so this is equivalent to allowing arbitrary code execution from any profile that
+    /// carries a script, including one imported from someone else. "Run test" in the Profile Designer
+    /// works regardless of this setting, since that's a single-document action taken interactively by
+    /// the profile's own author, not unattended execution.</summary>
+    public bool AllowFieldScripts { get; set; }
+
     /// <summary>When true, a detailed activity log (imports, exports, watch-folder activity, and
     /// errors) is written to a file for troubleshooting — see <c>IDebugLogService</c>.</summary>
     public bool DebugMode { get; set; }

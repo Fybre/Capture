@@ -47,6 +47,10 @@
                         <TextBlock Text="Checks GitHub for a newer release each time Capture starts. Only a version number is requested — no document or usage data is sent."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
+                        <CheckBox Content="Allow profile scripts" IsChecked="{Binding AllowFieldScripts}" Margin="0,8,0,0" />
+                        <TextBlock Text="Lets indexing profiles run C# scripts (Scripts tab in the profile designer, or a field's Script kind) after fields are extracted or around export. Off by default: a script runs with full access to this computer, same as any program you'd run yourself — there is no sandboxing. Importing a profile that contains a script always asks first, regardless of this setting; &quot;Run test&quot; in the profile designer always works, since that's a single-document action you take yourself."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
                     </StackPanel>
                 </Border>
 

@@ -5,8 +5,10 @@ using Avalonia.Media.Imaging;
 using Capture.App.Services;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
+using Capture.Core.Models;
 using Capture.Core.Profiles;
 using Capture.Core.Redaction;
+using Capture.Core.Scripting;
 using Capture.Therefore;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -27,6 +29,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
 
     private readonly IBarcodeDecoder? _barcodes;
     private readonly IAiExtractor? _ai;
+    private readonly IFieldScriptRunner? _scripts;
 
     public ProfileDesignerViewModel(
         IndexingProfile profile,
@@ -38,7 +41,8 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         IThereforeCategoryPickerDialogService thereforeCategoryPicker,
         IToastService toasts,
         IBarcodeDecoder? barcodes = null,
-        IAiExtractor? ai = null)
+        IAiExtractor? ai = null,
+        IFieldScriptRunner? scripts = null)
     {
         Profile = profile;
         IsNew = isNew;
@@ -50,6 +54,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _toasts = toasts;
         _barcodes = barcodes;
         _ai = ai;
+        _scripts = scripts;
         _name = profile.Name;
         _separationTrigger = profile.Separation.Trigger;
         _separationPageCount = Math.Max(1, profile.Separation.PageCount);
@@ -67,6 +72,9 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         foreach (var export in profile.Exports)
             Exports.Add(new ExportDefinitionRow(export, Fields));
         Exports.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoExports));
+        foreach (var script in profile.Scripts)
+            Scripts.Add(new ScriptRow(script));
+        Scripts.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoScripts));
         Fields.CollectionChanged += (_, _) =>
         {
             RefreshBarcodeFieldOptions();
@@ -101,6 +109,18 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     public ObservableCollection<ExportDefinitionRow> Exports { get; } = [];
 
     public bool HasNoExports => Exports.Count == 0;
+
+    public ObservableCollection<ScriptRow> Scripts { get; } = [];
+
+    public bool HasNoScripts => Scripts.Count == 0;
+
+    /// <summary>False when scripting is off in Settings (WatchSettings.AllowFieldScripts) — purely
+    /// informational, shown as an inline hint so a profile author knows a saved script won't actually
+    /// run during real import/export yet. Doesn't gate anything here: "Run test" (both profile-level and
+    /// per-field) always works regardless, since it's a single-document action the author takes
+    /// themselves while editing — only ProfileApplicator's real pipeline checks this for unattended
+    /// (batch/watch-folder) execution.</summary>
+    public bool IsScriptingAvailable => _scripts?.IsAvailable ?? false;
 
     [ObservableProperty]
     private bool _removeAfterExport;
@@ -205,6 +225,8 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExtractAiCommand))]
     [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunScriptTestCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunFieldScriptCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -369,6 +391,21 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Fields.Add(row);
         SelectedField = row;
         StatusText = "Add display labels and their exported values";
+    }
+
+    [RelayCommand]
+    private void AddScriptField()
+    {
+        var field = new IndexField
+        {
+            Name = NextFieldName(),
+            Kind = FieldKind.Script,
+            Format = FieldFormat.String
+        };
+        var row = Wrap(field);
+        Fields.Add(row);
+        SelectedField = row;
+        StatusText = "Enter a C# expression — other fields are read-only, its result becomes this field's value";
     }
 
     [RelayCommand]
@@ -598,6 +635,119 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     private void RemoveExportDefinition(ExportDefinitionRow row) => Exports.Remove(row);
 
     [RelayCommand]
+    private void AddScript() => Scripts.Add(new ScriptRow(new FieldScript()));
+
+    [RelayCommand]
+    private void RemoveScript(ScriptRow row) => Scripts.Remove(row);
+
+    /// <summary>Snapshots every field's current designer-preview value into real IndexValue objects — the
+    /// same shape ProfileApplicator hands scripts at real import time, built from whatever the field
+    /// panel is currently showing (LiveValue/LiveConfidence) rather than a live document.</summary>
+    private List<IndexValue> BuildPreviewIndexValues() =>
+        Fields.Select(row => new IndexValue
+        {
+            FieldId = row.Id,
+            FieldName = row.Name,
+            Format = row.Format,
+            Value = row.LiveValue ?? string.Empty,
+            Confidence = row.LiveConfidence
+        }).ToList();
+
+    private ScriptExecutionContext BuildScriptPreviewContext(List<IndexValue> values) => new()
+    {
+        ProfileName = Name,
+        DocumentNumber = 1,
+        BatchNumber = 1,
+        Timestamp = DateTimeOffset.Now,
+        Values = values
+    };
+
+    [RelayCommand(CanExecute = nameof(CanRunScript))]
+    private async Task RunScriptTestAsync(ScriptRow row)
+    {
+        if (_scripts is null)
+            return;
+
+        IsBusy = true;
+        StatusText = "Running script…";
+        try
+        {
+            var values = BuildPreviewIndexValues();
+            var result = await _scripts.RunProfileScriptAsync(row.Script, BuildScriptPreviewContext(values)).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                StatusText = $"Script failed: {result.ErrorMessage}";
+                _toasts.ShowError(StatusText);
+                return;
+            }
+
+            // Reflect any mutations the script made back into the visible field rows.
+            foreach (var value in values)
+            {
+                var fieldRow = Fields.FirstOrDefault(item => item.Id == value.FieldId);
+                if (fieldRow is null)
+                    continue;
+                fieldRow.LiveValue = value.Value;
+                fieldRow.LiveConfidence = value.Confidence;
+            }
+
+            StatusText = "Script ran successfully";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunScript))]
+    private async Task RunFieldScriptAsync()
+    {
+        if (SelectedField is not { IsScript: true } row || _scripts is null)
+            return;
+        if (string.IsNullOrWhiteSpace(row.ScriptExpression))
+        {
+            StatusText = "Enter an expression first";
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = "Running script…";
+        try
+        {
+            var context = BuildScriptPreviewContext(BuildPreviewIndexValues());
+            var result = await _scripts.RunFieldExpressionAsync(row.Id, row.ScriptExpression, context).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                StatusText = $"Script failed: {result.ErrorMessage}";
+                _toasts.ShowError(StatusText);
+                return;
+            }
+
+            row.LiveValue = result.Value ?? string.Empty;
+            row.LiveConfidence = 100;
+            StatusText = "Script ran successfully";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanRunScript() => !IsBusy && _scripts is not null;
+
+    [RelayCommand]
     private void ToggleExportExpanded(ExportDefinitionRow row) => row.IsExpanded = !row.IsExpanded;
 
     [RelayCommand]
@@ -657,6 +807,7 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         };
         Profile.Fields = Fields.Select(row => row.Field).ToList();
         Profile.Exports = Exports.Select(row => row.Definition).ToList();
+        Profile.Scripts = Scripts.Select(row => row.Script).ToList();
         Profile.RemoveAfterExport = RemoveAfterExport;
         await _store.SaveAsync(Profile);
         Saved = true;
@@ -775,6 +926,14 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         if (row.IsAi)
         {
             row.LiveFormat = "AI";
+            return;
+        }
+
+        if (row.IsScript)
+        {
+            // Evaluating a script needs the async runner (and every other field's current preview
+            // value) — see RunFieldScriptAsync. Nothing to compute synchronously here.
+            row.LiveFormat = "Script";
             return;
         }
 

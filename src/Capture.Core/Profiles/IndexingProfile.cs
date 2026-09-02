@@ -20,7 +20,45 @@ public enum FieldKind
     Text = 7,
 
     /// <summary>A value chosen manually from the field's configured list of display/export pairs.</summary>
-    Lookup = 8
+    Lookup = 8,
+
+    /// <summary>Computed by evaluating <see cref="IndexField.ScriptExpression"/> (C# via Roslyn
+    /// scripting) once fields have been extracted — read-only access to every other field's resolved
+    /// value, own value = the expression's result. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
+    Script = 9
+}
+
+public enum ScriptTrigger
+{
+    /// <summary>Runs once per document, after every field (including AI and Script kinds) has been
+    /// extracted/resolved, before manual-edit preservation and Text/Lookup default templates are
+    /// applied. A profile-level script's writes to <c>IndexValue.Value</c> here are real and persisted.</summary>
+    AfterFieldsPopulated = 0,
+
+    /// <summary>Runs once per export attempt (<c>ProfileExportRunner.RunAsync</c>), before any writer
+    /// runs, over a snapshot of the document's field values — mutations here reshape only what gets
+    /// written out, never the stored/reviewed document.</summary>
+    BeforeExport = 1,
+
+    /// <summary>Runs once per export attempt after every writer has finished, given each writer's
+    /// result — side effects only (e.g. a webhook), field values are not writable at this point.</summary>
+    AfterExport = 2
+}
+
+/// <summary>A named, independently enable/disable-able C# script attached to a profile. See
+/// <see cref="ScriptTrigger"/> for when it runs and <c>IFieldScriptRunner</c> for how.</summary>
+public sealed class FieldScript
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "New script";
+    public bool Enabled { get; set; } = true;
+    public ScriptTrigger Trigger { get; set; } = ScriptTrigger.AfterFieldsPopulated;
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>Hard ceiling on one run of this script. .NET's cooperative cancellation can't preempt a
+    /// tight non-<c>await</c> loop, so this is a best-effort guard, not an ironclad one — see
+    /// <c>RoslynFieldScriptRunner</c>.</summary>
+    public int TimeoutSeconds { get; set; } = 10;
 }
 
 public enum IndexLevel
@@ -158,6 +196,13 @@ public sealed class IndexField
     /// document; when it doesn't (no match, or the referenced field is blank), <see cref="LookupDefaultValue"/>
     /// is used instead, if set.</summary>
     public string? LookupKeyTemplate { get; set; }
+
+    /// <summary>Only meaningful for <see cref="FieldKind.Script"/>. C# evaluated via Roslyn scripting
+    /// once every other field has been resolved — the expression's result becomes this field's value.
+    /// Other fields are read-only to it (unlike a profile-level <see cref="FieldScript"/>, which can
+    /// write any field); this is deliberate so a field expression can't reach into and mutate unrelated
+    /// fields as a side effect. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
+    public string? ScriptExpression { get; set; }
 }
 
 /// <summary>Profile-level redaction configuration — PII detected by the bundled Presidio sidecar and/or
@@ -296,6 +341,12 @@ public sealed class IndexingProfile
     /// <see cref="Capture.Core.Models.DocumentStatus.Exported"/> and kept around.</summary>
     public bool RemoveAfterExport { get; set; }
     public List<IndexField> Fields { get; set; } = [];
+
+    /// <summary>Profile-level C# scripts — see <see cref="FieldScript"/>/<see cref="ScriptTrigger"/>.
+    /// Distinct from a <see cref="FieldKind.Script"/> field's own <see cref="IndexField.ScriptExpression"/>:
+    /// these are imperative and can write any field, not just their own.</summary>
+    public List<FieldScript> Scripts { get; set; } = [];
+
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
 }
