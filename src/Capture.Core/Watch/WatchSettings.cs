@@ -1,5 +1,6 @@
 using Capture.Core.Batches;
 using Capture.Core.Indexing;
+using Capture.Core.Store;
 
 namespace Capture.Core.Watch;
 
@@ -58,6 +59,11 @@ public sealed class WatchSettings
     /// folder has none configured — see <see cref="NoBatchProfileBehavior"/>.</summary>
     public NoBatchProfileBehavior NoBatchProfileBehavior { get; set; } = NoBatchProfileBehavior.NewBatchPerFile;
 
+    /// <summary>What MainViewModel's import loop does when a file being imported has the same content
+    /// hash as an already-imported, still-active document — see <see cref="DuplicateImportBehavior"/>.
+    /// Applies uniformly to manual import, drag-drop, folder import, and watch folders.</summary>
+    public DuplicateImportBehavior DuplicateImportBehavior { get; set; } = DuplicateImportBehavior.ImportAnyway;
+
     /// <summary>When true, MainViewModel deletes exported documents older than
     /// <see cref="AutoDeleteExportedDocumentsAfterDays"/> at each app startup and whenever Settings is
     /// saved — see <c>Store.DocumentCleanup</c>. Off by default; Settings' "Clean up now" button always
@@ -65,6 +71,12 @@ public sealed class WatchSettings
     public bool AutoDeleteExportedDocuments { get; set; }
 
     public int AutoDeleteExportedDocumentsAfterDays { get; set; } = 30;
+
+    /// <summary>How long a soft-deleted (trashed) document stays recoverable before MainViewModel's
+    /// auto-cleanup sweep purges it for good — see <c>Store.DocumentCleanup.SelectExpiredTrash</c>.
+    /// Always active (not a separate opt-in toggle): unlike AutoDeleteExportedDocuments, which changes
+    /// what a reviewer sees, a retention window on an already-trashed document is purely a safety net.</summary>
+    public int TrashRetentionDays { get; set; } = 30;
 
     public int ScanDpi { get; set; } = 200;
 

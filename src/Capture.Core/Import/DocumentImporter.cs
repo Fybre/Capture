@@ -314,7 +314,7 @@ public sealed class DocumentImporter : IDocumentImporter
             {
                 try
                 {
-                    await _store.DeleteAsync(document.Document.Id, cancellationToken).ConfigureAwait(false);
+                    await _store.PurgeAsync(document.Document.Id, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception cleanupEx)
                 {
@@ -419,7 +419,7 @@ public sealed class DocumentImporter : IDocumentImporter
             // only knows about splits that made it into its results list) can't see.
             try
             {
-                await _store.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+                await _store.PurgeAsync(id, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception cleanupEx)
             {

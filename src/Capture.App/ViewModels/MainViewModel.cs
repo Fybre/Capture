@@ -57,6 +57,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IDebugLogService _debugLog;
     private readonly IToastService _toasts;
     private readonly IUpdateCheckService _updateCheck;
+    private readonly IConfirmDialogService _confirm;
     private readonly IFieldScriptRunner? _scripts;
     private readonly IReadOnlyList<IPostIndexStep> _postIndexSteps;
 
@@ -90,6 +91,7 @@ public partial class MainViewModel : ViewModelBase
         IDebugLogService debugLog,
         IToastService toasts,
         IUpdateCheckService updateCheck,
+        IConfirmDialogService confirm,
         IFieldScriptRunner? scripts = null,
         IEnumerable<IPostIndexStep>? postIndexSteps = null)
     {
@@ -122,6 +124,7 @@ public partial class MainViewModel : ViewModelBase
         _debugLog = debugLog;
         _toasts = toasts;
         _updateCheck = updateCheck;
+        _confirm = confirm;
         _scripts = scripts;
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
@@ -159,6 +162,34 @@ public partial class MainViewModel : ViewModelBase
             : SelectedDocument is { } row ? [row] : [];
     }
 
+    // Single source of truth for "something CanActOnSelected/CanActOnTrash/CanMergeSelectedDocuments/
+    // CanMarkReady/CanApplyRedactions/CanExport/CanExportAll reads just changed" — every trigger that
+    // affects one of those predicates (IsBusy, ShowTrash, SelectedDocument, the SelectedDocuments
+    // collection, ViewMode, the Documents collection) calls this instead of each duplicating its own
+    // copy of the same NotifyCanExecuteChanged list. Three separate bugs this session (MarkSelectedReady,
+    // then RestoreSelectedTrash/PurgeSelectedTrash) were exactly this: a new bulk-action command added to
+    // some but not all of those lists, so it silently never re-evaluated on the one trigger that actually
+    // mattered. A command belongs in this method if — and only if — its own CanExecute reads
+    // GetActingRows()/SelectedDocument/ShowTrash/Documents.Count; adding one here is now the only step
+    // needed, since every trigger already calls this rather than listing commands individually.
+    private void RefreshSelectionDependentCommands()
+    {
+        OnPropertyChanged(nameof(HasSelectedDocuments));
+        OnPropertyChanged(nameof(SelectedDocumentsSummary));
+        OnPropertyChanged(nameof(HasMultipleSelectedDocuments));
+        ApplySelectedProfileCommand.NotifyCanExecuteChanged();
+        RemoveSelectedCommand.NotifyCanExecuteChanged();
+        MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
+        RedactSelectedCommand.NotifyCanExecuteChanged();
+        ApplyRedactionsCommand.NotifyCanExecuteChanged();
+        MarkReadyCommand.NotifyCanExecuteChanged();
+        MarkSelectedReadyCommand.NotifyCanExecuteChanged();
+        ExportCommand.NotifyCanExecuteChanged();
+        ExportAllCommand.NotifyCanExecuteChanged();
+        RestoreSelectedTrashCommand.NotifyCanExecuteChanged();
+        PurgeSelectedTrashCommand.NotifyCanExecuteChanged();
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPreviewMode))]
     [NotifyPropertyChangedFor(nameof(IsTableMode))]
@@ -172,37 +203,25 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ToggleManualRedactionModeCommand))]
     private Bitmap? _pageImage;
 
+    // See RefreshSelectionDependentCommands (called from OnSelectedDocumentChanged's body in
+    // MainViewModel.Documents.cs) for why this has no NotifyCanExecuteChangedFor attributes of its own.
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MarkSelectedReadyCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MergeSelectedDocumentsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
-    [NotifyPropertyChangedFor(nameof(HasSelectedDocuments))]
-    [NotifyPropertyChangedFor(nameof(SelectedDocumentsSummary))]
     private DocumentRow? _selectedDocument;
 
     [ObservableProperty]
     private string _statusText = "Starting…";
 
+    // Selection/view-dependent commands (ApplySelectedProfile, RemoveSelected, MergeSelectedDocuments,
+    // RedactSelected, ApplyRedactions, MarkReady, MarkSelectedReady, Export, ExportAll,
+    // RestoreSelectedTrash, PurgeSelectedTrash) are deliberately NOT listed here — see
+    // RefreshSelectionDependentCommands, called from OnIsBusyChanged below, for the single place they're
+    // all wired instead of duplicating this list. Only genuinely IsBusy-specific commands stay here.
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ImportFilesCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenProfilesCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenSettingsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ApplySelectedProfileCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RemoveSelectedCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MergeSelectedDocumentsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RedactSelectedCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ApplyRedactionsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MarkReadyCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MarkSelectedReadyCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExportAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleManualRedactionModeCommand))]
@@ -210,6 +229,8 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedPagesCommand))]
     [NotifyCanExecuteChangedFor(nameof(SplitDocumentAtCurrentPageCommand))]
     private bool _isBusy;
+
+    partial void OnIsBusyChanged(bool value) => RefreshSelectionDependentCommands();
 
     public void AttachHost(object host)
     {
@@ -310,15 +331,7 @@ public partial class MainViewModel : ViewModelBase
     {
         // The visible DataGrid can change without either selection property changing immediately, so
         // nudge every selection-dependent command/property when switching views.
-        OnPropertyChanged(nameof(HasSelectedDocuments));
-        OnPropertyChanged(nameof(SelectedDocumentsSummary));
-        OnPropertyChanged(nameof(HasMultipleSelectedDocuments));
-        ApplySelectedProfileCommand.NotifyCanExecuteChanged();
-        RemoveSelectedCommand.NotifyCanExecuteChanged();
-        MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
-        RedactSelectedCommand.NotifyCanExecuteChanged();
-        MarkSelectedReadyCommand.NotifyCanExecuteChanged();
-        ExportCommand.NotifyCanExecuteChanged();
+        RefreshSelectionDependentCommands();
     }
 
     private void RefreshRowSelectionFlags()

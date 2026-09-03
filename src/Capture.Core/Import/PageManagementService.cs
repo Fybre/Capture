@@ -220,7 +220,7 @@ public sealed class PageManagementService : IPageManagementService
                 Directory.Delete(ocrDirectory, recursive: true);
 
             foreach (var absorbed in documents.Skip(1))
-                await _store.DeleteAsync(absorbed.Id, cancellationToken).ConfigureAwait(false);
+                await _store.PurgeAsync(absorbed.Id, cancellationToken).ConfigureAwait(false);
 
             return target;
         }
@@ -360,7 +360,7 @@ public sealed class PageManagementService : IPageManagementService
         {
             try
             {
-                await _store.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+                await _store.PurgeAsync(id, cancellationToken).ConfigureAwait(false);
             }
             catch
             {

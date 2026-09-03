@@ -6,6 +6,7 @@
         xmlns:redaction="using:Capture.Core.Redaction"
         xmlns:scanner="using:Capture.Scanner"
         xmlns:watch="using:Capture.Core.Watch"
+        xmlns:store="using:Capture.Core.Store"
         xmlns:conv="using:Capture.App.Converters"
         x:Class="Capture.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
@@ -54,6 +55,19 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         <TextBlock Text="Applies to a manual import with no batch profile chosen in the toolbar, and to a watch folder with none configured. &quot;New batch per file&quot; starts a fresh batch for every imported file. &quot;Add to open batch&quot; keeps appending to whichever batch is already open, the same batch until you start a new one — for a watch folder, that means every file it ever imports lands in one continuously-growing batch."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="When an imported file matches one already imported" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding DuplicateImportBehaviorOptions}"
+                                  SelectedItem="{Binding DuplicateImportBehavior}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="store:DuplicateImportBehavior">
+                                    <TextBlock Text="{Binding Converter={x:Static conv:DuplicateImportBehaviorDisplayConverter.Instance}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="A match is based on the file's exact content, not its name — checked at import time against every currently-active (non-trashed) document. &quot;Skip&quot; doesn't import the file at all. &quot;Import and flag for review&quot; imports it normally, but every matching document shows a small &quot;Duplicate&quot; indicator until one of them is removed."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                         <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}" />
@@ -425,12 +439,21 @@
                             <NumericUpDown Grid.Column="0" Value="{Binding CleanupOlderThanDays}" Minimum="1" Maximum="3650" Width="120" />
                             <TextBlock Grid.Column="1" Text="day(s)" VerticalAlignment="Center" Margin="8,0,0,0" />
                         </Grid>
-                        <TextBlock Text="Checked at startup and whenever Settings is saved. Only ever considers documents that have already been exported — anything still needing review, or not yet exported, is never touched regardless of age."
+                        <TextBlock Text="Checked at startup and whenever Settings is saved. Only ever considers documents that have already been exported — anything still needing review, or not yet exported, is never touched regardless of age. Moves matching documents to Trash rather than deleting them outright — see below."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                         <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                         <Button Content="Clean up now" Command="{Binding CleanUpOldDocumentsCommand}" HorizontalAlignment="Left" />
-                        <TextBlock Text="Immediately deletes every already-exported document, regardless of age — not limited by the day count above. Asks for confirmation and shows how many documents matched before deleting anything."
+                        <TextBlock Text="Immediately moves every already-exported document to Trash, regardless of age — not limited by the day count above. Asks for confirmation and shows how many documents matched before doing anything."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                        <TextBlock Text="Trash retention" Classes="field-label" />
+                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                            <NumericUpDown Grid.Column="0" Value="{Binding TrashRetentionDays}" Minimum="1" Maximum="3650" Width="120" />
+                            <TextBlock Grid.Column="1" Text="day(s)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="A document in Trash (Table mode) can be restored any time before this many days pass, after which it's permanently deleted the next time Capture checks (startup, or Settings save)."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                     </StackPanel>

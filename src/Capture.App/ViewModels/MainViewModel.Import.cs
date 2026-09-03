@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
@@ -28,9 +29,15 @@ namespace Capture.App.ViewModels;
 
 public partial class MainViewModel
 {
+    // Trash-aware: reloads whichever list is currently showing (see ShowTrash in
+    // MainViewModel.Documents.cs), so every existing caller (startup, auto-cleanup, Settings save)
+    // correctly refreshes the Trash view instead of silently switching back to the normal list if
+    // that's what the reviewer happened to be looking at.
     private async Task ReloadDocumentsAsync()
     {
-        var documents = await _store.GetAllAsync().ConfigureAwait(true);
+        var documents = ShowTrash
+            ? await _store.GetTrashedAsync().ConfigureAwait(true)
+            : await _store.GetAllAsync().ConfigureAwait(true);
         Documents.Clear();
         SelectedDocuments.Clear();
         foreach (var document in documents)
@@ -141,18 +148,28 @@ public partial class MainViewModel
             var batchSources = new Dictionary<Guid, CaptureDocument>();
             var batchSeparatorValues = new Dictionary<Guid, string?>();
             var failedFiles = 0;
+            var skippedDuplicates = 0;
             foreach (var path in paths)
             {
                 index++;
                 StatusText = $"Importing {index} of {paths.Count}: {Path.GetFileName(path)}";
                 try
                 {
+                    var contentHash = await ComputeContentHashAsync(path).ConfigureAwait(true);
+                    if (_watchSettings.DuplicateImportBehavior == DuplicateImportBehavior.Skip
+                        && (await _store.FindByContentHashAsync(contentHash).ConfigureAwait(true)).Count > 0)
+                    {
+                        skippedDuplicates++;
+                        MoveWatchFile(path, watchRoot, watchFolderEntry, success: true);
+                        continue;
+                    }
+
                     var dpi = imageDpiByPath?.GetValueOrDefault(path);
                     var imported = await _importer.ImportAsync(
                             path, source, profile, batchProfile, imageDpiOverride: dpi)
                         .ConfigureAwait(true);
                     var (fileLast, failed) = await MaterializeImportedAsync(
-                            imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true)
+                            imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true, contentHash)
                         .ConfigureAwait(true);
                     if (fileLast is not null)
                         last = fileLast;
@@ -195,11 +212,16 @@ public partial class MainViewModel
                 await LoadSelectedDocumentAsync(last).ConfigureAwait(true);
             }
 
-            StatusText = failedFiles == 0
-                ? $"Imported {paths.Count} file(s)"
-                : failedFiles == paths.Count
-                    ? $"Import failed for all {paths.Count} file(s)"
-                    : $"Imported {paths.Count - failedFiles} of {paths.Count} file(s) — {failedFiles} failed";
+            var imports = paths.Count - skippedDuplicates;
+            var succeeded = imports - failedFiles;
+            var suffix = skippedDuplicates > 0 ? $" — {skippedDuplicates} skipped as duplicate" : string.Empty;
+            StatusText = imports == 0
+                ? $"All {paths.Count} file(s) skipped as duplicates"
+                : failedFiles == 0
+                    ? $"Imported {succeeded} file(s){suffix}"
+                    : failedFiles == imports
+                        ? $"Import failed for all {imports} file(s){suffix}"
+                        : $"Imported {succeeded} of {imports} file(s) — {failedFiles} failed{suffix}";
         }
         catch (Exception ex)
         {
@@ -214,17 +236,33 @@ public partial class MainViewModel
         }
     }
 
+    /// <summary>SHA-256 (hex) of a source file's raw bytes, streamed rather than loaded fully into memory
+    /// — computed once per file at import time, before rasterize/OCR, for duplicate detection (see
+    /// <see cref="CaptureDocument.ContentHash"/> and <see cref="WatchSettings.DuplicateImportBehavior"/>).</summary>
+    private static async Task<string> ComputeContentHashAsync(string path, CancellationToken cancellationToken = default)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, useAsync: true);
+        var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexString(hash);
+    }
+
     /// <summary>Batch-allocates, applies profile fields to, and creates a row for each document produced
     /// by one import call — shared by <see cref="ImportPathsAsync"/>'s per-file loop and
     /// <see cref="ImportScannedPagesAsync"/>'s single scan-job import, so the two entry points can't
     /// drift apart on how a resulting <see cref="ImportedDocument"/> gets surfaced.</summary>
+    /// <param name="contentHash">The source file's hash, if known — see <see cref="ComputeContentHashAsync"/>.
+    /// Only stamped onto the resulting document when the import produced exactly one document from it;
+    /// when a single source file is split into several, none of them individually equals the whole
+    /// file's bytes, so tagging them all with the same hash would falsely flag them as duplicates of
+    /// each other.</param>
     private async Task<(DocumentRow? Last, bool Failed)> MaterializeImportedAsync(
         IReadOnlyList<ImportedDocument> imported,
         IndexingProfile? profile,
         BatchAllocator allocator,
         Dictionary<Guid, CaptureDocument> batchSources,
         Dictionary<Guid, string?> batchSeparatorValues,
-        bool isFirstOfFile)
+        bool isFirstOfFile,
+        string? contentHash = null)
     {
         DocumentRow? last = null;
         var failed = false;
@@ -236,6 +274,7 @@ public partial class MainViewModel
             isFirstOfFile = false;
 
             document.BatchId = batch.Id;
+            document.ContentHash = imported.Count == 1 ? contentHash : null;
             await _store.UpdateAsync(document).ConfigureAwait(true);
             await ApplyDocumentFieldsAsync(document, profile, item.SeparatorValues, item.BatchSeparatorValue)
                 .ConfigureAwait(true);

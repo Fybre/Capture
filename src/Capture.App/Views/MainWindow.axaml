@@ -138,9 +138,22 @@
                         </StackPanel>
                     </Border>
 
+                    <Button Classes="ghost"
+                            Classes.accent="{Binding ShowTrash}"
+                            Command="{Binding ToggleTrashViewCommand}"
+                            VerticalAlignment="Center"
+                            Margin="0,2,16,2"
+                            IsVisible="{Binding IsTableMode}"
+                            ToolTip.Tip="Documents removed until Trash retention expires — restore them, or delete them permanently">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Data="{StaticResource IconDelete}" Stretch="Uniform" Width="13" Height="13" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.3" />
+                            <TextBlock Text="Trash" FontSize="12.5" />
+                        </StackPanel>
+                    </Button>
+
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2" IsVisible="{Binding !ShowTrash}">
                         <Button Command="{Binding ScanCommand}"
                                 ToolTip.Tip="Scan a document from the first available scanner">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -327,7 +340,7 @@
 
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" DockPanel.Dock="Left" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left" IsVisible="{Binding !ShowTrash}">
                         <Border Classes="segment" Padding="4" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <Button Command="{Binding MarkSelectedReadyCommand}"
@@ -358,6 +371,35 @@
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <Path Data="{StaticResource IconRemove}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
                                         <TextBlock Text="Remove" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding SelectedDocumentsSummary}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="12"
+                                   IsVisible="{Binding HasSelectedDocuments}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left" IsVisible="{Binding ShowTrash}">
+                        <Border Classes="segment" Padding="4" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Button Command="{Binding RestoreSelectedTrashCommand}"
+                                        Classes="ghost"
+                                        ToolTip.Tip="Restore the selected document(s) out of Trash">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Path Data="{StaticResource IconRestore}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                                        <TextBlock Text="Restore" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding PurgeSelectedTrashCommand}"
+                                        Classes="ghost"
+                                        Foreground="{DynamicResource CriticalBrush}"
+                                        ToolTip.Tip="Permanently delete the selected document(s) — cannot be undone">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Path Data="{StaticResource IconDelete}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                                        <TextBlock Text="Delete permanently" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -500,6 +542,13 @@
                                                            FontSize="10.5"
                                                            Foreground="{DynamicResource MutedBrush}"
                                                            IsVisible="{Binding RedactionStatusDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Text="Duplicate"
+                                                           Classes="mono"
+                                                           FontSize="10.5"
+                                                           Foreground="{DynamicResource MutedBrush}"
+                                                           IsVisible="{Binding IsDuplicate}"
+                                                           ToolTip.Tip="{Binding DuplicateTooltip}"
                                                            VerticalAlignment="Center" />
                                             </StackPanel>
                                         </StackPanel>
@@ -970,10 +1019,19 @@
                                                 <DataGridTemplateColumn Header="Issues" Width="150">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
-                                                            <TextBlock Text="{Binding IssueDisplay, Converter={x:Static conv:StringOrDashConverter.Instance}}"
-                                                                       Classes="issue-cell"
-                                                                       Classes.critical="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
-                                                                       VerticalAlignment="Center" />
+                                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding IssueDisplay, Converter={x:Static conv:StringOrDashConverter.Instance}}"
+                                                                           Classes="issue-cell"
+                                                                           Classes.critical="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                                                           VerticalAlignment="Center" />
+                                                                <TextBlock Text="Duplicate"
+                                                                           Classes="mono"
+                                                                           FontSize="10.5"
+                                                                           Foreground="{DynamicResource MutedBrush}"
+                                                                           IsVisible="{Binding IsDuplicate}"
+                                                                           ToolTip.Tip="{Binding DuplicateTooltip}"
+                                                                           VerticalAlignment="Center" />
+                                                            </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>

@@ -40,9 +40,9 @@ public partial class MainViewModel
     [RelayCommand(CanExecute = nameof(CanExportAll))]
     private async Task ExportAllAsync() => await RunExportAsync(Documents.ToList()).ConfigureAwait(true);
 
-    private bool CanExport() => !IsBusy && Documents.Count > 0;
+    private bool CanExport() => !IsBusy && !ShowTrash && Documents.Count > 0;
 
-    private bool CanExportAll() => !IsBusy && Documents.Count > 0;
+    private bool CanExportAll() => !IsBusy && !ShowTrash && Documents.Count > 0;
 
     private async Task RunExportAsync(IReadOnlyList<DocumentRow> rows)
     {
@@ -132,7 +132,7 @@ public partial class MainViewModel
 
         if (profile.RemoveAfterExport)
         {
-            await _store.DeleteAsync(document.Id).ConfigureAwait(true);
+            await _store.SoftDeleteAsync(document.Id).ConfigureAwait(true);
             Documents.Remove(row);
             SelectedDocuments.Remove(row);
             return ExportOutcome.ExportedAndRemoved;

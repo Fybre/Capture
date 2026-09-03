@@ -1,5 +1,6 @@
 using Capture.Core.Batches;
 using Capture.Core.Paths;
+using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.Storage;
 
@@ -23,6 +24,8 @@ public class JsonWatchSettingsStoreTests
             NoBatchProfileBehavior = NoBatchProfileBehavior.AddToOpenBatch,
             AutoDeleteExportedDocuments = true,
             AutoDeleteExportedDocumentsAfterDays = 45,
+            TrashRetentionDays = 60,
+            DuplicateImportBehavior = DuplicateImportBehavior.FlagForReview,
             WatchFolders =
             [
                 new WatchFolderEntry { Enabled = true, Folder = "/tmp/invoices", ProfileId = profileId, SettleMilliseconds = 1500 },
@@ -47,6 +50,8 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal(NoBatchProfileBehavior.AddToOpenBatch, loaded.NoBatchProfileBehavior);
         Assert.True(loaded.AutoDeleteExportedDocuments);
         Assert.Equal(45, loaded.AutoDeleteExportedDocumentsAfterDays);
+        Assert.Equal(60, loaded.TrashRetentionDays);
+        Assert.Equal(DuplicateImportBehavior.FlagForReview, loaded.DuplicateImportBehavior);
         Assert.Equal(2, loaded.WatchFolders.Count);
         Assert.True(loaded.WatchFolders[0].Enabled);
         Assert.Equal("/tmp/invoices", loaded.WatchFolders[0].Folder);

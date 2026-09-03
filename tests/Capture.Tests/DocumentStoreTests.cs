@@ -45,7 +45,7 @@ public class DocumentStoreTests
     }
 
     [Fact]
-    public async Task Delete_removes_document_and_work_files()
+    public async Task Purge_removes_document_and_work_files()
     {
         var root = Path.Combine(Path.GetTempPath(), "capture-del-" + Guid.NewGuid().ToString("N"));
         var paths = new AppPaths(root);
@@ -80,11 +80,50 @@ public class DocumentStoreTests
             }
         ]);
 
-        await store.DeleteAsync(document.Id);
+        await store.PurgeAsync(document.Id);
 
         Assert.Empty(await store.GetAllAsync());
         Assert.Empty(await store.GetPagesAsync(document.Id));
         Assert.False(Directory.Exists(paths.DocumentDirectory(document.Id)));
+    }
+
+    [Fact]
+    public async Task SoftDelete_hides_from_GetAll_and_moves_it_to_GetTrashed_without_touching_files()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-softdel-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        var id = Guid.NewGuid();
+        var document = new CaptureDocument
+        {
+            Id = id,
+            OriginalFileName = "trashed.pdf",
+            StoredPath = paths.DocumentOriginalPath(id, "trashed.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.Exported,
+            PageCount = 1
+        };
+        Directory.CreateDirectory(paths.DocumentDirectory(id));
+        File.WriteAllText(document.StoredPath, "x");
+        await store.SaveAsync(document, []);
+
+        await store.SoftDeleteAsync(id);
+
+        Assert.Empty(await store.GetAllAsync());
+        var trashed = Assert.Single(await store.GetTrashedAsync());
+        Assert.Equal(id, trashed.Id);
+        Assert.NotNull(trashed.DeletedUtc);
+        Assert.True(Directory.Exists(paths.DocumentDirectory(id))); // soft delete never touches files
+
+        await store.RestoreAsync(id);
+
+        var restored = Assert.Single(await store.GetAllAsync());
+        Assert.Equal(id, restored.Id);
+        Assert.Null(restored.DeletedUtc);
+        Assert.Empty(await store.GetTrashedAsync());
     }
 
     [Fact]
@@ -109,5 +148,98 @@ public class DocumentStoreTests
         await store.SaveAsync(document, []);
         var loaded = Assert.Single(await store.GetAllAsync());
         Assert.Equal(batch.Id, loaded.BatchId);
+    }
+
+    [Fact]
+    public async Task ContentHash_roundtrips_through_save_and_update()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-hash-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        var document = new CaptureDocument
+        {
+            OriginalFileName = "hashed.pdf",
+            StoredPath = Path.Combine(root, "hashed.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.NeedsReview,
+            PageCount = 1,
+            ContentHash = "AAAABBBBCCCCDDDD"
+        };
+        await store.SaveAsync(document, []);
+
+        var saved = Assert.Single(await store.GetAllAsync());
+        Assert.Equal("AAAABBBBCCCCDDDD", saved.ContentHash);
+
+        saved.ContentHash = "1111222233334444";
+        await store.UpdateAsync(saved);
+
+        var updated = await store.GetAsync(document.Id);
+        Assert.NotNull(updated);
+        Assert.Equal("1111222233334444", updated!.ContentHash);
+    }
+
+    [Fact]
+    public async Task FindByContentHashAsync_finds_active_matches_and_excludes_trashed_ones()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-hashfind-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        const string hash = "SHAREDHASHVALUE";
+
+        var active = new CaptureDocument
+        {
+            OriginalFileName = "active.pdf",
+            StoredPath = Path.Combine(root, "active.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.NeedsReview,
+            PageCount = 1,
+            ContentHash = hash
+        };
+        var trashed = new CaptureDocument
+        {
+            OriginalFileName = "trashed.pdf",
+            StoredPath = Path.Combine(root, "trashed.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.NeedsReview,
+            PageCount = 1,
+            ContentHash = hash
+        };
+        var unrelated = new CaptureDocument
+        {
+            OriginalFileName = "unrelated.pdf",
+            StoredPath = Path.Combine(root, "unrelated.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.NeedsReview,
+            PageCount = 1,
+            ContentHash = "SOMETHINGELSE"
+        };
+
+        await store.SaveAsync(active, []);
+        await store.SaveAsync(trashed, []);
+        await store.SaveAsync(unrelated, []);
+        await store.SoftDeleteAsync(trashed.Id);
+
+        var matches = await store.FindByContentHashAsync(hash);
+
+        var match = Assert.Single(matches);
+        Assert.Equal(active.Id, match.Id);
+    }
+
+    [Fact]
+    public async Task FindByContentHashAsync_returns_empty_for_a_null_or_empty_hash()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-hashempty-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        Assert.Empty(await store.FindByContentHashAsync(string.Empty));
     }
 }

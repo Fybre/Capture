@@ -23,6 +23,16 @@ public sealed partial class DocumentRow : ObservableObject
     [ObservableProperty]
     private bool _batchAccent;
 
+    /// <summary>Set by MainViewModel.RefreshDuplicateFlags — true when another active document shares
+    /// this document's ContentHash. Derived on the fly rather than persisted, so it can't go stale when
+    /// the matching document is later removed/restored/re-imported.</summary>
+    [ObservableProperty]
+    private bool _isDuplicate;
+
+    /// <summary>Tooltip text for the duplicate indicator — empty when <see cref="IsDuplicate"/> is false.</summary>
+    [ObservableProperty]
+    private string _duplicateTooltip = string.Empty;
+
     public int ConfidenceThreshold { get; set; } = 80;
 
     public string? Locale { get; set; }

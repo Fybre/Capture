@@ -98,6 +98,10 @@ public sealed class SqliteDocumentStore : IDocumentStore
             .ConfigureAwait(false);
         await TryAddColumnAsync(connection, "documents", "redaction_error", "TEXT", cancellationToken)
             .ConfigureAwait(false);
+        await TryAddColumnAsync(connection, "documents", "deleted_utc", "TEXT", cancellationToken)
+            .ConfigureAwait(false);
+        await TryAddColumnAsync(connection, "documents", "content_hash", "TEXT", cancellationToken)
+            .ConfigureAwait(false);
         await BackfillBatchesAsync(connection, cancellationToken).ConfigureAwait(false);
         await BackfillBatchNumbersAsync(connection, cancellationToken).ConfigureAwait(false);
     }
@@ -205,8 +209,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
         {
             upsert.Transaction = (SqliteTransaction)transaction;
             upsert.CommandText = """
-                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error)
-                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError)
+                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error, content_hash)
+                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError, $contentHash)
                 ON CONFLICT(id) DO UPDATE SET
                   original_file_name = excluded.original_file_name,
                   stored_path = excluded.stored_path,
@@ -218,7 +222,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
                   error_message = excluded.error_message,
                   redaction_status = excluded.redaction_status,
                   redacted_path = excluded.redacted_path,
-                  redaction_error = excluded.redaction_error;
+                  redaction_error = excluded.redaction_error,
+                  content_hash = excluded.content_hash;
                 """;
             AddDocumentParameters(upsert, document);
             await upsert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -260,7 +265,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
               error_message = $error,
               redaction_status = $redactionStatus,
               redacted_path = $redactedPath,
-              redaction_error = $redactionError
+              redaction_error = $redactionError,
+              content_hash = $contentHash
             WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", document.Id.ToString("D"));
@@ -273,17 +279,22 @@ public sealed class SqliteDocumentStore : IDocumentStore
         command.Parameters.AddWithValue("$redactionStatus", (int)document.RedactionStatus);
         command.Parameters.AddWithValue("$redactedPath", (object?)document.RedactedPath ?? DBNull.Value);
         command.Parameters.AddWithValue("$redactionError", (object?)document.RedactionError ?? DBNull.Value);
+        command.Parameters.AddWithValue("$contentHash", (object?)document.ContentHash ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    // deleted_utc IS NULL — every existing caller (the normal document list) implicitly excludes
+    // soft-deleted (trashed) documents now, with no call-site changes needed. See GetTrashedAsync for
+    // the mirror query.
     public async Task<IReadOnlyList<CaptureDocument>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error
+            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error, d.deleted_utc, d.content_hash
             FROM documents d
             LEFT JOIN batches b ON b.id = d.batch_id
+            WHERE d.deleted_utc IS NULL
             ORDER BY IFNULL(b.created_utc, d.created_utc), d.created_utc, d.id;
             """;
 
@@ -295,12 +306,36 @@ public sealed class SqliteDocumentStore : IDocumentStore
         return results;
     }
 
+    /// <summary>The mirror of <see cref="GetAllAsync"/> — every soft-deleted (trashed) document,
+    /// newest-deleted first, for the Trash view.</summary>
+    public async Task<IReadOnlyList<CaptureDocument>> GetTrashedAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash
+            FROM documents
+            WHERE deleted_utc IS NOT NULL
+            ORDER BY deleted_utc DESC;
+            """;
+
+        var results = new List<CaptureDocument>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            results.Add(ReadDocument(reader));
+
+        return results;
+    }
+
+    // Deliberately not filtered on deleted_utc — a trashed document still needs to be individually
+    // fetchable (by Restore/Purge and any internal consistency checks), it's just excluded from the
+    // normal list (GetAllAsync).
     public async Task<CaptureDocument?> GetAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash
             FROM documents
             WHERE id = $id;
             """;
@@ -308,6 +343,32 @@ public sealed class SqliteDocumentStore : IDocumentStore
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadDocument(reader) : null;
+    }
+
+    // Excludes trashed documents (deleted_utc IS NULL) — a soft-deleted document should never cause an
+    // active re-import to be treated as a duplicate, and shouldn't show up as one either. A null/empty
+    // hash intentionally matches nothing (see the interface doc comment).
+    public async Task<IReadOnlyList<CaptureDocument>> FindByContentHashAsync(string contentHash, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(contentHash))
+            return Array.Empty<CaptureDocument>();
+
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash
+            FROM documents
+            WHERE content_hash = $hash AND deleted_utc IS NULL
+            ORDER BY created_utc;
+            """;
+        command.Parameters.AddWithValue("$hash", contentHash);
+
+        var results = new List<CaptureDocument>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            results.Add(ReadDocument(reader));
+
+        return results;
     }
 
     public async Task<IReadOnlyList<DocumentPage>> GetPagesAsync(
@@ -431,7 +492,11 @@ public sealed class SqliteDocumentStore : IDocumentStore
         return Math.Max(1, count);
     }
 
-    public async Task DeleteAsync(Guid documentId, CancellationToken cancellationToken = default)
+    // The real, permanent removal — deletes the DB rows, the on-disk document directory, and cascades
+    // an empty-batch cleanup. Formerly named DeleteAsync; renamed once SoftDeleteAsync/RestoreAsync
+    // existed, so every call site had to make an explicit choice between "reversible" and "gone for
+    // good" rather than silently keeping whatever a generically-named DeleteAsync used to mean.
+    public async Task PurgeAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
@@ -471,6 +536,31 @@ public sealed class SqliteDocumentStore : IDocumentStore
 
         if (batchId is { } id)
             await DeleteEmptyBatchAsync(id, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Reversible removal — every "delete a document" action a reviewer takes goes through this
+    // instead of PurgeAsync now (Remove, RemoveAfterExport, both cleanup sweeps). Touches no files and
+    // no batch — a trashed document might still be restored back into its batch, so batch-emptiness
+    // cleanup only happens on the real PurgeAsync.
+    public async Task SoftDeleteAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE documents SET deleted_utc = $deleted WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", documentId.ToString("D"));
+        command.Parameters.AddWithValue("$deleted", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Undoes <see cref="SoftDeleteAsync"/> — the document reappears in <see cref="GetAllAsync"/>
+    /// exactly as it was, since nothing about it was ever touched besides the one column.</summary>
+    public async Task RestoreAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE documents SET deleted_utc = NULL WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", documentId.ToString("D"));
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteEmptyBatchAsync(Guid batchId, CancellationToken cancellationToken = default)
@@ -517,6 +607,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         command.Parameters.AddWithValue("$redactionStatus", (int)document.RedactionStatus);
         command.Parameters.AddWithValue("$redactedPath", (object?)document.RedactedPath ?? DBNull.Value);
         command.Parameters.AddWithValue("$redactionError", (object?)document.RedactionError ?? DBNull.Value);
+        command.Parameters.AddWithValue("$contentHash", (object?)document.ContentHash ?? DBNull.Value);
     }
 
     private static CaptureDocument ReadDocument(SqliteDataReader reader)
@@ -538,7 +629,11 @@ public sealed class SqliteDocumentStore : IDocumentStore
                 ? (RedactionStatus)reader.GetInt32(10)
                 : RedactionStatus.None,
             RedactedPath = reader.FieldCount > 11 && !reader.IsDBNull(11) ? reader.GetString(11) : null,
-            RedactionError = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : null
+            RedactionError = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : null,
+            DeletedUtc = reader.FieldCount > 13 && !reader.IsDBNull(13)
+                ? DateTimeOffset.Parse(reader.GetString(13), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                : null,
+            ContentHash = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetString(14) : null
         };
     }
 }

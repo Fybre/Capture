@@ -131,27 +131,48 @@ public partial class MainViewModel
     }
 
     /// <summary>Runs at each app startup and whenever Settings is saved (both via ApplyWatchAsync) — see
-    /// WatchSettings.AutoDeleteExportedDocuments. Distinct from Settings' "Clean up now" button
-    /// (SettingsViewModel.CleanUpOldDocumentsAsync), which is an immediate, unconditional, user-initiated
-    /// sweep rather than this age-gated automatic one.</summary>
+    /// WatchSettings.AutoDeleteExportedDocuments and WatchSettings.TrashRetentionDays. Distinct from
+    /// Settings' "Clean up now" button (SettingsViewModel.CleanUpOldDocumentsAsync), which is an
+    /// immediate, unconditional, user-initiated sweep rather than these age-gated automatic ones. The
+    /// exported-document sweep now soft-deletes (reversible, via Trash) rather than purging outright;
+    /// the trash sweep below is what actually removes anything for good, once it's past retention.</summary>
     private async Task RunAutoCleanupIfEnabledAsync()
     {
-        if (!_watchSettings.AutoDeleteExportedDocuments)
-            return;
+        var reloadNeeded = false;
 
-        var stale = DocumentCleanup.SelectStale(
-            await _store.GetAllAsync().ConfigureAwait(true),
-            _watchSettings.AutoDeleteExportedDocumentsAfterDays,
+        if (_watchSettings.AutoDeleteExportedDocuments)
+        {
+            var stale = DocumentCleanup.SelectStale(
+                await _store.GetAllAsync().ConfigureAwait(true),
+                _watchSettings.AutoDeleteExportedDocumentsAfterDays,
+                DateTimeOffset.Now);
+            if (stale.Count > 0)
+            {
+                foreach (var document in stale)
+                    await _store.SoftDeleteAsync(document.Id).ConfigureAwait(true);
+
+                Trace.TraceInformation(
+                    $"Auto-cleanup trashed {stale.Count} exported document(s) older than {_watchSettings.AutoDeleteExportedDocumentsAfterDays} day(s)");
+                reloadNeeded = true;
+            }
+        }
+
+        var expiredTrash = DocumentCleanup.SelectExpiredTrash(
+            await _store.GetTrashedAsync().ConfigureAwait(true),
+            _watchSettings.TrashRetentionDays,
             DateTimeOffset.Now);
-        if (stale.Count == 0)
-            return;
+        if (expiredTrash.Count > 0)
+        {
+            foreach (var document in expiredTrash)
+                await _store.PurgeAsync(document.Id).ConfigureAwait(true);
 
-        foreach (var document in stale)
-            await _store.DeleteAsync(document.Id).ConfigureAwait(true);
+            Trace.TraceInformation(
+                $"Trash purged {expiredTrash.Count} document(s) past the {_watchSettings.TrashRetentionDays}-day retention period");
+            reloadNeeded = true;
+        }
 
-        Trace.TraceInformation(
-            $"Auto-cleanup removed {stale.Count} exported document(s) older than {_watchSettings.AutoDeleteExportedDocumentsAfterDays} day(s)");
-        await ReloadDocumentsAsync().ConfigureAwait(true);
+        if (reloadNeeded)
+            await ReloadDocumentsAsync().ConfigureAwait(true);
     }
 
     private static void ApplyTheme(AppTheme theme)

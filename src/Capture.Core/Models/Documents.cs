@@ -44,6 +44,19 @@ public sealed class CaptureDocument
     public RedactionStatus RedactionStatus { get; set; } = RedactionStatus.None;
     public string? RedactedPath { get; set; }
     public string? RedactionError { get; set; }
+
+    /// <summary>Null means active. Set by <c>IDocumentStore.SoftDeleteAsync</c> — the document still
+    /// exists (row + on-disk files intact) but is excluded from <c>GetAllAsync</c> and shown in the
+    /// Trash view instead, until <c>RestoreAsync</c> or a real <c>PurgeAsync</c>.</summary>
+    public DateTimeOffset? DeletedUtc { get; set; }
+
+    /// <summary>SHA-256 (hex) of the original source file's bytes, computed once at import time — see
+    /// <c>MainViewModel.ImportPathsAsync</c>. Null for documents imported before this existed, and for
+    /// scanned documents (no single source file to hash). Used by <c>IDocumentStore.FindByContentHashAsync</c>
+    /// to detect a re-imported file; "duplicate" itself is derived by comparing this against other
+    /// active documents' hashes on the fly, not stored as its own flag, so it never goes stale if the
+    /// document(s) it matches are later removed, restored, or re-imported.</summary>
+    public string? ContentHash { get; set; }
 }
 
 public sealed class DocumentPage

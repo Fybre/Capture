@@ -41,7 +41,103 @@ public partial class MainViewModel
 
     public bool HasMultipleSelectedDocuments => SelectedDocuments.Count > 1;
 
-    private bool CanActOnSelected() => !IsBusy && GetActingRows().Count > 0;
+    /// <summary>Table mode's Trash toggle — swaps what <see cref="ReloadDocumentsAsync"/> loads into
+    /// <see cref="MainViewModel.Documents"/> between the normal list and every soft-deleted document
+    /// (<c>IDocumentStore.GetTrashedAsync</c>), reusing the same collection, grouping, and selection
+    /// machinery rather than introducing a parallel Trash-specific view. While true, every normal
+    /// bulk action's CanExecute is gated off (see CanActOnSelected/CanMergeSelectedDocuments/
+    /// CanMarkReady/CanExport/CanExportAll) — only Restore/Delete permanently are available.</summary>
+    // See RefreshSelectionDependentCommands, called from this property's own OnShowTrashChanged below —
+    // no NotifyCanExecuteChangedFor attributes needed here for the same reason SelectedDocument has none.
+    [ObservableProperty]
+    private bool _showTrash;
+
+    partial void OnShowTrashChanged(bool value)
+    {
+        SelectedDocuments.Clear();
+        SelectedDocument = null;
+        RefreshSelectionDependentCommands();
+        _ = ReloadDocumentsAsync();
+    }
+
+    [RelayCommand]
+    private void ToggleTrashView() => ShowTrash = !ShowTrash;
+
+    private bool CanActOnSelected() => !IsBusy && !ShowTrash && GetActingRows().Count > 0;
+
+    private bool CanActOnTrash() => !IsBusy && ShowTrash && GetActingRows().Count > 0;
+
+    /// <summary>Undoes a soft delete — the document reappears in the normal list exactly as it was.</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnTrash))]
+    private async Task RestoreSelectedTrashAsync()
+    {
+        var rows = GetActingRows();
+        if (rows.Count == 0)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            foreach (var row in rows)
+                await _store.RestoreAsync(row.Id).ConfigureAwait(true);
+
+            await ReloadDocumentsAsync().ConfigureAwait(true);
+            StatusText = $"Restored {rows.Count} document(s)";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>The real, permanent removal from Trash — unlike every other place a document gets
+    /// removed in this app (see SoftDeleteAsync call sites elsewhere), this one has no undo, so it's
+    /// the one deletion path that still confirms first.</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnTrash))]
+    private async Task PurgeSelectedTrashAsync()
+    {
+        var rows = GetActingRows();
+        if (rows.Count == 0)
+            return;
+
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var confirmed = await _confirm.ConfirmAsync(
+            host,
+            "Delete permanently?",
+            $"This permanently deletes {rows.Count} document(s) from Trash, including their original files. This can't be undone.",
+            confirmText: "Delete permanently",
+            cancelText: "Cancel");
+        if (!confirmed)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            foreach (var row in rows)
+                await _store.PurgeAsync(row.Id).ConfigureAwait(true);
+
+            await ReloadDocumentsAsync().ConfigureAwait(true);
+            StatusText = $"Permanently deleted {rows.Count} document(s)";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(CanActOnSelected))]
     private async Task ApplySelectedProfileAsync(IndexingProfile? profile)
@@ -91,7 +187,7 @@ public partial class MainViewModel
         {
             foreach (var row in rows)
             {
-                await _store.DeleteAsync(row.Id).ConfigureAwait(true);
+                await _store.SoftDeleteAsync(row.Id).ConfigureAwait(true);
                 Documents.Remove(row);
                 SelectedDocuments.Remove(row);
             }
@@ -128,7 +224,7 @@ public partial class MainViewModel
         }
     }
 
-    private bool CanMergeSelectedDocuments() => !IsBusy && GetActingRows().Count > 1;
+    private bool CanMergeSelectedDocuments() => !IsBusy && !ShowTrash && GetActingRows().Count > 1;
 
     [RelayCommand(CanExecute = nameof(CanMergeSelectedDocuments))]
     private async Task MergeSelectedDocumentsAsync()
@@ -303,6 +399,7 @@ public partial class MainViewModel
 
     private bool CanMarkReady() =>
         !IsBusy
+        && !ShowTrash
         && SelectedDocument is not null
         && SelectedDocument.Indexes.Any(index => !index.HideFromIndexing && !index.IsReadOnly)
         && SelectedDocument.Indexes.Where(index => !index.HideFromIndexing && !index.IsReadOnly).All(index => !index.IsMissing);
@@ -310,6 +407,7 @@ public partial class MainViewModel
     async partial void OnSelectedDocumentChanged(DocumentRow? value)
     {
         IsAddingManualRedaction = false;
+        RefreshSelectionDependentCommands();
         LoadReviewIndexes(value);
         await LoadRedactionCandidatesAsync(value);
         ApplyRedactionsCommand.NotifyCanExecuteChanged();
@@ -449,6 +547,42 @@ public partial class MainViewModel
 
             row.BatchAccent = accent;
         }
+
+        RefreshDuplicateFlags();
+    }
+
+    // Bundled into RefreshBatchAccents (called from it) rather than given its own separate call sites —
+    // every place a document's presence/hash could plausibly have changed already calls
+    // RefreshBatchAccents, so piggybacking here means IsDuplicate can never go stale the way a
+    // separately-wired derived flag could if a new trigger point were missed.
+    private void RefreshDuplicateFlags()
+    {
+        var groups = Documents
+            .Where(row => !string.IsNullOrEmpty(row.Document.ContentHash))
+            .GroupBy(row => row.Document.ContentHash!)
+            .Where(group => group.Count() > 1)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        foreach (var row in Documents)
+        {
+            if (row.Document.ContentHash is { } hash && groups.TryGetValue(hash, out var duplicates))
+            {
+                var others = duplicates
+                    .Where(item => item.Id != row.Id)
+                    .Select(item => item.FileName)
+                    .Distinct()
+                    .ToList();
+                row.IsDuplicate = true;
+                row.DuplicateTooltip = others.Count == 1
+                    ? $"Matches an already-imported document: {others[0]}"
+                    : $"Matches {others.Count} other already-imported document(s)";
+            }
+            else
+            {
+                row.IsDuplicate = false;
+                row.DuplicateTooltip = string.Empty;
+            }
+        }
     }
 
     private void RefreshDocumentGroups()
@@ -528,20 +662,11 @@ public partial class MainViewModel
     private void OnDocumentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasNoDocuments));
-        ExportCommand.NotifyCanExecuteChanged();
-        ExportAllCommand.NotifyCanExecuteChanged();
+        RefreshSelectionDependentCommands();
     }
 
     private void OnSelectedDocumentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        OnPropertyChanged(nameof(HasSelectedDocuments));
-        OnPropertyChanged(nameof(SelectedDocumentsSummary));
-        OnPropertyChanged(nameof(HasMultipleSelectedDocuments));
-        ApplySelectedProfileCommand.NotifyCanExecuteChanged();
-        RemoveSelectedCommand.NotifyCanExecuteChanged();
-        MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
-        RedactSelectedCommand.NotifyCanExecuteChanged();
-        MarkSelectedReadyCommand.NotifyCanExecuteChanged();
-        ExportCommand.NotifyCanExecuteChanged();
+        RefreshSelectionDependentCommands();
     }
 }

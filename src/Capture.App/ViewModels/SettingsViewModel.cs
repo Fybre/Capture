@@ -81,6 +81,8 @@ public partial class SettingsViewModel : ViewModelBase
 
     public IReadOnlyList<NoBatchProfileBehavior> NoBatchProfileBehaviorOptions { get; } = Enum.GetValues<NoBatchProfileBehavior>();
 
+    public IReadOnlyList<DuplicateImportBehavior> DuplicateImportBehaviorOptions { get; } = Enum.GetValues<DuplicateImportBehavior>();
+
     public ObservableCollection<IndexingProfile> Profiles { get; } = [];
 
     public ObservableCollection<BatchProfile> BatchProfiles { get; } = [];
@@ -102,6 +104,10 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private NoBatchProfileBehavior _noBatchProfileBehavior = NoBatchProfileBehavior.NewBatchPerFile;
+
+    /// <summary>See WatchSettings.DuplicateImportBehavior.</summary>
+    [ObservableProperty]
+    private DuplicateImportBehavior _duplicateImportBehavior = DuplicateImportBehavior.ImportAnyway;
 
     [ObservableProperty]
     private bool _debugMode;
@@ -349,8 +355,10 @@ public partial class SettingsViewModel : ViewModelBase
         StartView = settings.StartView;
         Theme = settings.Theme;
         NoBatchProfileBehavior = settings.NoBatchProfileBehavior;
+        DuplicateImportBehavior = settings.DuplicateImportBehavior;
         AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
         CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
+        TrashRetentionDays = settings.TrashRetentionDays;
         DebugMode = settings.DebugMode;
         CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
         AllowFieldScripts = settings.AllowFieldScripts;
@@ -710,8 +718,10 @@ public partial class SettingsViewModel : ViewModelBase
             StartView = StartView,
             Theme = Theme,
             NoBatchProfileBehavior = NoBatchProfileBehavior,
+            DuplicateImportBehavior = DuplicateImportBehavior,
             AutoDeleteExportedDocuments = AutoDeleteExportedDocuments,
             AutoDeleteExportedDocumentsAfterDays = Math.Max(1, CleanupOlderThanDays),
+            TrashRetentionDays = Math.Max(1, TrashRetentionDays),
             DebugMode = DebugMode,
             CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
             AllowFieldScripts = AllowFieldScripts,
@@ -751,6 +761,10 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private int _cleanupOlderThanDays = 30;
 
+    /// <summary>See WatchSettings.TrashRetentionDays.</summary>
+    [ObservableProperty]
+    private int _trashRetentionDays = 30;
+
     /// <summary>Deletes every already-exported document immediately, regardless of age — deliberately
     /// never touches anything still needing attention (NeedsReview, Ready-but-not-yet-exported, Error,
     /// Processing/Queued), since this runs against documents the reviewer isn't looking at one by one,
@@ -775,14 +789,14 @@ public partial class SettingsViewModel : ViewModelBase
         var confirmed = await _confirm.ConfirmAsync(
             host,
             "Delete all exported documents?",
-            $"This permanently deletes all {exported.Count} exported document(s), including their original files, regardless of how recent they are. Documents still needing review, or not yet exported, are never included. This can't be undone.",
+            $"This moves all {exported.Count} exported document(s) to Trash, regardless of how recent they are. Documents still needing review, or not yet exported, are never included. Restore them from Trash (Table mode) any time before the retention period passes.",
             confirmText: "Delete",
             cancelText: "Cancel");
         if (!confirmed)
             return;
 
         foreach (var document in exported)
-            await _documents.DeleteAsync(document.Id);
+            await _documents.SoftDeleteAsync(document.Id);
 
         DocumentsChanged = true;
         StatusText = $"Deleted {exported.Count} document(s)";
@@ -856,8 +870,10 @@ public partial class SettingsViewModel : ViewModelBase
             StartView = settings.StartView;
             Theme = settings.Theme;
             NoBatchProfileBehavior = settings.NoBatchProfileBehavior;
+            DuplicateImportBehavior = settings.DuplicateImportBehavior;
             AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
             CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
+            TrashRetentionDays = settings.TrashRetentionDays;
             DebugMode = settings.DebugMode;
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
             AllowFieldScripts = settings.AllowFieldScripts;

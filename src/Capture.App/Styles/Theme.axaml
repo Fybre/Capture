@@ -107,6 +107,7 @@
       <StreamGeometry x:Key="IconAddZone">M8 3v10M3 8h10 M3 3h1M12 3h1M3 12h1M12 12h1</StreamGeometry>
       <StreamGeometry x:Key="IconPreviewMode">M2 2.5h4.5v11H2zM7.7 2.5h6.3v11H7.7z</StreamGeometry>
       <StreamGeometry x:Key="IconTableMode">M2 3h12v10H2zM2 6.5h12M6.3 6.5v6.5M10.6 6.5v6.5</StreamGeometry>
+      <StreamGeometry x:Key="IconRestore">M3.5 8a4.5 4.5 0 114.5 4.5H6.5M3.5 8L2 6.3M3.5 8l1.7-1.5</StreamGeometry>
     </ResourceDictionary>
   </Styles.Resources>
 
