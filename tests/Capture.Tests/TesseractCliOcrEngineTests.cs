@@ -9,10 +9,10 @@ public sealed class TesseractCliOcrEngineTests : IDisposable
     [Fact]
     public void ResolveExecutable_prefers_configured_then_bundled_then_path_then_well_known()
     {
-        var configured = CreateFile("configured/tesseract");
-        var bundled = CreateFile($"app/{ExecutableName}");
-        var fromPath = CreateFile($"path/{ExecutableName}");
-        var wellKnown = CreateFile("well-known/tesseract");
+        var configured = CreateFile(Path.Combine("configured", "tesseract"));
+        var bundled = CreateFile(Path.Combine("app", ExecutableName));
+        var fromPath = CreateFile(Path.Combine("path", ExecutableName));
+        var wellKnown = CreateFile(Path.Combine("well-known", "tesseract"));
         var appDirectory = Path.GetDirectoryName(bundled)!;
         var pathDirectory = Path.GetDirectoryName(fromPath)!;
 
@@ -31,7 +31,7 @@ public sealed class TesseractCliOcrEngineTests : IDisposable
     [Fact]
     public void ResolveTessdataDir_returns_only_an_existing_sibling_directory()
     {
-        var executable = CreateFile($"app/{ExecutableName}");
+        var executable = CreateFile(Path.Combine("app", ExecutableName));
 
         Assert.Null(TesseractCliOcrEngine.ResolveTessdataDir(executable));
 
