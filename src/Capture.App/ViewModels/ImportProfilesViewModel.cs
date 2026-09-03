@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Capture.App.Services;
 using Capture.Core.Import;
+using Capture.Core.Indexing;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -17,6 +18,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
     private readonly IPdfRasterizer _pdfRasterizer;
     private readonly IImagePageImporter _imageImporter;
     private readonly IToastService _toasts;
+    private readonly IBarcodeDecoder? _barcodes;
 
     public ImportProfilesViewModel(
         IImportProfileStore store,
@@ -25,7 +27,8 @@ public partial class ImportProfilesViewModel : ViewModelBase
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
-        IToastService toasts)
+        IToastService toasts,
+        IBarcodeDecoder? barcodes = null)
     {
         _store = store;
         _profileStore = profileStore;
@@ -34,6 +37,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
         _pdfRasterizer = pdfRasterizer;
         _imageImporter = imageImporter;
         _toasts = toasts;
+        _barcodes = barcodes;
     }
 
     public ObservableCollection<ImportProfile> Profiles { get; } = [];
@@ -116,7 +120,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
     private async Task OpenDesignerAsync(ImportProfile profile, bool isNew)
     {
         var designer = new ImportProfileDesignerViewModel(
-            profile, isNew, _store, _profileStore, _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts)
+            profile, isNew, _store, _profileStore, _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes)
         {
             CloseCommand = CloseDesignerCommand
         };

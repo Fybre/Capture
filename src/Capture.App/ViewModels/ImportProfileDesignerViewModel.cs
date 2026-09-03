@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using Capture.App.Services;
 using Capture.Core.Import;
+using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
@@ -25,6 +27,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     private readonly IPdfRasterizer _pdfRasterizer;
     private readonly IImagePageImporter _imageImporter;
     private readonly IToastService _toasts;
+    private readonly IBarcodeDecoder? _barcodes;
     private readonly List<string> _pageImagePaths = [];
     private int _loadGeneration;
 
@@ -37,7 +40,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
-        IToastService toasts)
+        IToastService toasts,
+        IBarcodeDecoder? barcodes = null)
     {
         Profile = profile;
         IsNew = isNew;
@@ -48,6 +52,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         _pdfRasterizer = pdfRasterizer;
         _imageImporter = imageImporter;
         _toasts = toasts;
+        _barcodes = barcodes;
 
         _name = profile.Name;
         _trigger = profile.Trigger;
@@ -322,7 +327,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         };
         Profile.BarcodePageNumber = CurrentPageNumber;
         RefreshHighlights();
-        StatusText = "Barcode zone set";
+        DetectBarcode();
     }
 
     [RelayCommand]
@@ -339,6 +344,33 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         zone.PageNumber = CurrentPageNumber;
         Profile.BarcodePageNumber = CurrentPageNumber;
         RefreshHighlights();
+        DetectBarcode();
+    }
+
+    // Attempts to decode a real barcode from the zone just drawn/adjusted and pre-fills the
+    // type/value fields from what's actually there, since typing a symbology and an exact regex by
+    // hand is unnecessary busywork when a real sample is right in front of the user. Both fields stay
+    // freely editable/clearable afterward — this only ever sets a starting point, never something the
+    // user is locked into.
+    private void DetectBarcode()
+    {
+        if (_barcodes is null || Profile.BarcodeZone is null)
+            return;
+
+        var pageIndex = CurrentPageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
+            return;
+
+        var decoded = _barcodes.Decode(_pageImagePaths[pageIndex], Profile.BarcodeZone);
+        if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
+        {
+            StatusText = "Barcode zone set — no barcode detected there; enter the type/value manually if needed";
+            return;
+        }
+
+        BarcodeFormat = decoded.Format;
+        BarcodeValuePattern = $"^{Regex.Escape(decoded.Text)}$";
+        StatusText = $"Detected {BarcodePatterns.DisplayType(decoded.Format)}: {decoded.Text}";
     }
 
     [RelayCommand]
