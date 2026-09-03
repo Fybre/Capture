@@ -128,7 +128,7 @@ public partial class MainViewModel
             IsBusy = true;
         try
         {
-            profile ??= SelectedImportProfile;
+            profile ??= SelectedIndexingProfile;
 
             var selectedBatchProfile = watchFolderEntry is not null
                 ? (watchFolderEntry.BatchProfileId is { } bpId
@@ -136,6 +136,11 @@ public partial class MainViewModel
                     : null)
                 : SelectedBatchProfile;
             var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
+            var importProfile = watchFolderEntry is not null
+                ? (watchFolderEntry.ImportProfileId is { } ipId
+                    ? ImportProfiles.FirstOrDefault(item => item.Id == ipId)
+                    : null)
+                : SelectedImportProfile;
             var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
             var resumeBatch = watchFolderEntry is null && keepsBatchOpen
                 ? _lastManualBatch
@@ -166,7 +171,7 @@ public partial class MainViewModel
 
                     var dpi = imageDpiByPath?.GetValueOrDefault(path);
                     var imported = await _importer.ImportAsync(
-                            path, source, profile, batchProfile, importProfile: null, imageDpiOverride: dpi)
+                            path, source, profile, batchProfile, importProfile, imageDpiOverride: dpi)
                         .ConfigureAwait(true);
                     var (fileLast, failed) = await MaterializeImportedAsync(
                             imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true, contentHash)
@@ -296,7 +301,8 @@ public partial class MainViewModel
     {
         try
         {
-            var profile = SelectedImportProfile;
+            var profile = SelectedIndexingProfile;
+            var importProfile = SelectedImportProfile;
             var batchProfile = BatchProfileResolver.Resolve(SelectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
             var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
             var resumeBatch = keepsBatchOpen ? _lastManualBatch : null;
@@ -310,7 +316,7 @@ public partial class MainViewModel
             IReadOnlyList<ImportedDocument> imported;
             try
             {
-                imported = await _importer.ImportScannedPagesAsync(pages, source, profile, batchProfile, importProfile: null)
+                imported = await _importer.ImportScannedPagesAsync(pages, source, profile, batchProfile, importProfile)
                     .ConfigureAwait(true);
             }
             catch (Exception ex)

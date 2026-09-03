@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Capture.App.Services;
 using Capture.Core.Batches;
+using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
@@ -24,6 +25,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IWatchSettingsStore _store;
     private readonly IProfileStore _profiles;
     private readonly IBatchProfileStore _batchProfiles;
+    private readonly IImportProfileStore _importProfiles;
     private readonly IAiFieldCatalogStore _catalogStore;
     private readonly IRedactionEntitySetStore _redactionEntitySets;
     private readonly IScanSource _scanSource;
@@ -44,6 +46,7 @@ public partial class SettingsViewModel : ViewModelBase
         IWatchSettingsStore store,
         IProfileStore profiles,
         IBatchProfileStore batchProfiles,
+        IImportProfileStore importProfiles,
         IAiFieldCatalogStore catalogStore,
         IRedactionEntitySetStore redactionEntitySets,
         IScanSource scanSource,
@@ -58,6 +61,7 @@ public partial class SettingsViewModel : ViewModelBase
         _store = store;
         _profiles = profiles;
         _batchProfiles = batchProfiles;
+        _importProfiles = importProfiles;
         _catalogStore = catalogStore;
         _redactionEntitySets = redactionEntitySets;
         _scanSource = scanSource;
@@ -86,6 +90,8 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<IndexingProfile> Profiles { get; } = [];
 
     public ObservableCollection<BatchProfile> BatchProfiles { get; } = [];
+
+    public ObservableCollection<ImportProfile> ImportProfiles { get; } = [];
 
     public bool Saved { get; private set; }
 
@@ -350,6 +356,10 @@ public partial class SettingsViewModel : ViewModelBase
         BatchProfiles.Clear();
         foreach (var batchProfile in await _batchProfiles.GetAllAsync())
             BatchProfiles.Add(batchProfile);
+
+        ImportProfiles.Clear();
+        foreach (var importProfile in await _importProfiles.GetAllAsync())
+            ImportProfiles.Add(importProfile);
 
         var settings = await _store.LoadAsync();
         StartView = settings.StartView;
@@ -652,6 +662,9 @@ public partial class SettingsViewModel : ViewModelBase
             SelectedProfile = entry.ProfileId is { } id ? Profiles.FirstOrDefault(profile => profile.Id == id) : null,
             SelectedBatchProfile = entry.BatchProfileId is { } batchId
                 ? BatchProfiles.FirstOrDefault(profile => profile.Id == batchId)
+                : null,
+            SelectedImportProfile = entry.ImportProfileId is { } importId
+                ? ImportProfiles.FirstOrDefault(profile => profile.Id == importId)
                 : null,
             BrowseRequested = OnBrowseWatchFolder,
             RemoveRequested = OnRemoveWatchFolder

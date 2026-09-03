@@ -3,6 +3,7 @@
         xmlns:vm="using:Capture.App.ViewModels"
         xmlns:profiles="using:Capture.Core.Profiles"
         xmlns:batches="using:Capture.Core.Batches"
+        xmlns:import="using:Capture.Core.Import"
         xmlns:redaction="using:Capture.Core.Redaction"
         xmlns:scanner="using:Capture.Scanner"
         xmlns:watch="using:Capture.Core.Watch"
@@ -149,6 +150,19 @@
                                                           HorizontalAlignment="Stretch">
                                                     <ComboBox.ItemTemplate>
                                                         <DataTemplate x:DataType="batches:BatchProfile">
+                                                            <TextBlock Text="{Binding Name}" />
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                            </StackPanel>
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="Import profile" Classes="field-label" />
+                                                <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).ImportProfiles}"
+                                                          SelectedItem="{Binding SelectedImportProfile}"
+                                                          PlaceholderText="None (no splitting)"
+                                                          HorizontalAlignment="Stretch">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="import:ImportProfile">
                                                             <TextBlock Text="{Binding Name}" />
                                                         </DataTemplate>
                                                     </ComboBox.ItemTemplate>

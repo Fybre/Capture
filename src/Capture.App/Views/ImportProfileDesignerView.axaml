@@ -1,0 +1,149 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Capture.App.ViewModels"
+             xmlns:controls="using:Capture.App.Controls"
+             x:Class="Capture.App.Views.ImportProfileDesignerView"
+             x:DataType="vm:ImportProfileDesignerViewModel">
+    <Grid RowDefinitions="Auto,*" Background="{DynamicResource GroundBrush}">
+        <Border Grid.Row="0"
+                Padding="16,10"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush1}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Command="{Binding CloseCommand}" Classes="ghost">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="12" Height="12" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" />
+                        <TextBlock Text="Back" />
+                    </StackPanel>
+                </Button>
+                <TextBox Grid.Column="1"
+                         Text="{Binding Name}"
+                         Watermark="Import profile name"
+                         Margin="12,0"
+                         VerticalAlignment="Center" />
+                <Button Grid.Column="2"
+                        Command="{Binding SaveCommand}"
+                        Classes="accent">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconSave}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round" />
+                        <TextBlock Text="Save" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="420,*">
+            <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24,16" Spacing="14" HorizontalAlignment="Stretch">
+
+                    <Border Classes="card" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Split incoming file when" Classes="section-title" />
+                            <ComboBox ItemsSource="{Binding TriggerOptions}"
+                                      SelectedItem="{Binding Trigger}"
+                                      HorizontalAlignment="Stretch" />
+
+                            <StackPanel Spacing="4" IsVisible="{Binding IsEveryNPages}">
+                                <TextBlock Text="Pages per document" Classes="field-label" />
+                                <NumericUpDown Value="{Binding PageCount}" Minimum="1" Maximum="500" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding IsBlankPage}">
+                                <TextBlock Text="Blank page ink threshold (%)" Classes="field-label" />
+                                <NumericUpDown Value="{Binding BlankInkPercent}" Minimum="0" Maximum="100" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding IsBarcode}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Barcode type" Classes="field-label" />
+                                    <ComboBox ItemsSource="{Binding BarcodeFormatOptions}"
+                                              SelectedItem="{Binding BarcodeFormat}"
+                                              PlaceholderText="Any format"
+                                              HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Barcode value to match" Classes="field-label" />
+                                    <TextBox Text="{Binding BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
+                                </StackPanel>
+                                <TextBlock Text="Load a sample document on the right and draw a rectangle around the barcode."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                            </StackPanel>
+
+                            <CheckBox Content="Discard the separator page"
+                                      IsChecked="{Binding DiscardSeparatorPage}"
+                                      IsVisible="{Binding !IsEveryNPages}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Classes="card" HorizontalAlignment="Stretch" IsVisible="{Binding IsBarcode}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Sample document" Classes="section-title" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Choose sample…" Command="{Binding ChangeSampleCommand}" />
+                                <TextBlock Text="{Binding SampleFileName}" VerticalAlignment="Center" Classes="field-label" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Classes="card" HorizontalAlignment="Stretch" Margin="0,0,0,40">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Valid indexing profiles" Classes="section-title" />
+                            <TextBlock Text="Which indexing profiles apply to documents this import profile produces. Leave all unchecked to allow any."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <ItemsControl ItemsSource="{Binding IndexingProfileOptions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:IndexingProfileOption">
+                                        <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="{DynamicResource CriticalBrush}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasStatusText}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid Grid.Column="1"
+                  RowDefinitions="Auto,*"
+                  Background="{DynamicResource SurfaceBrush}"
+                  IsVisible="{Binding IsBarcode}">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="12,10">
+                    <Button Classes="ghost nav" Command="{Binding PreviousPageCommand}">
+                        <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
+                    </Button>
+                    <TextBlock Grid.Column="1"
+                               Classes="mono"
+                               Text="{Binding PageLabel}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="12.5"
+                               FontWeight="Medium" />
+                    <Button Grid.Column="2" Classes="ghost nav" Command="{Binding NextPageCommand}">
+                        <Path Data="{StaticResource IconChevronRight}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
+                    </Button>
+                </Grid>
+                <Border Grid.Row="1"
+                        Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{DynamicResource BorderBrush1}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="12,0,12,10"
+                        ClipToBounds="True">
+                    <controls:PagePreview PageImage="{Binding PageImage}"
+                                          Highlights="{Binding Highlights}"
+                                          AllowDraw="True"
+                                          ZoneDrawnCommand="{Binding CompleteZoneCommand}"
+                                          ZoneChangedCommand="{Binding ChangeZoneCommand}"
+                                          Margin="8" />
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -39,8 +39,10 @@ public partial class MainViewModel : ViewModelBase
     private readonly ILatticeBuilder _latticeBuilder;
     private readonly IProfileDialogService _profiles;
     private readonly IBatchProfileDialogService _batchProfiles;
+    private readonly IImportProfileDialogService _importProfiles;
     private readonly IProfileStore _profileStore;
     private readonly IBatchProfileStore _batchProfileStore;
+    private readonly IImportProfileStore _importProfileStore;
     private readonly IProfileApplicator _applicator;
     private readonly IIndexValueStore _indexes;
     private readonly IWatchFolderService _watch;
@@ -73,8 +75,10 @@ public partial class MainViewModel : ViewModelBase
         ILatticeBuilder latticeBuilder,
         IProfileDialogService profiles,
         IBatchProfileDialogService batchProfiles,
+        IImportProfileDialogService importProfiles,
         IProfileStore profileStore,
         IBatchProfileStore batchProfileStore,
+        IImportProfileStore importProfileStore,
         IProfileApplicator applicator,
         IIndexValueStore indexes,
         IWatchFolderService watch,
@@ -106,8 +110,10 @@ public partial class MainViewModel : ViewModelBase
         _latticeBuilder = latticeBuilder;
         _profiles = profiles;
         _batchProfiles = batchProfiles;
+        _importProfiles = importProfiles;
         _profileStore = profileStore;
         _batchProfileStore = batchProfileStore;
+        _importProfileStore = importProfileStore;
         _applicator = applicator;
         _indexes = indexes;
         _watch = watch;

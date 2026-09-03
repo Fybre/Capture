@@ -81,6 +81,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IProfileDialogService, ProfileDialogService>();
         services.AddSingleton<IBatchProfileDialogService, BatchProfileDialogService>();
+        services.AddSingleton<IImportProfileDialogService, ImportProfileDialogService>();
         services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
         services.AddSingleton<IHelpWindowService, HelpWindowService>();
         services.AddSingleton<IAboutDialogService, AboutDialogService>();
@@ -98,6 +99,7 @@ public static class ServiceConfiguration
         services.AddSingleton<MainViewModel>();
         services.AddTransient<ProfilesViewModel>();
         services.AddTransient<BatchProfilesViewModel>();
+        services.AddTransient<ImportProfilesViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<ThereforeCategoryPickerViewModel>();
         return services;

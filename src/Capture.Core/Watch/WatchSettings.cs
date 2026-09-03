@@ -52,7 +52,15 @@ public sealed class WatchSettings
     /// errors) is written to a file for troubleshooting — see <c>IDebugLogService</c>.</summary>
     public bool DebugMode { get; set; }
 
+    /// <summary>Last selected <c>IndexingProfile</c> in the toolbar — named for what it now is, not the
+    /// toolbar picker's older label (see <see cref="LastImportProfileId"/> below for the newer, genuinely
+    /// import-flavored concept this name used to mean).</summary>
+    public Guid? LastIndexingProfileId { get; set; }
+
+    /// <summary>Last selected <c>ImportProfile</c> in the toolbar — how an incoming file gets split into
+    /// documents, independent of <see cref="LastIndexingProfileId"/>.</summary>
     public Guid? LastImportProfileId { get; set; }
+
     public Guid? LastBatchProfileId { get; set; }
 
     /// <summary>How to batch documents when a manual import has no BatchProfile selected, or a watch

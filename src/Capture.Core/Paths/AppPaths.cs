@@ -28,6 +28,8 @@ public interface IAppPaths
     string ImportProfilesDirectory { get; }
     string ImportProfileDirectory(Guid importProfileId);
     string ImportProfileJsonPath(Guid importProfileId);
+    string ImportProfilePagesDirectory(Guid importProfileId);
+    string ImportProfileSamplePath(Guid importProfileId, string originalFileName);
     string RedactionSetsDirectory { get; }
     string RedactionSetDirectory(Guid redactionSetId);
     string RedactionSetJsonPath(Guid redactionSetId);
@@ -139,6 +141,17 @@ public sealed class AppPaths : IAppPaths
 
     public string ImportProfileJsonPath(Guid importProfileId) =>
         Path.Combine(ImportProfileDirectory(importProfileId), "import-profile.json");
+
+    public string ImportProfilePagesDirectory(Guid importProfileId) =>
+        Path.Combine(ImportProfileDirectory(importProfileId), "pages");
+
+    public string ImportProfileSamplePath(Guid importProfileId, string originalFileName)
+    {
+        var extension = Path.GetExtension(originalFileName);
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = ".bin";
+        return Path.Combine(ImportProfileDirectory(importProfileId), "sample" + extension);
+    }
 
     public string RedactionSetDirectory(Guid redactionSetId) =>
         Path.Combine(RedactionSetsDirectory, redactionSetId.ToString("N"));
