@@ -118,6 +118,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TestMatchCommand))]
     private bool _isBusy;
 
     public bool IsEveryNPages => Trigger == ImportSeparationTrigger.EveryNPages;
@@ -372,6 +373,41 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         BarcodeValuePattern = $"^{Regex.Escape(decoded.Text)}$";
         StatusText = $"Detected {BarcodePatterns.DisplayType(decoded.Format)}: {decoded.Text}";
     }
+
+    // Re-decodes the current zone and checks it against whatever the user has typed into
+    // BarcodeFormat/BarcodeValuePattern right now — unlike DetectBarcode (which overwrites those
+    // fields), this leaves them untouched and just reports whether they'd actually match a real
+    // scan of this sample. Useful after hand-editing the pattern (e.g. loosening it to a prefix).
+    [RelayCommand(CanExecute = nameof(CanTestMatch))]
+    private void TestMatch()
+    {
+        if (Profile.BarcodeZone is null)
+        {
+            StatusText = "Draw a barcode zone first, then test";
+            return;
+        }
+
+        var pageIndex = CurrentPageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
+            return;
+
+        var decoded = _barcodes!.Decode(_pageImagePaths[pageIndex], Profile.BarcodeZone);
+        if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
+        {
+            StatusText = "No barcode detected in the current zone";
+            return;
+        }
+
+        var formatMatches = string.IsNullOrWhiteSpace(BarcodeFormat)
+            || string.Equals(BarcodeFormat, decoded.Format, StringComparison.OrdinalIgnoreCase);
+        var valueMatches = BarcodePatterns.Matches(BarcodeValuePattern, decoded.Text);
+
+        StatusText = formatMatches && valueMatches
+            ? $"Match: {BarcodePatterns.DisplayType(decoded.Format)} “{decoded.Text}”"
+            : $"No match — detected {BarcodePatterns.DisplayType(decoded.Format)} “{decoded.Text}”, which doesn't satisfy the current type/value filter";
+    }
+
+    private bool CanTestMatch() => !IsBusy && _barcodes is not null;
 
     [RelayCommand]
     private async Task SaveAsync()

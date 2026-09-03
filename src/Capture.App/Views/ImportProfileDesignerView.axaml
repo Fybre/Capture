@@ -65,7 +65,13 @@
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Barcode value to match" Classes="field-label" />
                                     <TextBox Text="{Binding BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
+                                    <TextBlock Text="This is a regex, not the literal value — drawing a zone auto-fills an exact-match pattern (^value$) for whatever's detected there. Edit or clear it to match more broadly."
+                                               TextWrapping="Wrap"
+                                               Classes="hint" />
                                 </StackPanel>
+                                <Button Content="Test against current sample"
+                                        Command="{Binding TestMatchCommand}"
+                                        HorizontalAlignment="Left" />
                                 <TextBlock Text="Load a sample document on the right and draw a rectangle around the barcode."
                                            TextWrapping="Wrap"
                                            Classes="hint" />
