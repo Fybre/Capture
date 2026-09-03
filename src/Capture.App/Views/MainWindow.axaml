@@ -4,7 +4,6 @@
         xmlns:controls="using:Capture.App.Controls"
         xmlns:conv="using:Capture.App.Converters"
         xmlns:profiles="using:Capture.Core.Profiles"
-        xmlns:batches="using:Capture.Core.Batches"
         xmlns:import="using:Capture.Core.Import"
         xmlns:redaction="using:Capture.Core.Redaction"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -222,7 +221,7 @@
                                                 HorizontalContentAlignment="Left">
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <Path Data="{StaticResource IconProfiles}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
-                                                <TextBlock Text="Profiles…" />
+                                                <TextBlock Text="Indexing profiles…" />
                                             </StackPanel>
                                         </Button>
                                         <Button Command="{Binding OpenBatchProfilesCommand}"
@@ -291,33 +290,6 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left">
-                        <TextBlock Text="Batch" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
-                        <ComboBox MinWidth="130"
-                                  MaxWidth="170"
-                                  Width="170"
-                                  ItemsSource="{Binding BatchProfiles}"
-                                  SelectedItem="{Binding SelectedBatchProfile}"
-                                  PlaceholderText="None"
-                                  ToolTip.Tip="Batch profile applied to manually imported files — controls when a new batch starts.">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="batches:BatchProfile">
-                                    <TextBlock Text="{Binding Name}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <Button Classes="ghost"
-                                Width="22" Height="22" Padding="0" CornerRadius="6"
-                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Command="{Binding ClearBatchProfileCommand}"
-                                IsVisible="{Binding SelectedBatchProfile, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                ToolTip.Tip="Clear batch profile (use None)">
-                            <TextBlock Text="×" FontSize="15" FontWeight="Medium" />
-                        </Button>
-                    </StackPanel>
-
-                    <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" DockPanel.Dock="Left" />
-
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left">
                         <TextBlock Text="Indexing profile" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
                         <ComboBox MinWidth="140"
                                   MaxWidth="190"
@@ -358,7 +330,7 @@
                                   ItemsSource="{Binding ImportProfiles}"
                                   SelectedItem="{Binding SelectedImportProfile}"
                                   PlaceholderText="None"
-                                  ToolTip.Tip="Import profile applied to manually imported files — controls how an incoming file gets split into documents.">
+                                  ToolTip.Tip="Import profile applied to manually imported files — controls how an incoming file gets split into documents, and which batch it joins.">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="import:ImportProfile">
                                     <TextBlock Text="{Binding Name}" />

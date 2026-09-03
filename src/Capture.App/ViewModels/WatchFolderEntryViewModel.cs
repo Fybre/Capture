@@ -1,5 +1,4 @@
 using System.Windows.Input;
-using Capture.Core.Batches;
 using Capture.Core.Import;
 using Capture.Core.Profiles;
 using Capture.Core.Watch;
@@ -34,9 +33,6 @@ public sealed partial class WatchFolderEntryViewModel : ObservableObject
     private IndexingProfile? _selectedProfile;
 
     [ObservableProperty]
-    private BatchProfile? _selectedBatchProfile;
-
-    [ObservableProperty]
     private ImportProfile? _selectedImportProfile;
 
     [ObservableProperty]
@@ -52,7 +48,6 @@ public sealed partial class WatchFolderEntryViewModel : ObservableObject
         Enabled = Enabled,
         Folder = string.IsNullOrWhiteSpace(Folder) ? null : Folder,
         ProfileId = SelectedProfile?.Id,
-        BatchProfileId = SelectedBatchProfile?.Id,
         ImportProfileId = SelectedImportProfile?.Id,
         SettleMilliseconds = (int)(Math.Max(1, SettleSeconds) * 1000)
     };

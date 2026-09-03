@@ -143,23 +143,10 @@
                                                 </StackPanel>
                                             </Grid>
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="Batch profile" Classes="field-label" />
-                                                <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).BatchProfiles}"
-                                                          SelectedItem="{Binding SelectedBatchProfile}"
-                                                          PlaceholderText="None (new batch per file)"
-                                                          HorizontalAlignment="Stretch">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate x:DataType="batches:BatchProfile">
-                                                            <TextBlock Text="{Binding Name}" />
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                            </StackPanel>
-                                            <StackPanel Spacing="4">
                                                 <TextBlock Text="Import profile" Classes="field-label" />
                                                 <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).ImportProfiles}"
                                                           SelectedItem="{Binding SelectedImportProfile}"
-                                                          PlaceholderText="None (no splitting)"
+                                                          PlaceholderText="None (no splitting or batching)"
                                                           HorizontalAlignment="Stretch">
                                                     <ComboBox.ItemTemplate>
                                                         <DataTemplate x:DataType="import:ImportProfile">

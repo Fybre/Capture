@@ -68,6 +68,13 @@ public sealed class ImportProfile
     /// lifecycle, not about how it was split.</summary>
     public bool RemoveAfterExport { get; set; }
 
+    /// <summary>Which <c>BatchProfile</c> documents this import profile produces should join —
+    /// batching is controlled from here rather than selected independently, so a user configuring one
+    /// import profile controls both separation and batching (and, via <see cref="IndexingProfileIds"/>,
+    /// indexing) from a single place. Null means no batch profile — falls back to
+    /// <c>WatchSettings.NoBatchProfileBehavior</c>, same as before this concept existed.</summary>
+    public Guid? BatchProfileId { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
 }

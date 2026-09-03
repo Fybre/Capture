@@ -24,7 +24,6 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IFileDialogService _dialogs;
     private readonly IWatchSettingsStore _store;
     private readonly IProfileStore _profiles;
-    private readonly IBatchProfileStore _batchProfiles;
     private readonly IImportProfileStore _importProfiles;
     private readonly IAiFieldCatalogStore _catalogStore;
     private readonly IRedactionEntitySetStore _redactionEntitySets;
@@ -45,7 +44,6 @@ public partial class SettingsViewModel : ViewModelBase
         IFileDialogService dialogs,
         IWatchSettingsStore store,
         IProfileStore profiles,
-        IBatchProfileStore batchProfiles,
         IImportProfileStore importProfiles,
         IAiFieldCatalogStore catalogStore,
         IRedactionEntitySetStore redactionEntitySets,
@@ -60,7 +58,6 @@ public partial class SettingsViewModel : ViewModelBase
         _dialogs = dialogs;
         _store = store;
         _profiles = profiles;
-        _batchProfiles = batchProfiles;
         _importProfiles = importProfiles;
         _catalogStore = catalogStore;
         _redactionEntitySets = redactionEntitySets;
@@ -89,7 +86,6 @@ public partial class SettingsViewModel : ViewModelBase
 
     public ObservableCollection<IndexingProfile> Profiles { get; } = [];
 
-    public ObservableCollection<BatchProfile> BatchProfiles { get; } = [];
 
     public ObservableCollection<ImportProfile> ImportProfiles { get; } = [];
 
@@ -352,10 +348,6 @@ public partial class SettingsViewModel : ViewModelBase
         Profiles.Clear();
         foreach (var profile in await _profiles.GetAllAsync())
             Profiles.Add(profile);
-
-        BatchProfiles.Clear();
-        foreach (var batchProfile in await _batchProfiles.GetAllAsync())
-            BatchProfiles.Add(batchProfile);
 
         ImportProfiles.Clear();
         foreach (var importProfile in await _importProfiles.GetAllAsync())
@@ -660,9 +652,6 @@ public partial class SettingsViewModel : ViewModelBase
         var row = new WatchFolderEntryViewModel(entry)
         {
             SelectedProfile = entry.ProfileId is { } id ? Profiles.FirstOrDefault(profile => profile.Id == id) : null,
-            SelectedBatchProfile = entry.BatchProfileId is { } batchId
-                ? BatchProfiles.FirstOrDefault(profile => profile.Id == batchId)
-                : null,
             SelectedImportProfile = entry.ImportProfileId is { } importId
                 ? ImportProfiles.FirstOrDefault(profile => profile.Id == importId)
                 : null,

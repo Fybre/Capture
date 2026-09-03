@@ -123,7 +123,8 @@ public class CaptureJsonOptionsTests
             BarcodePageNumber = 1,
             DiscardSeparatorPage = true,
             IndexingProfileIds = [Guid.NewGuid()],
-            RemoveAfterExport = true
+            RemoveAfterExport = true,
+            BatchProfileId = Guid.NewGuid()
         };
 
         var json = JsonSerializer.Serialize(profile, CaptureJsonOptions.Default);
@@ -138,6 +139,7 @@ public class CaptureJsonOptionsTests
         Assert.True(roundtripped.DiscardSeparatorPage);
         Assert.Single(roundtripped.IndexingProfileIds);
         Assert.True(roundtripped.RemoveAfterExport);
+        Assert.Equal(profile.BatchProfileId, roundtripped.BatchProfileId);
     }
 
     [Fact]

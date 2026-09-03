@@ -38,11 +38,6 @@ public partial class MainViewModel
 
     public ObservableCollection<ImportProfile> ImportProfiles { get; } = [];
 
-    /// <summary>Batch profile chosen for manual (non-watch-folder) imports — null means today's default,
-    /// one new batch per import action.</summary>
-    [ObservableProperty]
-    private BatchProfile? _selectedBatchProfile;
-
     /// <summary>Indexing profile chosen for manual (non-watch-folder) imports/applying — governs field
     /// extraction only. Named distinctly from <see cref="SelectedImportProfile"/> below (which governs
     /// document separation) since the two used to be the same, conflated concept.</summary>
@@ -89,9 +84,6 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
-    private void ClearBatchProfile() => SelectedBatchProfile = null;
-
-    [RelayCommand]
     private void ClearIndexingProfile() => SelectedIndexingProfile = null;
 
     [RelayCommand]
@@ -99,11 +91,11 @@ public partial class MainViewModel
 
     private async Task LoadProfilesAsync()
     {
-        // Suppress the change-triggered persist below while restoring all three selections from
-        // settings — SelectedIndexingProfile is set here, and SelectedBatchProfile/SelectedImportProfile
-        // a moment later inside LoadBatchProfilesAsync/LoadImportProfilesAsync, each firing its own
-        // fire-and-forget PersistLastProfilesAsync. Without this guard, an earlier call can race a later
-        // one and write a half-restored state to disk before the last call corrects it.
+        // Suppress the change-triggered persist below while restoring both selections from settings —
+        // SelectedIndexingProfile is set here, and SelectedImportProfile a moment later inside
+        // LoadImportProfilesAsync, each firing its own fire-and-forget PersistLastProfilesAsync. Without
+        // this guard, an earlier call can race a later one and write a half-restored state to disk
+        // before the last call corrects it.
         _restoringProfileSelection = true;
         try
         {
@@ -125,16 +117,15 @@ public partial class MainViewModel
         }
     }
 
+    // No longer toolbar-bound — batching is implied by whichever Import Profile is selected
+    // (ImportProfile.BatchProfileId), not chosen independently. This collection still exists purely
+    // to resolve that Id into a BatchProfile object (see ImportPathsAsync/ImportScannedPagesAsync)
+    // and to populate the Import Profile Designer's own Batch Profile picker.
     private async Task LoadBatchProfilesAsync()
     {
-        var restoreId = SelectedBatchProfile?.Id ?? _watchSettings.LastBatchProfileId;
         BatchProfiles.Clear();
         foreach (var profile in await _batchProfileStore.GetAllAsync().ConfigureAwait(true))
             BatchProfiles.Add(profile);
-
-        SelectedBatchProfile = restoreId is { } id
-            ? BatchProfiles.FirstOrDefault(profile => profile.Id == id)
-            : null;
     }
 
     private async Task LoadImportProfilesAsync()
@@ -155,12 +146,6 @@ public partial class MainViewModel
             _ = PersistLastProfilesAsync();
     }
 
-    partial void OnSelectedBatchProfileChanged(BatchProfile? value)
-    {
-        if (!_restoringProfileSelection)
-            _ = PersistLastProfilesAsync();
-    }
-
     partial void OnSelectedImportProfileChanged(ImportProfile? value)
     {
         if (!_restoringProfileSelection)
@@ -170,12 +155,10 @@ public partial class MainViewModel
     private async Task PersistLastProfilesAsync()
     {
         if (_watchSettings.LastIndexingProfileId == SelectedIndexingProfile?.Id
-            && _watchSettings.LastBatchProfileId == SelectedBatchProfile?.Id
             && _watchSettings.LastImportProfileId == SelectedImportProfile?.Id)
             return;
 
         _watchSettings.LastIndexingProfileId = SelectedIndexingProfile?.Id;
-        _watchSettings.LastBatchProfileId = SelectedBatchProfile?.Id;
         _watchSettings.LastImportProfileId = SelectedImportProfile?.Id;
         await _watchStore.SaveAsync(_watchSettings).ConfigureAwait(true);
     }

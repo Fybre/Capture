@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using Capture.App.Services;
+using Capture.Core.Batches;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
@@ -22,6 +23,9 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     private readonly IImportProfileStore _store;
     private readonly IProfileStore _profileStore;
+    private readonly IBatchProfileStore _batchProfileStore;
+    private readonly IProfileDialogService _profileDialog;
+    private readonly IBatchProfileDialogService _batchProfileDialog;
     private readonly IFileDialogService _dialogs;
     private readonly IAppPaths _paths;
     private readonly IPdfRasterizer _pdfRasterizer;
@@ -36,6 +40,9 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         bool isNew,
         IImportProfileStore store,
         IProfileStore profileStore,
+        IBatchProfileStore batchProfileStore,
+        IProfileDialogService profileDialog,
+        IBatchProfileDialogService batchProfileDialog,
         IFileDialogService dialogs,
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
@@ -47,6 +54,9 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         IsNew = isNew;
         _store = store;
         _profileStore = profileStore;
+        _batchProfileStore = batchProfileStore;
+        _profileDialog = profileDialog;
+        _batchProfileDialog = batchProfileDialog;
         _dialogs = dialogs;
         _paths = paths;
         _pdfRasterizer = pdfRasterizer;
@@ -80,6 +90,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     public ObservableCollection<IndexingProfileOption> IndexingProfileOptions { get; } = [];
 
+    public ObservableCollection<BatchProfile> BatchProfileOptions { get; } = [];
+
     [ObservableProperty]
     private string _name;
 
@@ -107,6 +119,9 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _discardSeparatorPage;
+
+    [ObservableProperty]
+    private BatchProfile? _selectedBatchProfile;
 
     /// <summary>Applies regardless of <see cref="Trigger"/> — a fact about the imported document's
     /// lifecycle, not about how it was split.</summary>
@@ -155,14 +170,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
-        IndexingProfileOptions.Clear();
-        foreach (var indexingProfile in await _profileStore.GetAllAsync().ConfigureAwait(true))
-        {
-            IndexingProfileOptions.Add(new IndexingProfileOption(indexingProfile)
-            {
-                IsSelected = Profile.IndexingProfileIds.Contains(indexingProfile.Id)
-            });
-        }
+        await ReloadIndexingProfileOptionsAsync().ConfigureAwait(true);
+        await ReloadBatchProfileOptionsAsync().ConfigureAwait(true);
 
         _pageImagePaths.Clear();
         _pageImagePaths.AddRange(GetPageImagePaths());
@@ -170,6 +179,56 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         CurrentPageNumber = SamplePageCount == 0 ? 1 : Math.Clamp(CurrentPageNumber, 1, SamplePageCount);
         await ShowPageAsync().ConfigureAwait(true);
         StatusText = SamplePageCount == 0 ? "No sample pages" : string.Empty;
+    }
+
+    // Preserves existing checkbox selections across a reload — used both by InitializeAsync and after
+    // returning from the "New indexing profile…" sub-dialog, so a profile created there shows up
+    // immediately without losing anything already checked.
+    private async Task ReloadIndexingProfileOptionsAsync()
+    {
+        var selectedIds = IndexingProfileOptions.Where(option => option.IsSelected).Select(option => option.Id).ToHashSet();
+        IndexingProfileOptions.Clear();
+        foreach (var indexingProfile in await _profileStore.GetAllAsync().ConfigureAwait(true))
+        {
+            IndexingProfileOptions.Add(new IndexingProfileOption(indexingProfile)
+            {
+                IsSelected = Profile.IndexingProfileIds.Contains(indexingProfile.Id) || selectedIds.Contains(indexingProfile.Id)
+            });
+        }
+    }
+
+    // Same idea as ReloadIndexingProfileOptionsAsync — preserves the current selection (by Id) across
+    // a reload, used both by InitializeAsync and after returning from "New batch profile…".
+    private async Task ReloadBatchProfileOptionsAsync()
+    {
+        var selectedId = SelectedBatchProfile?.Id ?? Profile.BatchProfileId;
+        BatchProfileOptions.Clear();
+        foreach (var batchProfile in await _batchProfileStore.GetAllAsync().ConfigureAwait(true))
+            BatchProfileOptions.Add(batchProfile);
+
+        SelectedBatchProfile = selectedId is { } id
+            ? BatchProfileOptions.FirstOrDefault(p => p.Id == id)
+            : null;
+    }
+
+    [RelayCommand]
+    private async Task ManageIndexingProfilesAsync()
+    {
+        var host = _dialogs.Host;
+        if (host is null)
+            return;
+        await _profileDialog.ShowAsync(host).ConfigureAwait(true);
+        await ReloadIndexingProfileOptionsAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task ManageBatchProfilesAsync()
+    {
+        var host = _dialogs.Host;
+        if (host is null)
+            return;
+        await _batchProfileDialog.ShowAsync(host).ConfigureAwait(true);
+        await ReloadBatchProfileOptionsAsync().ConfigureAwait(true);
     }
 
     private IReadOnlyList<string> GetPageImagePaths()
@@ -433,6 +492,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         Profile.BarcodeValuePattern = string.IsNullOrWhiteSpace(BarcodeValuePattern) ? null : BarcodeValuePattern;
         Profile.DiscardSeparatorPage = DiscardSeparatorPage;
         Profile.RemoveAfterExport = RemoveAfterExport;
+        Profile.BatchProfileId = SelectedBatchProfile?.Id;
         Profile.IndexingProfileIds = IndexingProfileOptions
             .Where(option => option.IsSelected)
             .Select(option => option.Id)

@@ -61,8 +61,6 @@ public sealed class WatchSettings
     /// documents, independent of <see cref="LastIndexingProfileId"/>.</summary>
     public Guid? LastImportProfileId { get; set; }
 
-    public Guid? LastBatchProfileId { get; set; }
-
     /// <summary>How to batch documents when a manual import has no BatchProfile selected, or a watch
     /// folder has none configured — see <see cref="NoBatchProfileBehavior"/>.</summary>
     public NoBatchProfileBehavior NoBatchProfileBehavior { get; set; } = NoBatchProfileBehavior.NewBatchPerFile;

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Capture.App.Services;
+using Capture.Core.Batches;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Paths;
@@ -13,6 +14,9 @@ public partial class ImportProfilesViewModel : ViewModelBase
 {
     private readonly IImportProfileStore _store;
     private readonly IProfileStore _profileStore;
+    private readonly IBatchProfileStore _batchProfileStore;
+    private readonly IProfileDialogService _profileDialog;
+    private readonly IBatchProfileDialogService _batchProfileDialog;
     private readonly IFileDialogService _dialogs;
     private readonly IAppPaths _paths;
     private readonly IPdfRasterizer _pdfRasterizer;
@@ -23,6 +27,9 @@ public partial class ImportProfilesViewModel : ViewModelBase
     public ImportProfilesViewModel(
         IImportProfileStore store,
         IProfileStore profileStore,
+        IBatchProfileStore batchProfileStore,
+        IProfileDialogService profileDialog,
+        IBatchProfileDialogService batchProfileDialog,
         IFileDialogService dialogs,
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
@@ -32,6 +39,9 @@ public partial class ImportProfilesViewModel : ViewModelBase
     {
         _store = store;
         _profileStore = profileStore;
+        _batchProfileStore = batchProfileStore;
+        _profileDialog = profileDialog;
+        _batchProfileDialog = batchProfileDialog;
         _dialogs = dialogs;
         _paths = paths;
         _pdfRasterizer = pdfRasterizer;
@@ -120,7 +130,8 @@ public partial class ImportProfilesViewModel : ViewModelBase
     private async Task OpenDesignerAsync(ImportProfile profile, bool isNew)
     {
         var designer = new ImportProfileDesignerViewModel(
-            profile, isNew, _store, _profileStore, _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes)
+            profile, isNew, _store, _profileStore, _batchProfileStore, _profileDialog, _batchProfileDialog,
+            _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes)
         {
             CloseCommand = CloseDesignerCommand
         };

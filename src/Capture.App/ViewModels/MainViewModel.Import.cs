@@ -130,17 +130,15 @@ public partial class MainViewModel
         {
             profile ??= SelectedIndexingProfile;
 
-            var selectedBatchProfile = watchFolderEntry is not null
-                ? (watchFolderEntry.BatchProfileId is { } bpId
-                    ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
-                    : null)
-                : SelectedBatchProfile;
-            var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
             var importProfile = watchFolderEntry is not null
                 ? (watchFolderEntry.ImportProfileId is { } ipId
                     ? ImportProfiles.FirstOrDefault(item => item.Id == ipId)
                     : null)
                 : SelectedImportProfile;
+            var selectedBatchProfile = importProfile?.BatchProfileId is { } bpId
+                ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
+                : null;
+            var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
             var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
             var resumeBatch = watchFolderEntry is null && keepsBatchOpen
                 ? _lastManualBatch
@@ -303,7 +301,10 @@ public partial class MainViewModel
         {
             var profile = SelectedIndexingProfile;
             var importProfile = SelectedImportProfile;
-            var batchProfile = BatchProfileResolver.Resolve(SelectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
+            var selectedBatchProfile = importProfile?.BatchProfileId is { } bpId
+                ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
+                : null;
+            var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
             var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
             var resumeBatch = keepsBatchOpen ? _lastManualBatch : null;
             var allocator = await BatchAllocator.CreateAsync(_store, batchProfile, watchFolderEntryId: null, resumeBatch)
