@@ -132,10 +132,11 @@ public sealed class DocumentImporter : IDocumentImporter
         DocumentSource source,
         IndexingProfile? profile = null,
         BatchProfile? batchProfile = null,
+        ImportProfile? importProfile = null,
         CancellationToken cancellationToken = default,
         int? imageDpiOverride = null)
     {
-        if (!PageSeparator.Enabled(profile) && !BatchSeparator.NeedsPageScan(batchProfile))
+        if (!PageSeparator.Enabled(importProfile) && !BatchSeparator.NeedsPageScan(batchProfile))
         {
             var document = await ImportFileAsync(path, source, cancellationToken, imageDpiOverride).ConfigureAwait(false);
             return [new ImportedDocument { Document = document }];
@@ -162,7 +163,7 @@ public sealed class DocumentImporter : IDocumentImporter
 
             var originalName = Path.GetFileName(path);
             var results = await ImportRastersWithSplittingAsync(
-                    rasters, path, originalName, source, profile, batchProfile, cancellationToken)
+                    rasters, path, originalName, source, profile, batchProfile, importProfile, cancellationToken)
                 .ConfigureAwait(false);
 
             return results.Count == 0
@@ -186,6 +187,7 @@ public sealed class DocumentImporter : IDocumentImporter
         DocumentSource source,
         IndexingProfile? profile = null,
         BatchProfile? batchProfile = null,
+        ImportProfile? importProfile = null,
         CancellationToken cancellationToken = default)
     {
         if (pages.Count == 0)
@@ -200,7 +202,7 @@ public sealed class DocumentImporter : IDocumentImporter
         // "original" copy's filename from (see MaterializeSplitAsync's no-source-path branch).
         var originalName = $"Scan {DateTimeOffset.Now:yyyy-MM-dd HHmmss}.png";
 
-        if (!PageSeparator.Enabled(profile) && !BatchSeparator.NeedsPageScan(batchProfile))
+        if (!PageSeparator.Enabled(importProfile) && !BatchSeparator.NeedsPageScan(batchProfile))
         {
             var wholeDocument = new ClassifiedSplit { SourcePages = rasters.Select(raster => raster.PageNumber).ToList() };
             var imported = await MaterializeSplitAsync(
@@ -210,7 +212,7 @@ public sealed class DocumentImporter : IDocumentImporter
         }
 
         var results = await ImportRastersWithSplittingAsync(
-                rasters, sourcePath: null, originalName, source, profile, batchProfile, cancellationToken)
+                rasters, sourcePath: null, originalName, source, profile, batchProfile, importProfile, cancellationToken)
             .ConfigureAwait(false);
 
         return results.Count == 0
@@ -232,13 +234,15 @@ public sealed class DocumentImporter : IDocumentImporter
         DocumentSource source,
         IndexingProfile? profile,
         BatchProfile? batchProfile,
+        ImportProfile? importProfile,
         CancellationToken cancellationToken)
     {
         var preIndexContext = new PreIndexContext
         {
             Pages = rasters,
             SourcePath = sourcePath ?? originalName,
-            CandidateProfiles = profile is null ? [] : [profile]
+            CandidateProfiles = profile is null ? [] : [profile],
+            ImportProfile = importProfile
         };
         var splits = await _preIndexStep.RunAsync(preIndexContext, cancellationToken).ConfigureAwait(false);
 

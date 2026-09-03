@@ -62,9 +62,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _ai = ai;
         _scripts = scripts;
         _name = profile.Name;
-        _separationTrigger = profile.Separation.Trigger;
-        _separationPageCount = Math.Max(1, profile.Separation.PageCount);
-        _separationDiscardPage = profile.Separation.DiscardSeparatorPage;
         _redactionEnabled = profile.Redaction.Enabled;
         _redactionDetectPii = profile.Redaction.DetectPii;
         _redactionScoreThreshold = profile.Redaction.ScoreThresholdPercent;
@@ -75,8 +72,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _autoReadyThreshold = profile.AutoReadyThreshold;
         foreach (var field in profile.Fields)
             Fields.Add(Wrap(field));
-        RefreshBarcodeFieldOptions();
-        _separationBarcodeField = BarcodeFieldOptions.FirstOrDefault(field => field.Id == profile.Separation.BarcodeFieldId);
         foreach (var export in profile.Exports)
             Exports.Add(new ExportDefinitionRow(export, Fields));
         Exports.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoExports));
@@ -85,26 +80,10 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Scripts.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoScripts));
         Fields.CollectionChanged += (_, _) =>
         {
-            RefreshBarcodeFieldOptions();
             foreach (var export in Exports)
                 export.RefreshFieldOptions(Fields);
         };
     }
-
-    private void RefreshBarcodeFieldOptions()
-    {
-        var selectedId = SeparationBarcodeField?.Id;
-        BarcodeFieldOptions.Clear();
-        foreach (var field in Fields.Where(item => item.IsBarcode))
-            BarcodeFieldOptions.Add(field);
-
-        if (selectedId is { } id)
-            SeparationBarcodeField = BarcodeFieldOptions.FirstOrDefault(field => field.Id == id);
-
-        OnPropertyChanged(nameof(HasBarcodeFieldOptions));
-    }
-
-    public bool HasBarcodeFieldOptions => BarcodeFieldOptions.Count > 0;
 
     public IndexingProfile Profile { get; }
 
@@ -156,31 +135,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     public PatternSuggestTarget SuggestTarget { get; set; }
 
     public string Hint => "Draw a rectangle for a zone or barcode. Click in key/value/regex, then draw to suggest a pattern. Otherwise draw to set a search region.";
-
-    public IReadOnlyList<DocumentSeparationTrigger> SeparationTriggerOptions { get; } = Enum.GetValues<DocumentSeparationTrigger>();
-
-    public ObservableCollection<FieldRow> BarcodeFieldOptions { get; } = [];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSeparationBarcode))]
-    [NotifyPropertyChangedFor(nameof(IsSeparationBlank))]
-    [NotifyPropertyChangedFor(nameof(IsSeparationEveryNPages))]
-    private DocumentSeparationTrigger _separationTrigger;
-
-    [ObservableProperty]
-    private FieldRow? _separationBarcodeField;
-
-    [ObservableProperty]
-    private int _separationPageCount = 1;
-
-    [ObservableProperty]
-    private bool _separationDiscardPage;
-
-    public bool IsSeparationBarcode => SeparationTrigger == DocumentSeparationTrigger.Barcode;
-
-    public bool IsSeparationBlank => SeparationTrigger == DocumentSeparationTrigger.BlankPage;
-
-    public bool IsSeparationEveryNPages => SeparationTrigger == DocumentSeparationTrigger.EveryNPages;
 
     public ObservableCollection<RedactionEntitySet> RedactionSetOptions { get; } = [];
 
@@ -995,13 +949,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     {
         Profile.Name = string.IsNullOrWhiteSpace(Name) ? "Untitled profile" : Name.Trim();
         Profile.AutoReadyThreshold = Math.Clamp(AutoReadyThreshold, 0, 100);
-        Profile.Separation = new DocumentSeparation
-        {
-            Trigger = SeparationTrigger,
-            BarcodeFieldId = SeparationBarcodeField?.Id,
-            PageCount = Math.Max(1, SeparationPageCount),
-            DiscardSeparatorPage = SeparationDiscardPage
-        };
         Profile.Redaction = new RedactionSettings
         {
             Enabled = RedactionEnabled,
@@ -1075,15 +1022,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     partial void OnSharedScriptSourceChanged(string value)
     {
         Profile.SharedScriptSource = value;
-    }
-
-    partial void OnSeparationTriggerChanged(DocumentSeparationTrigger value)
-    {
-        // Default "remove separator page" on for the common case when a user freshly switches to
-        // Blank pages, so the first click through doesn't require a second one to get today's
-        // long-standing default (blank pages were always discarded before this was configurable).
-        if (value == DocumentSeparationTrigger.BlankPage && !SeparationDiscardPage)
-            SeparationDiscardPage = true;
     }
 
     private bool CanExtractAi() => !IsBusy;

@@ -40,14 +40,13 @@ public class DocumentImporterBatchBoundaryTests
             paths, store, new PdfiumRasterizer(), new SkiaImagePageImporter(), new NoOpLatticeBuilder(),
             new PdfPigSubsetWriter(), barcodes);
 
-        var indexingProfile = new IndexingProfile
+        var indexingProfile = new IndexingProfile { Name = "Splits every page" };
+
+        var importProfile = new ImportProfile
         {
             Name = "Splits every page",
-            Separation = new DocumentSeparation
-            {
-                Trigger = DocumentSeparationTrigger.EveryNPages,
-                PageCount = 1
-            }
+            Trigger = ImportSeparationTrigger.EveryNPages,
+            PageCount = 1
         };
 
         var batchProfile = new BatchProfile
@@ -57,7 +56,7 @@ public class DocumentImporterBatchBoundaryTests
             DiscardSeparatorPage = true
         };
 
-        var results = await importer.ImportAsync(pdfPath, DocumentSource.Import, indexingProfile, batchProfile);
+        var results = await importer.ImportAsync(pdfPath, DocumentSource.Import, indexingProfile, batchProfile, importProfile);
 
         // Barcode pages (1 and 4) are discarded entirely — only the 4 content pages become documents.
         Assert.Equal(4, results.Count);

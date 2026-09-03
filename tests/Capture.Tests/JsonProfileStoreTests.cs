@@ -282,63 +282,6 @@ public class JsonProfileStoreTests
     }
 
     [Fact]
-    public async Task Migrates_legacy_split_on_blank_pages_into_separation()
-    {
-        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-blank-" + Guid.NewGuid().ToString("N")));
-        paths.EnsureCreated();
-        var store = new JsonProfileStore(paths);
-        var id = Guid.NewGuid();
-
-        await WriteLegacyProfileJsonAsync(paths, id, """
-            {
-              "id": "REPLACE_ID",
-              "name": "Legacy blank split",
-              "splitOnBlankPages": true,
-              "fields": []
-            }
-            """);
-
-        var loaded = await store.GetAsync(id);
-
-        Assert.NotNull(loaded);
-        Assert.Equal(DocumentSeparationTrigger.BlankPage, loaded!.Separation.Trigger);
-        Assert.True(loaded.Separation.DiscardSeparatorPage);
-    }
-
-    [Fact]
-    public async Task Migrates_legacy_barcode_separator_field_into_separation()
-    {
-        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-barcode-" + Guid.NewGuid().ToString("N")));
-        paths.EnsureCreated();
-        var store = new JsonProfileStore(paths);
-        var id = Guid.NewGuid();
-        var fieldId = Guid.NewGuid();
-
-        await WriteLegacyProfileJsonAsync(paths, id, $$"""
-            {
-              "id": "REPLACE_ID",
-              "name": "Legacy barcode split",
-              "fields": [
-                {
-                  "id": "{{fieldId}}",
-                  "name": "Separator",
-                  "kind": "barcode",
-                  "separatesDocuments": true,
-                  "discardPage": true
-                }
-              ]
-            }
-            """);
-
-        var loaded = await store.GetAsync(id);
-
-        Assert.NotNull(loaded);
-        Assert.Equal(DocumentSeparationTrigger.Barcode, loaded!.Separation.Trigger);
-        Assert.Equal(fieldId, loaded.Separation.BarcodeFieldId);
-        Assert.True(loaded.Separation.DiscardSeparatorPage);
-    }
-
-    [Fact]
     public async Task Normalizes_an_untouched_legacy_barcode_page_scope_to_number()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-legacy-scope-" + Guid.NewGuid().ToString("N")));

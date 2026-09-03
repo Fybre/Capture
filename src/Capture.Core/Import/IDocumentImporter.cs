@@ -23,6 +23,7 @@ public interface IDocumentImporter
         DocumentSource source,
         IndexingProfile? profile = null,
         BatchProfile? batchProfile = null,
+        ImportProfile? importProfile = null,
         CancellationToken cancellationToken = default,
         int? imageDpiOverride = null);
 
@@ -40,5 +41,6 @@ public interface IDocumentImporter
         DocumentSource source,
         IndexingProfile? profile = null,
         BatchProfile? batchProfile = null,
+        ImportProfile? importProfile = null,
         CancellationToken cancellationToken = default);
 }

@@ -31,14 +31,16 @@ public class DocumentImporterRollbackTests
         var importer = new DocumentImporter(
             paths, store, new PdfiumRasterizer(), new SkiaImagePageImporter(), latticeBuilder, new PdfPigSubsetWriter());
 
-        var profile = new IndexingProfile
+        var profile = new IndexingProfile { Name = "Splits every page" };
+        var importProfile = new ImportProfile
         {
             Name = "Splits every page",
-            Separation = new DocumentSeparation { Trigger = DocumentSeparationTrigger.EveryNPages, PageCount = 1 }
+            Trigger = ImportSeparationTrigger.EveryNPages,
+            PageCount = 1
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => importer.ImportAsync(pdfPath, DocumentSource.Import, profile));
+            () => importer.ImportAsync(pdfPath, DocumentSource.Import, profile, batchProfile: null, importProfile));
 
         var remaining = await store.GetAllAsync();
         Assert.Empty(remaining);

@@ -25,6 +25,9 @@ public interface IAppPaths
     string BatchProfilesDirectory { get; }
     string BatchProfileDirectory(Guid batchProfileId);
     string BatchProfileJsonPath(Guid batchProfileId);
+    string ImportProfilesDirectory { get; }
+    string ImportProfileDirectory(Guid importProfileId);
+    string ImportProfileJsonPath(Guid importProfileId);
     string RedactionSetsDirectory { get; }
     string RedactionSetDirectory(Guid redactionSetId);
     string RedactionSetJsonPath(Guid redactionSetId);
@@ -43,6 +46,7 @@ public sealed class AppPaths : IAppPaths
         Root = root ?? Path.Combine(DefaultBaseDirectory, "Capture");
         ProfilesDirectory = Path.Combine(Root, "profiles");
         BatchProfilesDirectory = Path.Combine(Root, "batch-profiles");
+        ImportProfilesDirectory = Path.Combine(Root, "import-profiles");
         RedactionSetsDirectory = Path.Combine(Root, "redaction-sets");
         WorkDirectory = Path.Combine(Root, "work");
         DatabasePath = Path.Combine(Root, "capture.db");
@@ -62,6 +66,7 @@ public sealed class AppPaths : IAppPaths
     public string LocalAiModelPath { get; }
     public string ProfilesDirectory { get; }
     public string BatchProfilesDirectory { get; }
+    public string ImportProfilesDirectory { get; }
     public string RedactionSetsDirectory { get; }
     public string WorkDirectory { get; }
 
@@ -129,6 +134,12 @@ public sealed class AppPaths : IAppPaths
     public string BatchProfileJsonPath(Guid batchProfileId) =>
         Path.Combine(BatchProfileDirectory(batchProfileId), "batch-profile.json");
 
+    public string ImportProfileDirectory(Guid importProfileId) =>
+        Path.Combine(ImportProfilesDirectory, importProfileId.ToString("N"));
+
+    public string ImportProfileJsonPath(Guid importProfileId) =>
+        Path.Combine(ImportProfileDirectory(importProfileId), "import-profile.json");
+
     public string RedactionSetDirectory(Guid redactionSetId) =>
         Path.Combine(RedactionSetsDirectory, redactionSetId.ToString("N"));
 
@@ -140,6 +151,7 @@ public sealed class AppPaths : IAppPaths
         Directory.CreateDirectory(Root);
         Directory.CreateDirectory(ProfilesDirectory);
         Directory.CreateDirectory(BatchProfilesDirectory);
+        Directory.CreateDirectory(ImportProfilesDirectory);
         Directory.CreateDirectory(RedactionSetsDirectory);
         Directory.CreateDirectory(WorkDirectory);
         Directory.CreateDirectory(LocalAiModelsDirectory);

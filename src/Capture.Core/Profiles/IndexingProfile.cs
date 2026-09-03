@@ -73,33 +73,6 @@ public enum IndexLevel
     Batch = 1
 }
 
-public enum DocumentSeparationTrigger
-{
-    None = 0,
-    Barcode = 1,
-    BlankPage = 2,
-    EveryNPages = 3
-}
-
-/// <summary>How a profile splits one imported file into multiple documents. Independent of any
-/// per-field configuration — a Barcode trigger just references an already-defined Barcode-kind field.</summary>
-public sealed class DocumentSeparation
-{
-    public DocumentSeparationTrigger Trigger { get; set; } = DocumentSeparationTrigger.None;
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="DocumentSeparationTrigger.Barcode"/> — the Id
-    /// of a <c>Kind == Barcode</c> field on this same profile. That field's own Zone/ValuePattern is reused
-    /// for matching; nothing barcode-specific is configured here.</summary>
-    public Guid? BarcodeFieldId { get; set; }
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="DocumentSeparationTrigger.EveryNPages"/>.</summary>
-    public int PageCount { get; set; } = 1;
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="DocumentSeparationTrigger.Barcode"/> or
-    /// <see cref="DocumentSeparationTrigger.BlankPage"/> — there's no separator page to discard for EveryNPages.</summary>
-    public bool DiscardSeparatorPage { get; set; }
-}
-
 public enum MatchOccurrence
 {
     First = 0,
@@ -169,12 +142,6 @@ public sealed class IndexField
     /// and <c>{Doc#}</c>/<c>{Batch#}</c>/<c>{Date}</c>/<c>{Time}</c>/<c>{ProfileName}</c>/<c>{OtherField}</c>
     /// tokens are resolved. Null/empty means no default — the field starts blank exactly as before.</summary>
     public string? DefaultValueTemplate { get; set; }
-
-    // Legacy per-field document-separation flags. Kept only so JsonProfileStore can migrate profiles
-    // saved before separation moved to IndexingProfile.Separation — new code should read/write that
-    // instead. See JsonProfileStore.MigrateLegacySeparation.
-    public bool SeparatesDocuments { get; set; }
-    public bool DiscardPage { get; set; }
 
     public bool HideFromIndexing { get; set; }
 
@@ -360,12 +327,6 @@ public sealed class IndexingProfile
     public string? Locale { get; set; }
     public int AutoReadyThreshold { get; set; } = 80;
 
-    // Legacy — kept only so JsonProfileStore can migrate profiles saved before separation moved to
-    // Separation below. New code should read/write Separation instead.
-    public bool SplitOnBlankPages { get; set; }
-
-    public float BlankInkPercent { get; set; } = 1;
-    public DocumentSeparation Separation { get; set; } = new();
     public RedactionSettings Redaction { get; set; } = new();
     public List<ExportDefinition> Exports { get; set; } = [];
 

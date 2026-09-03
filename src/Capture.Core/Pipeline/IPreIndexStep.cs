@@ -1,3 +1,4 @@
+using Capture.Core.Import;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
 
@@ -29,6 +30,10 @@ public sealed class PreIndexContext
     /// first (and only) candidate; a future classification step can evaluate several.
     /// </summary>
     public required IReadOnlyList<IndexingProfile> CandidateProfiles { get; init; }
+
+    /// <summary>The profile that actually drives splitting — null means "don't split, append
+    /// everything into one document" (today's <see cref="ImportSeparationTrigger.None"/> behavior).</summary>
+    public ImportProfile? ImportProfile { get; init; }
 }
 
 public interface IPreIndexStep

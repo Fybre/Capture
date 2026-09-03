@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Capture.Core.Batches;
+using Capture.Core.Import;
 using Capture.Core.Profiles;
 using Capture.Core.Watch;
 using Capture.Storage;
@@ -18,7 +19,6 @@ public class CaptureJsonOptionsTests
         var profile = new IndexingProfile
         {
             Name = "Invoice",
-            Separation = new DocumentSeparation { Trigger = DocumentSeparationTrigger.EveryNPages, PageCount = 2 },
             Redaction = new RedactionSettings { Enabled = true, Entities = ["PERSON", "EMAIL_ADDRESS"] },
             Fields =
             [
@@ -52,8 +52,6 @@ public class CaptureJsonOptionsTests
 
         Assert.NotNull(roundtripped);
         Assert.Equal("Invoice", roundtripped!.Name);
-        Assert.Equal(DocumentSeparationTrigger.EveryNPages, roundtripped.Separation.Trigger);
-        Assert.Equal(2, roundtripped.Separation.PageCount);
         Assert.True(roundtripped.Redaction.Enabled);
         Assert.Equal(["PERSON", "EMAIL_ADDRESS"], roundtripped.Redaction.Entities);
         var field = Assert.Single(roundtripped.Fields);
@@ -113,6 +111,34 @@ public class CaptureJsonOptionsTests
         Assert.Equal(BatchTrigger.Barcode, roundtripped.Trigger);
         Assert.Equal("CODE_128", roundtripped.BarcodeFormat);
         Assert.True(roundtripped.DiscardSeparatorPage);
+    }
+
+    [Fact]
+    public void Roundtrips_import_profile_including_trigger_enum_and_zone()
+    {
+        var profile = new ImportProfile
+        {
+            Name = "Barcode splits",
+            Trigger = ImportSeparationTrigger.Barcode,
+            BarcodeFormat = "CODE_128",
+            BarcodeValuePattern = "^DOC-",
+            BarcodeZone = new ZoneRect { PageNumber = 1, X = 0.1f, Y = 0.2f, Width = 0.3f, Height = 0.05f },
+            BarcodePageNumber = 1,
+            DiscardSeparatorPage = true,
+            IndexingProfileIds = [Guid.NewGuid()]
+        };
+
+        var json = JsonSerializer.Serialize(profile, CaptureJsonOptions.Default);
+        var roundtripped = JsonSerializer.Deserialize<ImportProfile>(json, CaptureJsonOptions.Default);
+
+        Assert.NotNull(roundtripped);
+        Assert.Equal("Barcode splits", roundtripped!.Name);
+        Assert.Equal(ImportSeparationTrigger.Barcode, roundtripped.Trigger);
+        Assert.Equal("CODE_128", roundtripped.BarcodeFormat);
+        Assert.Equal("^DOC-", roundtripped.BarcodeValuePattern);
+        Assert.NotNull(roundtripped.BarcodeZone);
+        Assert.True(roundtripped.DiscardSeparatorPage);
+        Assert.Single(roundtripped.IndexingProfileIds);
     }
 
     [Fact]

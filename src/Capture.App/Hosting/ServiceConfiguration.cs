@@ -65,6 +65,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IProfileApplicator, ProfileApplicator>();
         services.AddSingleton<IProfileStore, JsonProfileStore>();
         services.AddSingleton<IBatchProfileStore, JsonBatchProfileStore>();
+        services.AddSingleton<IImportProfileStore, JsonImportProfileStore>();
         services.AddSingleton<IProfileSampleService, ProfileSampleService>();
         services.AddSingleton<IWatchSettingsStore, JsonWatchSettingsStore>();
         services.AddSingleton<IAiFieldCatalogStore, JsonAiFieldCatalogStore>();

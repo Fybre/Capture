@@ -166,7 +166,7 @@ public partial class MainViewModel
 
                     var dpi = imageDpiByPath?.GetValueOrDefault(path);
                     var imported = await _importer.ImportAsync(
-                            path, source, profile, batchProfile, imageDpiOverride: dpi)
+                            path, source, profile, batchProfile, importProfile: null, imageDpiOverride: dpi)
                         .ConfigureAwait(true);
                     var (fileLast, failed) = await MaterializeImportedAsync(
                             imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true, contentHash)
@@ -310,7 +310,7 @@ public partial class MainViewModel
             IReadOnlyList<ImportedDocument> imported;
             try
             {
-                imported = await _importer.ImportScannedPagesAsync(pages, source, profile, batchProfile)
+                imported = await _importer.ImportScannedPagesAsync(pages, source, profile, batchProfile, importProfile: null)
                     .ConfigureAwait(true);
             }
             catch (Exception ex)

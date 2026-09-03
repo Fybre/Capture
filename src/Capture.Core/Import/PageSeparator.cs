@@ -6,12 +6,12 @@ namespace Capture.Core.Import;
 
 public static class PageSeparator
 {
-    public static bool Enabled(IndexingProfile? profile) =>
-        profile is not null && profile.Separation.Trigger != DocumentSeparationTrigger.None;
+    public static bool Enabled(ImportProfile? profile) =>
+        profile is not null && profile.Trigger != ImportSeparationTrigger.None;
 
     public static IReadOnlyList<PageSplit> Split(
         IReadOnlyList<RasterPage> pages,
-        IndexingProfile profile,
+        ImportProfile profile,
         IBarcodeDecoder? barcodes,
         IBlankPageDetector? blanks)
     {
@@ -21,23 +21,21 @@ public static class PageSeparator
         if (!Enabled(profile))
             return [All(pages)];
 
-        return profile.Separation.Trigger switch
+        return profile.Trigger switch
         {
-            DocumentSeparationTrigger.Barcode => SplitOnBarcode(pages, profile, barcodes),
-            DocumentSeparationTrigger.BlankPage => SplitOnBlank(pages, profile, blanks),
-            DocumentSeparationTrigger.EveryNPages => SplitEveryNPages(pages, profile),
+            ImportSeparationTrigger.Barcode => SplitOnBarcode(pages, profile, barcodes),
+            ImportSeparationTrigger.BlankPage => SplitOnBlank(pages, profile, blanks),
+            ImportSeparationTrigger.EveryNPages => SplitEveryNPages(pages, profile),
             _ => [All(pages)]
         };
     }
 
     private static IReadOnlyList<PageSplit> SplitOnBarcode(
         IReadOnlyList<RasterPage> pages,
-        IndexingProfile profile,
+        ImportProfile profile,
         IBarcodeDecoder? barcodes)
     {
-        var field = profile.Fields.FirstOrDefault(
-            item => item.Id == profile.Separation.BarcodeFieldId && item.Kind == FieldKind.Barcode);
-        if (field is null || barcodes is null)
+        if (barcodes is null)
             return [All(pages)];
 
         var current = new PageSplit();
@@ -45,20 +43,19 @@ public static class PageSeparator
 
         foreach (var page in pages)
         {
-            var decoded = barcodes.Decode(page.ImagePath, field.Zone);
+            var decoded = barcodes.Decode(page.ImagePath, profile.BarcodeZone);
             var hit = decoded is not null
                 && !string.IsNullOrWhiteSpace(decoded.Text)
-                && BarcodePatterns.Matches(field, decoded.Text)
+                && (string.IsNullOrWhiteSpace(profile.BarcodeFormat)
+                    || string.Equals(profile.BarcodeFormat, decoded.Format, StringComparison.OrdinalIgnoreCase))
+                && BarcodePatterns.Matches(profile.BarcodeValuePattern, decoded.Text)
                 ? decoded.Text
                 : null;
 
             if (hit is not null && current.SourcePages.Count > 0)
                 Flush(results, ref current);
 
-            if (hit is not null)
-                current.SeparatorValues[field.Id] = hit;
-
-            if (hit is null || !profile.Separation.DiscardSeparatorPage)
+            if (hit is null || !profile.DiscardSeparatorPage)
                 current.SourcePages.Add(page.PageNumber);
         }
 
@@ -68,7 +65,7 @@ public static class PageSeparator
 
     private static IReadOnlyList<PageSplit> SplitOnBlank(
         IReadOnlyList<RasterPage> pages,
-        IndexingProfile profile,
+        ImportProfile profile,
         IBlankPageDetector? blanks)
     {
         if (blanks is null)
@@ -83,7 +80,7 @@ public static class PageSeparator
             if (blank)
             {
                 Flush(results, ref current);
-                if (!profile.Separation.DiscardSeparatorPage)
+                if (!profile.DiscardSeparatorPage)
                     current.SourcePages.Add(page.PageNumber);
                 continue;
             }
@@ -95,9 +92,9 @@ public static class PageSeparator
         return results.Count == 0 ? [All(pages)] : results;
     }
 
-    private static IReadOnlyList<PageSplit> SplitEveryNPages(IReadOnlyList<RasterPage> pages, IndexingProfile profile)
+    private static IReadOnlyList<PageSplit> SplitEveryNPages(IReadOnlyList<RasterPage> pages, ImportProfile profile)
     {
-        var threshold = Math.Max(1, profile.Separation.PageCount);
+        var threshold = Math.Max(1, profile.PageCount);
         var current = new PageSplit();
         var results = new List<PageSplit>();
 

@@ -4,9 +4,10 @@ using Capture.Core.Indexing;
 namespace Capture.Core.Pipeline;
 
 /// <summary>
-/// Default <see cref="IPreIndexStep"/> — wraps today's single-profile <see cref="PageSeparator.Split"/>
-/// exactly as-is. Preserves current behavior: the first candidate profile (if any) drives blank-page
-/// and barcode-separator splitting, and every resulting segment is tagged with that same profile.
+/// Default <see cref="IPreIndexStep"/> — wraps <see cref="PageSeparator.Split"/> exactly as-is.
+/// <see cref="PreIndexContext.ImportProfile"/> alone drives blank-page/barcode/every-N-pages splitting;
+/// every resulting segment is tagged with the first candidate Indexing Profile (if any) — still
+/// always 0-or-1 today, the future classification seam later.
 /// </summary>
 public sealed class ClassicSeparatorStep : IPreIndexStep
 {
@@ -22,9 +23,9 @@ public sealed class ClassicSeparatorStep : IPreIndexStep
     public Task<IReadOnlyList<ClassifiedSplit>> RunAsync(PreIndexContext context, CancellationToken cancellationToken = default)
     {
         var profile = context.CandidateProfiles.FirstOrDefault();
-        var splits = profile is null
+        var splits = context.ImportProfile is null
             ? [AllPages(context)]
-            : PageSeparator.Split(context.Pages, profile, _barcodes, _blanks);
+            : PageSeparator.Split(context.Pages, context.ImportProfile, _barcodes, _blanks);
 
         var classified = splits
             .Select(split => new ClassifiedSplit

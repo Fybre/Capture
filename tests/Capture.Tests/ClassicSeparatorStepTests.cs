@@ -11,12 +11,8 @@ public class ClassicSeparatorStepTests
     [Fact]
     public async Task Produces_the_same_splits_as_calling_PageSeparator_directly()
     {
-        var field = new IndexField { Kind = FieldKind.Barcode };
-        var profile = new IndexingProfile
-        {
-            Fields = [field],
-            Separation = new DocumentSeparation { Trigger = DocumentSeparationTrigger.Barcode, BarcodeFieldId = field.Id }
-        };
+        var indexingProfile = new IndexingProfile();
+        var importProfile = new ImportProfile { Trigger = ImportSeparationTrigger.Barcode };
         var pages = Pages("a.png", "b.png", "c.png");
         var decoder = new MapDecoder
         {
@@ -24,14 +20,15 @@ public class ClassicSeparatorStepTests
             ["c.png"] = "DOC-2"
         };
 
-        var expected = PageSeparator.Split(pages, profile, decoder, blanks: null);
+        var expected = PageSeparator.Split(pages, importProfile, decoder, blanks: null);
         var step = new ClassicSeparatorStep(decoder, blanks: null);
 
         var actual = await step.RunAsync(new PreIndexContext
         {
             Pages = pages,
             SourcePath = "source.pdf",
-            CandidateProfiles = [profile]
+            CandidateProfiles = [indexingProfile],
+            ImportProfile = importProfile
         });
 
         Assert.Equal(expected.Count, actual.Count);
@@ -39,7 +36,7 @@ public class ClassicSeparatorStepTests
         {
             Assert.Equal(expected[i].SourcePages, actual[i].SourcePages);
             Assert.Equal(expected[i].SeparatorValues, actual[i].SeparatorValues);
-            Assert.Same(profile, actual[i].Profile);
+            Assert.Same(indexingProfile, actual[i].Profile);
         }
     }
 

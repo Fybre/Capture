@@ -124,40 +124,6 @@
                                Classes="hint" />
 
                     <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
-                    <TextBlock Text="Page separation" Classes="field-label" />
-                    <ComboBox ItemsSource="{Binding SeparationTriggerOptions}"
-                              SelectedItem="{Binding SeparationTrigger}"
-                              HorizontalAlignment="Stretch" />
-
-                    <StackPanel Spacing="6" IsVisible="{Binding IsSeparationBarcode}">
-                        <TextBlock Text="Barcode field" Classes="field-label" />
-                        <ComboBox ItemsSource="{Binding BarcodeFieldOptions}"
-                                  SelectedItem="{Binding SeparationBarcodeField}"
-                                  PlaceholderText="Choose a barcode field"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:FieldRow">
-                                    <TextBlock Text="{Binding Name}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <TextBlock Text="Add a barcode field first, then pick it here."
-                                   TextWrapping="Wrap"
-                                   Classes="hint"
-                                   IsVisible="{Binding !HasBarcodeFieldOptions}" />
-                        <CheckBox Content="Remove separator page" IsChecked="{Binding SeparationDiscardPage}" />
-                    </StackPanel>
-
-                    <StackPanel Spacing="6" IsVisible="{Binding IsSeparationBlank}">
-                        <CheckBox Content="Remove separator page" IsChecked="{Binding SeparationDiscardPage}" />
-                    </StackPanel>
-
-                    <StackPanel Spacing="6" IsVisible="{Binding IsSeparationEveryNPages}">
-                        <TextBlock Text="Pages per document" Classes="field-label" />
-                        <NumericUpDown Value="{Binding SeparationPageCount}" Minimum="1" Maximum="500" />
-                    </StackPanel>
-
-                    <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                     <CheckBox Content="Redaction" IsChecked="{Binding RedactionEnabled}" />
                     <StackPanel Spacing="6" IsVisible="{Binding RedactionEnabled}">
                         <CheckBox Content="Detect PII automatically (Presidio)" IsChecked="{Binding RedactionDetectPii}" />

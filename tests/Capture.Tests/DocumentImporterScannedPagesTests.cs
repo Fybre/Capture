@@ -51,13 +51,15 @@ public class DocumentImporterScannedPagesTests
         var importer = new DocumentImporter(
             paths, store, new PdfiumRasterizer(), new SkiaImagePageImporter(), new NoOpLatticeBuilder(), new PdfPigSubsetWriter());
 
-        var profile = new IndexingProfile
+        var profile = new IndexingProfile { Name = "Splits every page" };
+        var importProfile = new ImportProfile
         {
             Name = "Splits every page",
-            Separation = new DocumentSeparation { Trigger = DocumentSeparationTrigger.EveryNPages, PageCount = 1 }
+            Trigger = ImportSeparationTrigger.EveryNPages,
+            PageCount = 1
         };
 
-        var imported = await importer.ImportScannedPagesAsync(pages, DocumentSource.Scan, profile);
+        var imported = await importer.ImportScannedPagesAsync(pages, DocumentSource.Scan, profile, batchProfile: null, importProfile);
 
         Assert.Equal(3, imported.Count);
         Assert.All(imported, item => Assert.Equal(1, item.Document.PageCount));
