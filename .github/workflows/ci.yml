@@ -1,0 +1,36 @@
+name: CI
+
+# Build + test gate for every PR and every push to main — package.yml (the release/artifact build)
+# only ever ran on a tag push or a manual dispatch, so nothing on GitHub itself has been catching a
+# regression before now; this is deliberately just build+test, not packaging.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Same two runner images package.yml already ships from — real platform coverage (Capture.Scanner
+        # has Windows/macOS-specific device access code) rather than a single arbitrary OS.
+        os: [macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_PACKAGES_USERNAME: Fybre
+      # Same secret package.yml uses to restore Capture.Presidio.Binaries/Capture.Tesseract.Binaries from
+      # GitHub Packages — nuget.config's local-nuget-feed fallback is gitignored (only a .gitkeep is
+      # committed), so a fresh checkout has nothing there and needs this to restore Capture.App.
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.CAPTURE_PACKAGES_PAT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore Capture.sln
+      - name: Build
+        run: dotnet build Capture.sln --no-restore --configuration Release
+      - name: Test
+        run: dotnet test Capture.sln --no-build --configuration Release

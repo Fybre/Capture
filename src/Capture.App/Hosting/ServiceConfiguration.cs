@@ -88,7 +88,13 @@ public static class ServiceConfiguration
         services.AddSingleton<IThereforeCategoryPickerDialogService, ThereforeCategoryPickerDialogService>();
         services.AddSingleton<IToastService, ToastService>();
         services.AddSingleton<IUpdateCheckService, GitHubUpdateCheckService>();
-        services.AddTransient<MainViewModel>();
+        // Singleton, not transient: App.axaml.cs only ever creates one (the single main window, for the
+        // whole process lifetime), and it subscribes to events on singleton services (IWatchFolderService,
+        // PresidioSidecarLauncher) at construction with no IDisposable/unsubscribe. A transient
+        // registration papers over that — today's single-instance reality means it never bites — but
+        // registering it as what it actually is closes the landmine outright instead of relying on nothing
+        // ever creating a second instance.
+        services.AddSingleton<MainViewModel>();
         services.AddTransient<ProfilesViewModel>();
         services.AddTransient<BatchProfilesViewModel>();
         services.AddTransient<SettingsViewModel>();
