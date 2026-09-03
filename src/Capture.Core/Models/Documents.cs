@@ -37,6 +37,7 @@ public sealed class CaptureDocument
     public DocumentSource Source { get; init; }
     public Guid? ProfileId { get; set; }
     public Guid? BatchId { get; set; }
+    public Guid? ImportProfileId { get; set; }
     public DocumentStatus Status { get; set; } = DocumentStatus.Queued;
     public int PageCount { get; set; }
     public DateTimeOffset CreatedUtc { get; init; } = DateTimeOffset.UtcNow;

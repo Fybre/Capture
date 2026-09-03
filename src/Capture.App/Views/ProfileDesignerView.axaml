@@ -327,11 +327,6 @@
                                IsVisible="{Binding HasNoExports}"
                                Classes="hint" />
 
-                    <CheckBox Content="Remove from inbox after export" IsChecked="{Binding RemoveAfterExport}" />
-                    <TextBlock Text="Once every enabled export succeeds, the document is deleted instead of being marked Exported."
-                               TextWrapping="Wrap"
-                               Classes="hint" />
-
                     <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                     <DockPanel LastChildFill="False">
                         <TextBlock Text="Shared functions" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />

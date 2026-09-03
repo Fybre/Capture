@@ -43,8 +43,7 @@ public class CaptureJsonOptionsTests
                     FileMode = ExportFileMode.Redacted,
                     FieldIds = [Guid.NewGuid()]
                 }
-            ],
-            RemoveAfterExport = true
+            ]
         };
 
         var json = JsonSerializer.Serialize(profile, CaptureJsonOptions.Default);
@@ -59,8 +58,6 @@ public class CaptureJsonOptionsTests
         Assert.Equal(FieldFormat.Money, field.Format);
         Assert.True(field.Sensitive);
         Assert.NotNull(field.Zone);
-
-        Assert.True(roundtripped.RemoveAfterExport);
 
         var export = Assert.Single(roundtripped.Exports);
         Assert.Equal("Accounts CSV", export.Name);
@@ -125,7 +122,8 @@ public class CaptureJsonOptionsTests
             BarcodeZone = new ZoneRect { PageNumber = 1, X = 0.1f, Y = 0.2f, Width = 0.3f, Height = 0.05f },
             BarcodePageNumber = 1,
             DiscardSeparatorPage = true,
-            IndexingProfileIds = [Guid.NewGuid()]
+            IndexingProfileIds = [Guid.NewGuid()],
+            RemoveAfterExport = true
         };
 
         var json = JsonSerializer.Serialize(profile, CaptureJsonOptions.Default);
@@ -139,6 +137,7 @@ public class CaptureJsonOptionsTests
         Assert.NotNull(roundtripped.BarcodeZone);
         Assert.True(roundtripped.DiscardSeparatorPage);
         Assert.Single(roundtripped.IndexingProfileIds);
+        Assert.True(roundtripped.RemoveAfterExport);
     }
 
     [Fact]

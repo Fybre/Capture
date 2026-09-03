@@ -48,7 +48,8 @@ public sealed class DocumentImporter : IDocumentImporter
         string path,
         DocumentSource source,
         CancellationToken cancellationToken = default,
-        int? imageDpiOverride = null)
+        int? imageDpiOverride = null,
+        ImportProfile? importProfile = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -67,7 +68,8 @@ public sealed class DocumentImporter : IDocumentImporter
             StoredPath = storedPath,
             Source = source,
             Status = DocumentStatus.Processing,
-            CreatedUtc = DateTimeOffset.UtcNow
+            CreatedUtc = DateTimeOffset.UtcNow,
+            ImportProfileId = importProfile?.Id
         };
 
         try
@@ -138,7 +140,7 @@ public sealed class DocumentImporter : IDocumentImporter
     {
         if (!PageSeparator.Enabled(importProfile) && !BatchSeparator.NeedsPageScan(batchProfile))
         {
-            var document = await ImportFileAsync(path, source, cancellationToken, imageDpiOverride).ConfigureAwait(false);
+            var document = await ImportFileAsync(path, source, cancellationToken, imageDpiOverride, importProfile).ConfigureAwait(false);
             return [new ImportedDocument { Document = document }];
         }
 
@@ -167,7 +169,7 @@ public sealed class DocumentImporter : IDocumentImporter
                 .ConfigureAwait(false);
 
             return results.Count == 0
-                ? [new ImportedDocument { Document = await ImportFileAsync(path, source, cancellationToken).ConfigureAwait(false) }]
+                ? [new ImportedDocument { Document = await ImportFileAsync(path, source, cancellationToken, importProfile: importProfile).ConfigureAwait(false) }]
                 : results;
         }
         finally
@@ -206,7 +208,7 @@ public sealed class DocumentImporter : IDocumentImporter
         {
             var wholeDocument = new ClassifiedSplit { SourcePages = rasters.Select(raster => raster.PageNumber).ToList() };
             var imported = await MaterializeSplitAsync(
-                    null, originalName, source, rasters, wholeDocument, batchHit: null, cancellationToken)
+                    null, originalName, source, rasters, wholeDocument, batchHit: null, importProfile, cancellationToken)
                 .ConfigureAwait(false);
             return [imported];
         }
@@ -219,7 +221,7 @@ public sealed class DocumentImporter : IDocumentImporter
             ? [await MaterializeSplitAsync(
                 null, originalName, source, rasters,
                 new ClassifiedSplit { SourcePages = rasters.Select(raster => raster.PageNumber).ToList() },
-                batchHit: null, cancellationToken).ConfigureAwait(false)]
+                batchHit: null, importProfile, cancellationToken).ConfigureAwait(false)]
             : results;
     }
 
@@ -304,7 +306,7 @@ public sealed class DocumentImporter : IDocumentImporter
 
                 pendingHit = null;
                 results.Add(await MaterializeSplitAsync(
-                    sourcePath, originalName, source, rasters, effectiveSplit, hit, cancellationToken).ConfigureAwait(false));
+                    sourcePath, originalName, source, rasters, effectiveSplit, hit, importProfile, cancellationToken).ConfigureAwait(false));
             }
         }
         catch
@@ -360,6 +362,7 @@ public sealed class DocumentImporter : IDocumentImporter
         IReadOnlyList<RasterPage> rasters,
         ClassifiedSplit split,
         BatchTriggerHit? batchHit,
+        ImportProfile? importProfile,
         CancellationToken cancellationToken)
     {
         var id = Guid.NewGuid();
@@ -409,7 +412,8 @@ public sealed class DocumentImporter : IDocumentImporter
             Source = source,
             Status = DocumentStatus.NeedsReview,
             PageCount = pages.Count,
-            CreatedUtc = DateTimeOffset.UtcNow
+            CreatedUtc = DateTimeOffset.UtcNow,
+            ImportProfileId = importProfile?.Id
         };
         await _store.SaveAsync(document, pages, cancellationToken).ConfigureAwait(false);
         try

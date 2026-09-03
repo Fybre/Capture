@@ -130,7 +130,10 @@ public partial class MainViewModel
         if (results.Any(result => !result.Success))
             return ExportOutcome.Failed;
 
-        if (profile.RemoveAfterExport)
+        var importProfile = document.ImportProfileId is { } importProfileId
+            ? ImportProfiles.FirstOrDefault(item => item.Id == importProfileId)
+            : null;
+        if (importProfile?.RemoveAfterExport == true)
         {
             await _store.SoftDeleteAsync(document.Id).ConfigureAwait(true);
             Documents.Remove(row);

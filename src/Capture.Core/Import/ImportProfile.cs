@@ -61,6 +61,13 @@ public sealed class ImportProfile
     /// one immediate use is constraining the Indexing Profile picker to this list.</summary>
     public List<Guid> IndexingProfileIds { get; set; } = [];
 
+    /// <summary>When true, a document produced by this import profile that exports successfully
+    /// (every enabled export definition succeeded) is deleted from the inbox immediately afterward
+    /// instead of being marked <see cref="Capture.Core.Models.DocumentStatus.Exported"/> and kept
+    /// around. Applies regardless of <see cref="Trigger"/> — a fact about the imported document's
+    /// lifecycle, not about how it was split.</summary>
+    public bool RemoveAfterExport { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
 }

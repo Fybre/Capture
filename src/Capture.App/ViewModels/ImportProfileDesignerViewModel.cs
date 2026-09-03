@@ -62,6 +62,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         _barcodeFormat = profile.BarcodeFormat;
         _barcodeValuePattern = profile.BarcodeValuePattern;
         _discardSeparatorPage = profile.DiscardSeparatorPage;
+        _removeAfterExport = profile.RemoveAfterExport;
         _currentPageNumber = Math.Max(1, profile.BarcodePageNumber);
     }
 
@@ -106,6 +107,11 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _discardSeparatorPage;
+
+    /// <summary>Applies regardless of <see cref="Trigger"/> — a fact about the imported document's
+    /// lifecycle, not about how it was split.</summary>
+    [ObservableProperty]
+    private bool _removeAfterExport;
 
     [ObservableProperty]
     private string _statusText = string.Empty;
@@ -426,6 +432,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         Profile.BarcodeFormat = string.IsNullOrWhiteSpace(BarcodeFormat) ? null : BarcodeFormat;
         Profile.BarcodeValuePattern = string.IsNullOrWhiteSpace(BarcodeValuePattern) ? null : BarcodeValuePattern;
         Profile.DiscardSeparatorPage = DiscardSeparatorPage;
+        Profile.RemoveAfterExport = RemoveAfterExport;
         Profile.IndexingProfileIds = IndexingProfileOptions
             .Where(option => option.IsSelected)
             .Select(option => option.Id)

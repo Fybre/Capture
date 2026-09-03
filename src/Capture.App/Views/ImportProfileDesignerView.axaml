@@ -80,6 +80,11 @@
                             <CheckBox Content="Discard the separator page"
                                       IsChecked="{Binding DiscardSeparatorPage}"
                                       IsVisible="{Binding !IsEveryNPages}" />
+
+                            <CheckBox Content="Remove from inbox after export" IsChecked="{Binding RemoveAfterExport}" />
+                            <TextBlock Text="Once every enabled export succeeds, a document this import profile produced is deleted instead of being marked Exported."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
                         </StackPanel>
                     </Border>
 

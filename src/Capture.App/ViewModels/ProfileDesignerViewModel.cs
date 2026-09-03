@@ -66,7 +66,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         _redactionDetectPii = profile.Redaction.DetectPii;
         _redactionScoreThreshold = profile.Redaction.ScoreThresholdPercent;
         _redactionBypassScoreThreshold = profile.Redaction.BypassReviewScoreThresholdPercent;
-        _removeAfterExport = profile.RemoveAfterExport;
         _sampleFileName = profile.SampleFileName;
         _sharedScriptSource = profile.SharedScriptSource;
         _autoReadyThreshold = profile.AutoReadyThreshold;
@@ -115,9 +114,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
     /// themselves while editing — only ProfileApplicator's real pipeline checks this for unattended
     /// (batch/watch-folder) execution.</summary>
     public bool IsScriptingAvailable => _scripts?.IsAvailable ?? false;
-
-    [ObservableProperty]
-    private bool _removeAfterExport;
 
     public FieldFormat[] Formats { get; } = Enum.GetValues<FieldFormat>();
 
@@ -962,7 +958,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
         Profile.Fields = Fields.Select(row => row.Field).ToList();
         Profile.Exports = Exports.Select(row => row.Definition).ToList();
         Profile.Scripts = Scripts.Select(row => row.Script).ToList();
-        Profile.RemoveAfterExport = RemoveAfterExport;
         await _store.SaveAsync(Profile);
         Saved = true;
         IsNew = false;

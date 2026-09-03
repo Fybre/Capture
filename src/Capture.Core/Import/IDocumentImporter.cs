@@ -16,7 +16,8 @@ public interface IDocumentImporter
         string path,
         DocumentSource source,
         CancellationToken cancellationToken = default,
-        int? imageDpiOverride = null);
+        int? imageDpiOverride = null,
+        ImportProfile? importProfile = null);
 
     Task<IReadOnlyList<ImportedDocument>> ImportAsync(
         string path,

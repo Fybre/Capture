@@ -63,6 +63,7 @@ public class DocumentImporterScannedPagesTests
 
         Assert.Equal(3, imported.Count);
         Assert.All(imported, item => Assert.Equal(1, item.Document.PageCount));
+        Assert.All(imported, item => Assert.Equal(importProfile.Id, item.Document.ImportProfileId));
 
         var stored = await store.GetAllAsync();
         Assert.Equal(3, stored.Count);

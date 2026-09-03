@@ -330,10 +330,6 @@ public sealed class IndexingProfile
     public RedactionSettings Redaction { get; set; } = new();
     public List<ExportDefinition> Exports { get; set; } = [];
 
-    /// <summary>When true, a document that exports successfully (every enabled export definition
-    /// succeeded) is deleted from the inbox immediately afterward instead of being marked
-    /// <see cref="Capture.Core.Models.DocumentStatus.Exported"/> and kept around.</summary>
-    public bool RemoveAfterExport { get; set; }
     public List<IndexField> Fields { get; set; } = [];
 
     /// <summary>Profile-level C# scripts — see <see cref="FieldScript"/>/<see cref="ScriptTrigger"/>.

@@ -102,6 +102,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
             .ConfigureAwait(false);
         await TryAddColumnAsync(connection, "documents", "content_hash", "TEXT", cancellationToken)
             .ConfigureAwait(false);
+        await TryAddColumnAsync(connection, "documents", "import_profile_id", "TEXT", cancellationToken)
+            .ConfigureAwait(false);
         await BackfillBatchesAsync(connection, cancellationToken).ConfigureAwait(false);
         await BackfillBatchNumbersAsync(connection, cancellationToken).ConfigureAwait(false);
     }
@@ -209,8 +211,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
         {
             upsert.Transaction = (SqliteTransaction)transaction;
             upsert.CommandText = """
-                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error, content_hash)
-                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError, $contentHash)
+                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error, content_hash, import_profile_id)
+                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError, $contentHash, $importProfile)
                 ON CONFLICT(id) DO UPDATE SET
                   original_file_name = excluded.original_file_name,
                   stored_path = excluded.stored_path,
@@ -223,7 +225,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
                   redaction_status = excluded.redaction_status,
                   redacted_path = excluded.redacted_path,
                   redaction_error = excluded.redaction_error,
-                  content_hash = excluded.content_hash;
+                  content_hash = excluded.content_hash,
+                  import_profile_id = excluded.import_profile_id;
                 """;
             AddDocumentParameters(upsert, document);
             await upsert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -266,7 +269,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
               redaction_status = $redactionStatus,
               redacted_path = $redactedPath,
               redaction_error = $redactionError,
-              content_hash = $contentHash
+              content_hash = $contentHash,
+              import_profile_id = $importProfile
             WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", document.Id.ToString("D"));
@@ -280,6 +284,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         command.Parameters.AddWithValue("$redactedPath", (object?)document.RedactedPath ?? DBNull.Value);
         command.Parameters.AddWithValue("$redactionError", (object?)document.RedactionError ?? DBNull.Value);
         command.Parameters.AddWithValue("$contentHash", (object?)document.ContentHash ?? DBNull.Value);
+        command.Parameters.AddWithValue("$importProfile", (object?)document.ImportProfileId?.ToString("D") ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -291,7 +296,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error, d.deleted_utc, d.content_hash
+            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error, d.deleted_utc, d.content_hash, d.import_profile_id
             FROM documents d
             LEFT JOIN batches b ON b.id = d.batch_id
             WHERE d.deleted_utc IS NULL
@@ -313,7 +318,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, import_profile_id
             FROM documents
             WHERE deleted_utc IS NOT NULL
             ORDER BY deleted_utc DESC;
@@ -335,7 +340,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, import_profile_id
             FROM documents
             WHERE id = $id;
             """;
@@ -356,7 +361,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, import_profile_id
             FROM documents
             WHERE content_hash = $hash AND deleted_utc IS NULL
             ORDER BY created_utc;
@@ -608,6 +613,7 @@ public sealed class SqliteDocumentStore : IDocumentStore
         command.Parameters.AddWithValue("$redactedPath", (object?)document.RedactedPath ?? DBNull.Value);
         command.Parameters.AddWithValue("$redactionError", (object?)document.RedactionError ?? DBNull.Value);
         command.Parameters.AddWithValue("$contentHash", (object?)document.ContentHash ?? DBNull.Value);
+        command.Parameters.AddWithValue("$importProfile", (object?)document.ImportProfileId?.ToString("D") ?? DBNull.Value);
     }
 
     private static CaptureDocument ReadDocument(SqliteDataReader reader)
@@ -633,7 +639,8 @@ public sealed class SqliteDocumentStore : IDocumentStore
             DeletedUtc = reader.FieldCount > 13 && !reader.IsDBNull(13)
                 ? DateTimeOffset.Parse(reader.GetString(13), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
                 : null,
-            ContentHash = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetString(14) : null
+            ContentHash = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetString(14) : null,
+            ImportProfileId = reader.FieldCount > 15 && !reader.IsDBNull(15) ? Guid.Parse(reader.GetString(15)) : null
         };
     }
 }
