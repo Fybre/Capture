@@ -586,7 +586,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
             };
             fieldRow.NotifyPage();
             RefreshHighlights();
-            _ = DetectFieldAsync(fieldRow);
+            DetectField(fieldRow);
             return;
         }
 
@@ -623,7 +623,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
             fieldRow.Field.PageNumber = CurrentPageNumber;
             fieldRow.NotifyPage();
             RefreshHighlights();
-            _ = DetectFieldAsync(fieldRow);
+            DetectField(fieldRow);
             return;
         }
 
@@ -644,7 +644,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     // Mirrors DetectAsync (below, for Strategies) — pre-fills a Barcode field's ValuePattern as an
     // exact-match regex for whatever's decoded in the zone just drawn/adjusted. Zonal fields have
     // nothing to pre-fill (no format/pattern of their own); their live value shows via "Test fields".
-    private async Task DetectFieldAsync(FieldRow row)
+    private void DetectField(FieldRow row)
     {
         if (row.Field.Zone is null || !row.IsBarcode || _barcodes is null)
             return;
