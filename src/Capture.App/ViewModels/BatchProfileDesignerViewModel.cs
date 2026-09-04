@@ -914,7 +914,11 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
     private bool CanRunScriptTest() => !IsBusy && _scriptRunner is not null;
 
-    [RelayCommand]
+    // _scriptEditor is set once, in the constructor, and never changes for the lifetime of this
+    // ViewModel — no NotifyCanExecuteChangedFor wiring needed, unlike IsBusy-gated commands.
+    private bool CanPopOutScript() => _scriptEditor is not null;
+
+    [RelayCommand(CanExecute = nameof(CanPopOutScript))]
     private async Task PopOutSharedScriptAsync()
     {
         if (_scriptEditor is null || _dialogs.Host is not { } host)
@@ -925,7 +929,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
             SharedScriptSource = edited;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanPopOutScript))]
     private async Task PopOutScriptAsync(ScriptRow row)
     {
         if (_scriptEditor is null || _dialogs.Host is not { } host)
@@ -936,7 +940,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
             row.Source = edited;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanPopOutScript))]
     private async Task PopOutFieldScriptAsync()
     {
         if (SelectedField is not { IsScript: true } row || _scriptEditor is null || _dialogs.Host is not { } host)
@@ -947,7 +951,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
             row.ScriptExpression = edited;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanPopOutScript))]
     private async Task PopOutButtonScriptAsync()
     {
         if (SelectedField is not { IsButton: true } row || _scriptEditor is null || _dialogs.Host is not { } host)
