@@ -111,19 +111,26 @@ public class CaptureJsonOptionsTests
     }
 
     [Fact]
-    public void Roundtrips_import_profile_including_trigger_enum_and_zone()
+    public void Roundtrips_import_profile_including_strategy_list_and_match_mode()
     {
         var profile = new ImportProfile
         {
             Name = "Barcode splits",
-            Trigger = ImportSeparationTrigger.Barcode,
-            BarcodeFormat = "CODE_128",
-            BarcodeValuePattern = "^DOC-",
-            BarcodeZone = new ZoneRect { PageNumber = 1, X = 0.1f, Y = 0.2f, Width = 0.3f, Height = 0.05f },
-            BarcodePageNumber = 1,
-            DiscardSeparatorPage = true,
+            MatchMode = SeparationMatchMode.All,
             IndexingProfileIds = [Guid.NewGuid()],
-            BatchProfileId = Guid.NewGuid()
+            BatchProfileId = Guid.NewGuid(),
+            Strategies =
+            [
+                new SeparationStrategy
+                {
+                    Type = SeparationStrategyType.Barcode,
+                    BarcodeFormat = "CODE_128",
+                    BarcodeValuePattern = "^DOC-",
+                    Zone = new ZoneRect { PageNumber = 1, X = 0.1f, Y = 0.2f, Width = 0.3f, Height = 0.05f },
+                    ZonePageNumber = 1,
+                    DiscardSeparatorPage = true
+                }
+            ]
         };
 
         var json = JsonSerializer.Serialize(profile, CaptureJsonOptions.Default);
@@ -131,13 +138,16 @@ public class CaptureJsonOptionsTests
 
         Assert.NotNull(roundtripped);
         Assert.Equal("Barcode splits", roundtripped!.Name);
-        Assert.Equal(ImportSeparationTrigger.Barcode, roundtripped.Trigger);
-        Assert.Equal("CODE_128", roundtripped.BarcodeFormat);
-        Assert.Equal("^DOC-", roundtripped.BarcodeValuePattern);
-        Assert.NotNull(roundtripped.BarcodeZone);
-        Assert.True(roundtripped.DiscardSeparatorPage);
+        Assert.Equal(SeparationMatchMode.All, roundtripped.MatchMode);
         Assert.Single(roundtripped.IndexingProfileIds);
         Assert.Equal(profile.BatchProfileId, roundtripped.BatchProfileId);
+
+        var strategy = Assert.Single(roundtripped.Strategies);
+        Assert.Equal(SeparationStrategyType.Barcode, strategy.Type);
+        Assert.Equal("CODE_128", strategy.BarcodeFormat);
+        Assert.Equal("^DOC-", strategy.BarcodeValuePattern);
+        Assert.NotNull(strategy.Zone);
+        Assert.True(strategy.DiscardSeparatorPage);
     }
 
     [Fact]

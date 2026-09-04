@@ -3,6 +3,7 @@ using Capture.App.Services;
 using Capture.Core.Batches;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
+using Capture.Core.Lattice;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -23,6 +24,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
     private readonly IImagePageImporter _imageImporter;
     private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
+    private readonly ILatticeBuilder? _latticeBuilder;
 
     public ImportProfilesViewModel(
         IImportProfileStore store,
@@ -35,7 +37,8 @@ public partial class ImportProfilesViewModel : ViewModelBase
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
         IToastService toasts,
-        IBarcodeDecoder? barcodes = null)
+        IBarcodeDecoder? barcodes = null,
+        ILatticeBuilder? latticeBuilder = null)
     {
         _store = store;
         _profileStore = profileStore;
@@ -48,6 +51,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
         _imageImporter = imageImporter;
         _toasts = toasts;
         _barcodes = barcodes;
+        _latticeBuilder = latticeBuilder;
     }
 
     public ObservableCollection<ImportProfile> Profiles { get; } = [];
@@ -131,7 +135,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
     {
         var designer = new ImportProfileDesignerViewModel(
             profile, isNew, _store, _profileStore, _batchProfileStore, _profileDialog, _batchProfileDialog,
-            _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes)
+            _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes, _latticeBuilder)
         {
             CloseCommand = CloseDesignerCommand
         };

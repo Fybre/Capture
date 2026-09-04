@@ -41,52 +41,145 @@
                     <Border Classes="card" HorizontalAlignment="Stretch">
                         <StackPanel Spacing="10">
                             <TextBlock Text="Split incoming file when" Classes="section-title" />
-                            <ComboBox ItemsSource="{Binding TriggerOptions}"
-                                      SelectedItem="{Binding Trigger}"
+                            <ComboBox ItemsSource="{Binding MatchModeOptions}"
+                                      SelectedItem="{Binding MatchMode}"
                                       HorizontalAlignment="Stretch" />
+                            <StackPanel Spacing="4" IsVisible="{Binding IsAtLeast}">
+                                <TextBlock Text="Minimum strategies that must match" Classes="field-label" />
+                                <NumericUpDown Value="{Binding MatchMinimum}" Minimum="1" Maximum="20" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <TextBlock Text="All = every strategy below must match this page. Any = at least one must match. At least N = a minimum count of them must match."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                        </StackPanel>
+                    </Border>
 
-                            <StackPanel Spacing="4" IsVisible="{Binding IsEveryNPages}">
+                    <Border Classes="card" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Strategies" Classes="section-title" />
+                            <ListBox ItemsSource="{Binding Strategies}"
+                                     SelectedItem="{Binding SelectedStrategy}"
+                                     MaxHeight="220">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding DisplayLabel}" FontWeight="Medium" />
+                                                <TextBlock Text="(zone set)" Classes="hint" IsVisible="{Binding Zone, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1"
+                                                    Content="Remove"
+                                                    Classes="ghost"
+                                                    Padding="6,2"
+                                                    FontSize="11.5"
+                                                    Command="{Binding $parent[ListBox].((vm:ImportProfileDesignerViewModel)DataContext).RemoveStrategyCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <Button Content="+ Add strategy" Command="{Binding AddStrategyCommand}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Classes="card"
+                            HorizontalAlignment="Stretch"
+                            IsVisible="{Binding SelectedStrategy, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Strategy" Classes="section-title" />
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Type" Classes="field-label" />
+                                <ComboBox ItemsSource="{Binding StrategyTypeOptions}"
+                                          SelectedItem="{Binding SelectedStrategy.Type}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Name (optional)" Classes="field-label" />
+                                <TextBox Text="{Binding SelectedStrategy.Name}" Watermark="e.g. Cover barcode" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding SelectedStrategy.IsEveryNPages}">
                                 <TextBlock Text="Pages per document" Classes="field-label" />
-                                <NumericUpDown Value="{Binding PageCount}" Minimum="1" Maximum="500" HorizontalAlignment="Stretch" />
+                                <NumericUpDown Value="{Binding SelectedStrategy.PageCount}" Minimum="1" Maximum="500" HorizontalAlignment="Stretch" />
                             </StackPanel>
 
-                            <StackPanel Spacing="4" IsVisible="{Binding IsBlankPage}">
+                            <StackPanel Spacing="4" IsVisible="{Binding SelectedStrategy.IsBlankPage}">
                                 <TextBlock Text="Blank page ink threshold (%)" Classes="field-label" />
-                                <NumericUpDown Value="{Binding BlankInkPercent}" Minimum="0" Maximum="100" HorizontalAlignment="Stretch" />
+                                <NumericUpDown Value="{Binding SelectedStrategy.BlankInkPercent}" Minimum="0" Maximum="100" HorizontalAlignment="Stretch" />
                             </StackPanel>
 
-                            <StackPanel Spacing="10" IsVisible="{Binding IsBarcode}">
+                            <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsBarcode}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Barcode type" Classes="field-label" />
                                     <ComboBox ItemsSource="{Binding BarcodeFormatOptions}"
-                                              SelectedItem="{Binding BarcodeFormat}"
+                                              SelectedItem="{Binding SelectedStrategy.BarcodeFormat}"
                                               PlaceholderText="Any format"
                                               HorizontalAlignment="Stretch" />
                                 </StackPanel>
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Barcode value to match" Classes="field-label" />
-                                    <TextBox Text="{Binding BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
+                                    <TextBox Text="{Binding SelectedStrategy.BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
                                     <TextBlock Text="This is a regex, not the literal value — drawing a zone auto-fills an exact-match pattern (^value$) for whatever's detected there. Edit or clear it to match more broadly."
                                                TextWrapping="Wrap"
                                                Classes="hint" />
                                 </StackPanel>
-                                <Button Content="Test against current sample"
-                                        Command="{Binding TestMatchCommand}"
-                                        HorizontalAlignment="Left" />
-                                <TextBlock Text="Load a sample document on the right and draw a rectangle around the barcode."
+                                <Button Content="Test against current sample" Command="{Binding TestMatchCommand}" HorizontalAlignment="Left" />
+                                <TextBlock Text="Load a sample document below and draw a rectangle around the barcode."
                                            TextWrapping="Wrap"
                                            Classes="hint" />
                             </StackPanel>
 
+                            <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsOcrZone}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Zone text to match" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedStrategy.TextPattern}" Watermark="Leave empty to match any text in the zone (regex)" />
+                                    <TextBlock Text="This is a regex — drawing a zone auto-fills an exact-match pattern (^text$) for whatever's detected there. Edit or clear it to match more broadly."
+                                               TextWrapping="Wrap"
+                                               Classes="hint" />
+                                </StackPanel>
+                                <Button Content="Test against current sample" Command="{Binding TestMatchCommand}" HorizontalAlignment="Left" />
+                                <TextBlock Text="Load a sample document below and draw a rectangle around the text to match."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsRegex}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Whole-page text to match" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedStrategy.TextPattern}" Watermark="Regex — required, matched against the whole page's text" />
+                                </StackPanel>
+                                <Button Content="Test against current sample" Command="{Binding TestMatchCommand}" HorizontalAlignment="Left" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsSimilarity}">
+                                <TextBlock Text="Reference region" Classes="field-label" />
+                                <TextBlock Text="Draw a rectangle below to mark the reference region on the sample."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Similarity threshold" Classes="field-label" />
+                                    <NumericUpDown Value="{Binding SelectedStrategy.SimilarityThreshold}" Minimum="0" Maximum="1" Increment="0.01" FormatString="0.00" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                                <Button Content="Compute reference embedding" IsEnabled="False" HorizontalAlignment="Left"
+                                        ToolTip.Tip="Coming soon — needs an embedding model, not yet built." />
+                                <Button Content="Test against current sample" IsEnabled="False" HorizontalAlignment="Left"
+                                        ToolTip.Tip="Coming soon — needs an embedding model, not yet built." />
+                            </StackPanel>
+
                             <CheckBox Content="Discard the separator page"
-                                      IsChecked="{Binding DiscardSeparatorPage}"
-                                      IsVisible="{Binding !IsEveryNPages}" />
+                                      IsChecked="{Binding SelectedStrategy.DiscardSeparatorPage}"
+                                      IsVisible="{Binding !SelectedStrategy.IsEveryNPages}" />
                         </StackPanel>
                     </Border>
 
-                    <Border Classes="card" HorizontalAlignment="Stretch" IsVisible="{Binding IsBarcode}">
+                    <Border Classes="card" HorizontalAlignment="Stretch">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Sample document" Classes="section-title" />
+                            <TextBlock Text="Shared by every strategy above that needs a drawn zone."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="Choose sample…" Command="{Binding ChangeSampleCommand}" />
                                 <TextBlock Text="{Binding SampleFileName}" VerticalAlignment="Center" Classes="field-label" />
@@ -150,8 +243,7 @@
 
             <Grid Grid.Column="1"
                   RowDefinitions="Auto,*"
-                  Background="{DynamicResource SurfaceBrush}"
-                  IsVisible="{Binding IsBarcode}">
+                  Background="{DynamicResource SurfaceBrush}">
                 <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="12,10">
                     <Button Classes="ghost nav" Command="{Binding PreviousPageCommand}">
                         <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />

@@ -7,6 +7,7 @@ using Capture.Core.Batches;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
+using Capture.Core.Models;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -16,10 +17,7 @@ namespace Capture.App.ViewModels;
 
 public partial class ImportProfileDesignerViewModel : ViewModelBase
 {
-    // A fixed sentinel Id for the single barcode-zone highlight this Designer ever shows — there's no
-    // per-field identity here the way ProfileDesignerViewModel's fields have, so SelectHighlight has
-    // nothing to resolve back to; the highlight exists purely to render the current BarcodeZone.
-    private static readonly Guid BarcodeZoneHighlightId = Guid.NewGuid();
+    private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
     private readonly IImportProfileStore _store;
     private readonly IProfileStore _profileStore;
@@ -32,7 +30,9 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     private readonly IImagePageImporter _imageImporter;
     private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
+    private readonly ILatticeBuilder? _latticeBuilder;
     private readonly List<string> _pageImagePaths = [];
+    private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
 
     public ImportProfileDesignerViewModel(
@@ -48,7 +48,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
         IToastService toasts,
-        IBarcodeDecoder? barcodes = null)
+        IBarcodeDecoder? barcodes = null,
+        ILatticeBuilder? latticeBuilder = null)
     {
         Profile = profile;
         IsNew = isNew;
@@ -63,16 +64,15 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         _imageImporter = imageImporter;
         _toasts = toasts;
         _barcodes = barcodes;
+        _latticeBuilder = latticeBuilder;
 
         _name = profile.Name;
-        _trigger = profile.Trigger;
-        _pageCount = Math.Max(1, profile.PageCount);
-        _blankInkPercent = profile.BlankInkPercent;
         _sampleFileName = profile.SampleFileName;
-        _barcodeFormat = profile.BarcodeFormat;
-        _barcodeValuePattern = profile.BarcodeValuePattern;
-        _discardSeparatorPage = profile.DiscardSeparatorPage;
-        _currentPageNumber = Math.Max(1, profile.BarcodePageNumber);
+        _matchMode = profile.MatchMode;
+        _matchMinimum = Math.Max(1, profile.MatchMinimum);
+
+        foreach (var strategy in profile.Strategies)
+            Strategies.Add(new SeparationStrategyRow(strategy));
     }
 
     public ImportProfile Profile { get; }
@@ -83,9 +83,13 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     public ICommand? CloseCommand { get; set; }
 
-    public IReadOnlyList<ImportSeparationTrigger> TriggerOptions { get; } = Enum.GetValues<ImportSeparationTrigger>();
+    public IReadOnlyList<SeparationMatchMode> MatchModeOptions { get; } = Enum.GetValues<SeparationMatchMode>();
+
+    public IReadOnlyList<SeparationStrategyType> StrategyTypeOptions { get; } = Enum.GetValues<SeparationStrategyType>();
 
     public IReadOnlyList<string> BarcodeFormatOptions => BarcodePatterns.KnownFormats;
+
+    public ObservableCollection<SeparationStrategyRow> Strategies { get; } = [];
 
     public ObservableCollection<IndexingProfileOption> IndexingProfileOptions { get; } = [];
 
@@ -95,32 +99,24 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     private string _name;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEveryNPages))]
-    [NotifyPropertyChangedFor(nameof(IsBlankPage))]
-    [NotifyPropertyChangedFor(nameof(IsBarcode))]
-    private ImportSeparationTrigger _trigger;
+    [NotifyPropertyChangedFor(nameof(IsAtLeast))]
+    private SeparationMatchMode _matchMode;
 
     [ObservableProperty]
-    private int _pageCount;
+    private int _matchMinimum = 1;
 
-    [ObservableProperty]
-    private int _blankInkPercent;
+    public bool IsAtLeast => MatchMode == SeparationMatchMode.AtLeast;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
     private string? _sampleFileName;
 
     [ObservableProperty]
-    private string? _barcodeFormat;
-
-    [ObservableProperty]
-    private string? _barcodeValuePattern;
-
-    [ObservableProperty]
-    private bool _discardSeparatorPage;
-
-    [ObservableProperty]
     private BatchProfile? _selectedBatchProfile;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TestMatchCommand))]
+    private SeparationStrategyRow? _selectedStrategy;
 
     [ObservableProperty]
     private string _statusText = string.Empty;
@@ -129,18 +125,26 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(HasStatusText));
 
+    partial void OnSelectedStrategyChanged(SeparationStrategyRow? value)
+    {
+        if (value?.Zone is { } zone && zone.PageNumber != CurrentPageNumber
+            && zone.PageNumber >= 1 && zone.PageNumber <= SamplePageCount)
+        {
+            CurrentPageNumber = zone.PageNumber;
+            _ = ShowPageAsync();
+        }
+        else
+        {
+            RefreshHighlights();
+        }
+    }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(TestMatchCommand))]
     private bool _isBusy;
-
-    public bool IsEveryNPages => Trigger == ImportSeparationTrigger.EveryNPages;
-
-    public bool IsBlankPage => Trigger == ImportSeparationTrigger.BlankPage;
-
-    public bool IsBarcode => Trigger == ImportSeparationTrigger.Barcode;
 
     [ObservableProperty]
     private Bitmap? _pageImage;
@@ -173,6 +177,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         CurrentPageNumber = SamplePageCount == 0 ? 1 : Math.Clamp(CurrentPageNumber, 1, SamplePageCount);
         await ShowPageAsync().ConfigureAwait(true);
         StatusText = SamplePageCount == 0 ? "No sample pages" : string.Empty;
+
+        SelectedStrategy = Strategies.FirstOrDefault();
     }
 
     // Preserves existing checkbox selections across a reload — used both by InitializeAsync and after
@@ -225,6 +231,29 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         await ReloadBatchProfileOptionsAsync().ConfigureAwait(true);
     }
 
+    [RelayCommand]
+    private void AddStrategy()
+    {
+        // EveryNPages is the friendliest default to add — it needs no sample/zone at all, so a newly
+        // added strategy is immediately usable rather than sitting there needing setup before anything
+        // else can happen.
+        var row = new SeparationStrategyRow(new SeparationStrategy { Id = Guid.NewGuid(), Type = SeparationStrategyType.EveryNPages });
+        Strategies.Add(row);
+        SelectedStrategy = row;
+    }
+
+    [RelayCommand]
+    private void RemoveStrategy(SeparationStrategyRow? row)
+    {
+        if (row is null)
+            return;
+
+        Strategies.Remove(row);
+        if (SelectedStrategy == row)
+            SelectedStrategy = null;
+        RefreshHighlights();
+    }
+
     private IReadOnlyList<string> GetPageImagePaths()
     {
         var directory = _paths.ImportProfilePagesDirectory(Profile.Id);
@@ -251,6 +280,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
             SampleFileName = Profile.SampleFileName;
             _pageImagePaths.Clear();
             _pageImagePaths.AddRange(GetPageImagePaths());
+            _lattices.Clear();
             SamplePageCount = _pageImagePaths.Count;
             CurrentPageNumber = 1;
             await ShowPageAsync().ConfigureAwait(true);
@@ -272,9 +302,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     // Deliberately not reusing IProfileSampleService — it's typed to IndexingProfile specifically (its
     // PrepareAsync signature, and the ProfileDirectory/ProfilePagesDirectory paths it writes to, both
-    // assume an IndexingProfile). ImportProfile only ever needs the rasterized page images (no OCR
-    // lattice — there's no field extraction happening here), so this is a smaller, self-contained
-    // version rather than widening that service's contract for one extra caller.
+    // assume an IndexingProfile). ImportProfile only ever needs the rasterized page images; any OCR
+    // lattice a strategy card needs is built lazily and separately, see EnsureLatticeAsync.
     private async Task PrepareSampleAsync(string sourcePath)
     {
         _paths.EnsureCreated();
@@ -356,28 +385,28 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     private void RefreshHighlights()
     {
-        var zone = Profile.BarcodeZone;
-        Highlights = zone is not null && zone.PageNumber == CurrentPageNumber
-            ? [new IndexHighlight
+        Highlights = Strategies
+            .Where(row => row.NeedsZone && row.Zone is { } zone && zone.PageNumber == CurrentPageNumber)
+            .Select(row => new IndexHighlight
             {
-                FieldId = BarcodeZoneHighlightId,
-                FieldName = "Barcode zone",
-                X = zone.X,
-                Y = zone.Y,
-                Width = zone.Width,
-                Height = zone.Height,
-                IsSelected = true
-            }]
-            : [];
+                FieldId = row.Id,
+                FieldName = row.DisplayLabel,
+                X = row.Zone!.X,
+                Y = row.Zone.Y,
+                Width = row.Zone.Width,
+                Height = row.Zone.Height,
+                IsSelected = SelectedStrategy?.Id == row.Id
+            })
+            .ToList();
     }
 
     [RelayCommand]
     private void CompleteZone(NormalizedRect rect)
     {
-        if (!IsBarcode || rect.Width < 0.004f || rect.Height < 0.004f)
+        if (SelectedStrategy is not { NeedsZone: true } row || rect.Width < 0.004f || rect.Height < 0.004f)
             return;
 
-        Profile.BarcodeZone = new ZoneRect
+        row.Zone = new ZoneRect
         {
             PageNumber = CurrentPageNumber,
             X = rect.X,
@@ -385,62 +414,167 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
             Width = rect.Width,
             Height = rect.Height
         };
-        Profile.BarcodePageNumber = CurrentPageNumber;
+        row.ZonePageNumber = CurrentPageNumber;
         RefreshHighlights();
-        DetectBarcode();
+        _ = DetectAsync(row);
     }
 
     [RelayCommand]
     private void ChangeZone(NormalizedRect rect)
     {
-        if (!IsBarcode || Profile.BarcodeZone is null)
+        if (SelectedStrategy is not { NeedsZone: true } row || row.Zone is null)
             return;
 
-        var zone = Profile.BarcodeZone;
+        var zone = row.Zone;
         zone.X = Math.Clamp(rect.X, 0, 1);
         zone.Y = Math.Clamp(rect.Y, 0, 1);
         zone.Width = Math.Clamp(rect.Width, 0.002f, 1);
         zone.Height = Math.Clamp(rect.Height, 0.002f, 1);
         zone.PageNumber = CurrentPageNumber;
-        Profile.BarcodePageNumber = CurrentPageNumber;
+        row.ZonePageNumber = CurrentPageNumber;
         RefreshHighlights();
-        DetectBarcode();
+        _ = DetectAsync(row);
     }
 
-    // Attempts to decode a real barcode from the zone just drawn/adjusted and pre-fills the
-    // type/value fields from what's actually there, since typing a symbology and an exact regex by
-    // hand is unnecessary busywork when a real sample is right in front of the user. Both fields stay
-    // freely editable/clearable afterward — this only ever sets a starting point, never something the
-    // user is locked into.
-    private void DetectBarcode()
+    // Attempts to detect a real value from the zone just drawn/adjusted and pre-fills the row's
+    // config from what's actually there, since typing a symbology/regex by hand is unnecessary
+    // busywork when a real sample is right in front of the user. Fields stay freely editable/
+    // clearable afterward — this only ever sets a starting point.
+    private async Task DetectAsync(SeparationStrategyRow row)
     {
-        if (_barcodes is null || Profile.BarcodeZone is null)
+        if (row.Zone is null)
+            return;
+
+        if (row.IsBarcode)
+        {
+            DetectBarcode(row);
+            return;
+        }
+
+        if (row.IsOcrZone)
+        {
+            await DetectOcrZoneAsync(row).ConfigureAwait(true);
+            return;
+        }
+
+        if (row.IsSimilarity)
+            StatusText = "Reference zone set — embedding comparison isn't available yet";
+    }
+
+    private void DetectBarcode(SeparationStrategyRow row)
+    {
+        if (_barcodes is null || row.Zone is null)
             return;
 
         var pageIndex = CurrentPageNumber - 1;
         if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
             return;
 
-        var decoded = _barcodes.Decode(_pageImagePaths[pageIndex], Profile.BarcodeZone);
+        var decoded = _barcodes.Decode(_pageImagePaths[pageIndex], row.Zone);
         if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
         {
             StatusText = "Barcode zone set — no barcode detected there; enter the type/value manually if needed";
             return;
         }
 
-        BarcodeFormat = decoded.Format;
-        BarcodeValuePattern = $"^{Regex.Escape(decoded.Text)}$";
+        row.BarcodeFormat = decoded.Format;
+        row.BarcodeValuePattern = $"^{Regex.Escape(decoded.Text)}$";
         StatusText = $"Detected {BarcodePatterns.DisplayType(decoded.Format)}: {decoded.Text}";
     }
 
-    // Re-decodes the current zone and checks it against whatever the user has typed into
-    // BarcodeFormat/BarcodeValuePattern right now — unlike DetectBarcode (which overwrites those
-    // fields), this leaves them untouched and just reports whether they'd actually match a real
-    // scan of this sample. Useful after hand-editing the pattern (e.g. loosening it to a prefix).
-    [RelayCommand(CanExecute = nameof(CanTestMatch))]
-    private void TestMatch()
+    private async Task DetectOcrZoneAsync(SeparationStrategyRow row)
     {
-        if (Profile.BarcodeZone is null)
+        if (row.Zone is null)
+            return;
+
+        var lattice = await EnsureLatticeAsync(CurrentPageNumber).ConfigureAwait(true);
+        if (lattice is null)
+        {
+            StatusText = "No text found on this page to detect from";
+            return;
+        }
+
+        var extracted = ZonalExtractor.Extract(lattice, row.Zone);
+        if (string.IsNullOrWhiteSpace(extracted.Text))
+        {
+            StatusText = "OCR zone set — no text detected there; enter the pattern manually if needed";
+            return;
+        }
+
+        var text = extracted.Text.Trim();
+        row.TextPattern = $"^{Regex.Escape(text)}$";
+        StatusText = $"Detected text: {text}";
+    }
+
+    // Builds (and caches, per sample page) the OCR lattice a Regex/OcrZone strategy card needs to
+    // preview/test against — built lazily, only when a card actually asks for it, mirroring
+    // ProfileDesignerViewModel's own per-page lattice cache. The throwaway CaptureDocument/DocumentPage
+    // pair is never persisted, same pattern DocumentImporter uses to build page text/lattices before
+    // any real document exists.
+    private async Task<PageLattice?> EnsureLatticeAsync(int pageNumber)
+    {
+        if (_lattices.TryGetValue(pageNumber, out var cached))
+            return cached;
+
+        if (_latticeBuilder is null)
+            return null;
+
+        var pageIndex = pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
+            return null;
+
+        var imagePath = _pageImagePaths[pageIndex];
+        var throwawayId = Guid.NewGuid();
+        var throwawayDocument = new CaptureDocument { OriginalFileName = string.Empty, StoredPath = imagePath };
+        var throwawayPage = new DocumentPage
+        {
+            DocumentId = throwawayId,
+            PageNumber = pageNumber,
+            SourcePageNumber = pageNumber,
+            ImagePath = imagePath
+        };
+
+        var lattice = await _latticeBuilder.BuildPageAsync(throwawayDocument, throwawayPage, CancellationToken.None).ConfigureAwait(false);
+        _lattices[pageNumber] = lattice;
+        return lattice;
+    }
+
+    // Re-evaluates the selected strategy against the current sample and reports whether it would
+    // actually match — unlike DetectAsync (which overwrites the row's fields), this leaves them
+    // untouched. Useful after hand-editing a pattern (e.g. loosening it to a prefix).
+    [RelayCommand(CanExecute = nameof(CanTestMatch))]
+    private async Task TestMatchAsync()
+    {
+        if (SelectedStrategy is not { } row)
+            return;
+
+        if (row.IsBarcode)
+        {
+            TestBarcodeMatch(row);
+            return;
+        }
+
+        if (row.IsOcrZone)
+        {
+            await TestOcrZoneMatchAsync(row).ConfigureAwait(true);
+            return;
+        }
+
+        if (row.IsRegex)
+        {
+            await TestRegexMatchAsync(row).ConfigureAwait(true);
+            return;
+        }
+
+        if (row.IsSimilarity)
+            StatusText = "Testing isn't available yet — needs an embedding model";
+    }
+
+    private bool CanTestMatch() => !IsBusy && SelectedStrategy is not null;
+
+    private void TestBarcodeMatch(SeparationStrategyRow row)
+    {
+        if (_barcodes is null || row.Zone is null)
         {
             StatusText = "Draw a barcode zone first, then test";
             return;
@@ -450,23 +584,94 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
             return;
 
-        var decoded = _barcodes!.Decode(_pageImagePaths[pageIndex], Profile.BarcodeZone);
+        var decoded = _barcodes.Decode(_pageImagePaths[pageIndex], row.Zone);
         if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
         {
             StatusText = "No barcode detected in the current zone";
             return;
         }
 
-        var formatMatches = string.IsNullOrWhiteSpace(BarcodeFormat)
-            || string.Equals(BarcodeFormat, decoded.Format, StringComparison.OrdinalIgnoreCase);
-        var valueMatches = BarcodePatterns.Matches(BarcodeValuePattern, decoded.Text);
+        var formatMatches = string.IsNullOrWhiteSpace(row.BarcodeFormat)
+            || string.Equals(row.BarcodeFormat, decoded.Format, StringComparison.OrdinalIgnoreCase);
+        var valueMatches = BarcodePatterns.Matches(row.BarcodeValuePattern, decoded.Text);
 
         StatusText = formatMatches && valueMatches
             ? $"Match: {BarcodePatterns.DisplayType(decoded.Format)} “{decoded.Text}”"
             : $"No match — detected {BarcodePatterns.DisplayType(decoded.Format)} “{decoded.Text}”, which doesn't satisfy the current type/value filter";
     }
 
-    private bool CanTestMatch() => !IsBusy && _barcodes is not null;
+    // Mirrors PageSeparator's OcrZone evaluator exactly: an empty pattern matches any non-empty zone
+    // text, same as an empty BarcodeValuePattern matches any barcode value.
+    private async Task TestOcrZoneMatchAsync(SeparationStrategyRow row)
+    {
+        if (row.Zone is null)
+        {
+            StatusText = "Draw a zone first, then test";
+            return;
+        }
+
+        var lattice = await EnsureLatticeAsync(CurrentPageNumber).ConfigureAwait(true);
+        if (lattice is null)
+        {
+            StatusText = "No text found on this page to test against";
+            return;
+        }
+
+        var extracted = ZonalExtractor.Extract(lattice, row.Zone);
+        if (string.IsNullOrWhiteSpace(extracted.Text))
+        {
+            StatusText = "No text detected in the current zone";
+            return;
+        }
+
+        var text = extracted.Text.Trim();
+        if (string.IsNullOrWhiteSpace(row.TextPattern))
+        {
+            StatusText = $"Match (any non-empty text): “{text}”";
+            return;
+        }
+
+        StatusText = TryRegexMatch(row.TextPattern, extracted.Text)
+            ? $"Match: “{text}”"
+            : $"No match — detected “{text}”, which doesn't satisfy the current pattern";
+    }
+
+    // Mirrors PageSeparator's Regex evaluator exactly: unlike OcrZone, an empty pattern never hits —
+    // there's no other signal to fall back on for a whole-page match.
+    private async Task TestRegexMatchAsync(SeparationStrategyRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.TextPattern))
+        {
+            StatusText = "Enter a pattern first, then test";
+            return;
+        }
+
+        var lattice = await EnsureLatticeAsync(CurrentPageNumber).ConfigureAwait(true);
+        if (lattice is null)
+        {
+            StatusText = "No text found on this page to test against";
+            return;
+        }
+
+        var text = LatticeText.Build(lattice.Words).Text;
+        StatusText = TryRegexMatch(row.TextPattern, text) ? "Match found on this page" : "No match on this page";
+    }
+
+    private static bool TryRegexMatch(string pattern, string text)
+    {
+        try
+        {
+            return Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexMatchTimeout);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
 
     [RelayCommand]
     private async Task SaveAsync()
@@ -479,12 +684,9 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         }
 
         Profile.Name = Name.Trim();
-        Profile.Trigger = Trigger;
-        Profile.PageCount = Math.Max(1, PageCount);
-        Profile.BlankInkPercent = BlankInkPercent;
-        Profile.BarcodeFormat = string.IsNullOrWhiteSpace(BarcodeFormat) ? null : BarcodeFormat;
-        Profile.BarcodeValuePattern = string.IsNullOrWhiteSpace(BarcodeValuePattern) ? null : BarcodeValuePattern;
-        Profile.DiscardSeparatorPage = DiscardSeparatorPage;
+        Profile.MatchMode = MatchMode;
+        Profile.MatchMinimum = Math.Max(1, MatchMinimum);
+        Profile.Strategies = Strategies.Select(row => row.ToModel()).ToList();
         Profile.BatchProfileId = SelectedBatchProfile?.Id;
         Profile.IndexingProfileIds = IndexingProfileOptions
             .Where(option => option.IsSelected)
@@ -514,4 +716,106 @@ public sealed partial class IndexingProfileOption : ObservableObject
 
     [ObservableProperty]
     private bool _isSelected;
+}
+
+/// <summary>Wraps one <see cref="SeparationStrategy"/> for editing in the Designer — like <c>FieldRow</c>
+/// wraps an <c>IndexField</c>, this mirrors the model's flat, kind-specific fields as observable
+/// properties so the UI can bind/edit them directly, then flattens back via <see cref="ToModel"/>.</summary>
+public sealed partial class SeparationStrategyRow : ObservableObject
+{
+    public SeparationStrategyRow(SeparationStrategy strategy)
+    {
+        Id = strategy.Id;
+        _type = strategy.Type;
+        _name = strategy.Name;
+        _pageCount = Math.Max(1, strategy.PageCount);
+        _blankInkPercent = strategy.BlankInkPercent;
+        _zone = strategy.Zone;
+        _zonePageNumber = Math.Max(1, strategy.ZonePageNumber);
+        _barcodeFormat = strategy.BarcodeFormat;
+        _barcodeValuePattern = strategy.BarcodeValuePattern;
+        _textPattern = strategy.TextPattern;
+        _discardSeparatorPage = strategy.DiscardSeparatorPage;
+        ReferenceEmbedding = strategy.ReferenceEmbedding;
+        _similarityThreshold = strategy.SimilarityThreshold;
+    }
+
+    public Guid Id { get; }
+
+    /// <summary>Not editable directly today (nothing computes one yet) — just round-trips whatever
+    /// Phase C eventually sets.</summary>
+    public float[]? ReferenceEmbedding { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBarcode))]
+    [NotifyPropertyChangedFor(nameof(IsBlankPage))]
+    [NotifyPropertyChangedFor(nameof(IsEveryNPages))]
+    [NotifyPropertyChangedFor(nameof(IsRegex))]
+    [NotifyPropertyChangedFor(nameof(IsOcrZone))]
+    [NotifyPropertyChangedFor(nameof(IsSimilarity))]
+    [NotifyPropertyChangedFor(nameof(NeedsZone))]
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    private SeparationStrategyType _type;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    private string? _name;
+
+    [ObservableProperty]
+    private int _pageCount = 1;
+
+    [ObservableProperty]
+    private int _blankInkPercent;
+
+    [ObservableProperty]
+    private ZoneRect? _zone;
+
+    [ObservableProperty]
+    private int _zonePageNumber = 1;
+
+    [ObservableProperty]
+    private string? _barcodeFormat;
+
+    [ObservableProperty]
+    private string? _barcodeValuePattern;
+
+    [ObservableProperty]
+    private string? _textPattern;
+
+    [ObservableProperty]
+    private double _similarityThreshold = 0.85;
+
+    [ObservableProperty]
+    private bool _discardSeparatorPage;
+
+    public bool IsBarcode => Type == SeparationStrategyType.Barcode;
+    public bool IsBlankPage => Type == SeparationStrategyType.BlankPage;
+    public bool IsEveryNPages => Type == SeparationStrategyType.EveryNPages;
+    public bool IsRegex => Type == SeparationStrategyType.Regex;
+    public bool IsOcrZone => Type == SeparationStrategyType.OcrZone;
+    public bool IsSimilarity => Type == SeparationStrategyType.Similarity;
+
+    /// <summary>Barcode/OcrZone need a real drawn zone; Similarity's reference region does too, once
+    /// the embedding backend can use it (Phase C) — modeled now so the card's shape doesn't change
+    /// later.</summary>
+    public bool NeedsZone => IsBarcode || IsOcrZone || IsSimilarity;
+
+    public string DisplayLabel => string.IsNullOrWhiteSpace(Name) ? Type.ToString() : Name!;
+
+    public SeparationStrategy ToModel() => new()
+    {
+        Id = Id,
+        Type = Type,
+        Name = string.IsNullOrWhiteSpace(Name) ? null : Name,
+        PageCount = Math.Max(1, PageCount),
+        BlankInkPercent = BlankInkPercent,
+        Zone = Zone,
+        ZonePageNumber = ZonePageNumber,
+        BarcodeFormat = string.IsNullOrWhiteSpace(BarcodeFormat) ? null : BarcodeFormat,
+        BarcodeValuePattern = string.IsNullOrWhiteSpace(BarcodeValuePattern) ? null : BarcodeValuePattern,
+        TextPattern = string.IsNullOrWhiteSpace(TextPattern) ? null : TextPattern,
+        ReferenceEmbedding = ReferenceEmbedding,
+        SimilarityThreshold = SimilarityThreshold,
+        DiscardSeparatorPage = DiscardSeparatorPage
+    };
 }

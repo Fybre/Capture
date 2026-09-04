@@ -55,8 +55,7 @@ public class DocumentImporterScannedPagesTests
         var importProfile = new ImportProfile
         {
             Name = "Splits every page",
-            Trigger = ImportSeparationTrigger.EveryNPages,
-            PageCount = 1
+            Strategies = [new SeparationStrategy { Type = SeparationStrategyType.EveryNPages, PageCount = 1 }]
         };
 
         var imported = await importer.ImportScannedPagesAsync(pages, DocumentSource.Scan, profile, batchProfile: null, importProfile);

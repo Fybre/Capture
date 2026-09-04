@@ -57,7 +57,7 @@
                           DoubleTapped="OnProfilesDoubleTapped">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
-                        <DataGridTextColumn Header="Separation method" Binding="{Binding Trigger}" Width="200" />
+                        <DataGridTextColumn Header="Separation method" Binding="{Binding StrategySummary}" Width="200" />
                     </DataGrid.Columns>
                 </DataGrid>
                 <TextBlock Text="Create an import profile to configure how an incoming file gets split into documents — independently of any indexing profile."

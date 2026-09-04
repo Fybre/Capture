@@ -1,33 +1,46 @@
 using Capture.Core.Import;
 using Capture.Core.Indexing;
+using Capture.Core.Lattice;
 
 namespace Capture.Core.Pipeline;
 
 /// <summary>
-/// Default <see cref="IPreIndexStep"/> — wraps <see cref="PageSeparator.Split"/> exactly as-is.
-/// <see cref="PreIndexContext.ImportProfile"/> alone drives blank-page/barcode/every-N-pages splitting;
-/// every resulting segment is tagged with the first candidate Indexing Profile (if any) — still
-/// always 0-or-1 today, the future classification seam later.
+/// Default <see cref="IPreIndexStep"/> — wraps <see cref="PageSeparator.SplitAsync"/> exactly as-is.
+/// <see cref="PreIndexContext.ImportProfile"/> alone drives splitting (its <c>Strategies</c> list,
+/// combined via <c>MatchMode</c>); every resulting segment is tagged with the first candidate Indexing
+/// Profile (if any) — still always 0-or-1 today, the future classification seam later.
 /// </summary>
 public sealed class ClassicSeparatorStep : IPreIndexStep
 {
     private readonly IBarcodeDecoder? _barcodes;
     private readonly IBlankPageDetector? _blanks;
+    private readonly ILatticeBuilder? _latticeBuilder;
 
-    public ClassicSeparatorStep(IBarcodeDecoder? barcodes = null, IBlankPageDetector? blanks = null)
+    public ClassicSeparatorStep(IBarcodeDecoder? barcodes = null, IBlankPageDetector? blanks = null, ILatticeBuilder? latticeBuilder = null)
     {
         _barcodes = barcodes;
         _blanks = blanks;
+        _latticeBuilder = latticeBuilder;
     }
 
-    public Task<IReadOnlyList<ClassifiedSplit>> RunAsync(PreIndexContext context, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ClassifiedSplit>> RunAsync(PreIndexContext context, CancellationToken cancellationToken = default)
     {
         var profile = context.CandidateProfiles.FirstOrDefault();
-        var splits = context.ImportProfile is null
-            ? [AllPages(context)]
-            : PageSeparator.Split(context.Pages, context.ImportProfile, _barcodes, _blanks);
+        IReadOnlyList<PageSplit> splits;
+        if (context.ImportProfile is null)
+        {
+            splits = [AllPages(context)];
+        }
+        else
+        {
+            var latticeProvider = _latticeBuilder is null
+                ? null
+                : PageLatticeProviderFactory.Create(_latticeBuilder, context.SourcePath);
+            splits = await PageSeparator.SplitAsync(context.Pages, context.ImportProfile, _barcodes, _blanks, latticeProvider, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
-        var classified = splits
+        return splits
             .Select(split => new ClassifiedSplit
             {
                 Profile = profile,
@@ -35,8 +48,6 @@ public sealed class ClassicSeparatorStep : IPreIndexStep
                 SeparatorValues = split.SeparatorValues
             })
             .ToList();
-
-        return Task.FromResult<IReadOnlyList<ClassifiedSplit>>(classified);
     }
 
     private static PageSplit AllPages(PreIndexContext context)

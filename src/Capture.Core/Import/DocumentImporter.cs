@@ -41,7 +41,7 @@ public sealed class DocumentImporter : IDocumentImporter
         _latticeBuilder = latticeBuilder;
         _pdfSubsetWriter = pdfSubsetWriter;
         _barcodes = barcodes;
-        _preIndexStep = preIndexStep ?? new ClassicSeparatorStep(barcodes, blanks);
+        _preIndexStep = preIndexStep ?? new ClassicSeparatorStep(barcodes, blanks, latticeBuilder);
     }
 
     public async Task<CaptureDocument> ImportFileAsync(
@@ -336,24 +336,15 @@ public sealed class DocumentImporter : IDocumentImporter
 
     // Never persisted — used only to reuse ILatticeBuilder's OCR/PDF-text extraction for whole-page
     // regex batch-trigger matching before any document exists yet.
-    private Func<RasterPage, CancellationToken, Task<string>> CreatePageTextProvider(string sourcePath) =>
-        async (raster, ct) =>
+    private Func<RasterPage, CancellationToken, Task<string>> CreatePageTextProvider(string sourcePath)
+    {
+        var latticeProvider = PageLatticeProviderFactory.Create(_latticeBuilder, sourcePath);
+        return async (raster, ct) =>
         {
-            var throwawayId = Guid.NewGuid();
-            var throwawayDocument = new CaptureDocument { OriginalFileName = string.Empty, StoredPath = sourcePath };
-            var throwawayPage = new DocumentPage
-            {
-                DocumentId = throwawayId,
-                PageNumber = raster.PageNumber,
-                SourcePageNumber = raster.PageNumber,
-                ImagePath = raster.ImagePath,
-                Width = raster.Width,
-                Height = raster.Height,
-                Dpi = raster.Dpi
-            };
-            var lattice = await _latticeBuilder.BuildPageAsync(throwawayDocument, throwawayPage, ct).ConfigureAwait(false);
+            var lattice = await latticeProvider(raster, ct).ConfigureAwait(false);
             return LatticeText.Build(lattice.Words).Text;
         };
+    }
 
     private async Task<ImportedDocument> MaterializeSplitAsync(
         string? sourcePath,

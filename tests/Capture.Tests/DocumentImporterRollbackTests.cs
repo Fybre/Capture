@@ -35,8 +35,7 @@ public class DocumentImporterRollbackTests
         var importProfile = new ImportProfile
         {
             Name = "Splits every page",
-            Trigger = ImportSeparationTrigger.EveryNPages,
-            PageCount = 1
+            Strategies = [new SeparationStrategy { Type = SeparationStrategyType.EveryNPages, PageCount = 1 }]
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(

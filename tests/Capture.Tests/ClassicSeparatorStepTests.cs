@@ -12,7 +12,7 @@ public class ClassicSeparatorStepTests
     public async Task Produces_the_same_splits_as_calling_PageSeparator_directly()
     {
         var indexingProfile = new IndexingProfile();
-        var importProfile = new ImportProfile { Trigger = ImportSeparationTrigger.Barcode };
+        var importProfile = new ImportProfile { Strategies = [new SeparationStrategy { Type = SeparationStrategyType.Barcode }] };
         var pages = Pages("a.png", "b.png", "c.png");
         var decoder = new MapDecoder
         {
@@ -20,7 +20,7 @@ public class ClassicSeparatorStepTests
             ["c.png"] = "DOC-2"
         };
 
-        var expected = PageSeparator.Split(pages, importProfile, decoder, blanks: null);
+        var expected = await PageSeparator.SplitAsync(pages, importProfile, decoder, blanks: null, latticeProvider: null);
         var step = new ClassicSeparatorStep(decoder, blanks: null);
 
         var actual = await step.RunAsync(new PreIndexContext

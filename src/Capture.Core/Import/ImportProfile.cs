@@ -1,14 +1,4 @@
-using Capture.Core.Profiles;
-
 namespace Capture.Core.Import;
-
-public enum ImportSeparationTrigger
-{
-    None = 0,
-    Barcode = 1,
-    BlankPage = 2,
-    EveryNPages = 3
-}
 
 /// <summary>
 /// A named, reusable configuration describing how one imported file gets carved into documents —
@@ -21,39 +11,24 @@ public sealed class ImportProfile
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New import profile";
-    public ImportSeparationTrigger Trigger { get; set; } = ImportSeparationTrigger.None;
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.EveryNPages"/>.</summary>
-    public int PageCount { get; set; } = 1;
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.BlankPage"/>.</summary>
-    public int BlankInkPercent { get; set; }
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.Barcode"/> — the
-    /// sample document the zone below was drawn against, for the Designer's "load a sample, show the
-    /// page, drag a rectangle" interaction.</summary>
+    /// <summary>The sample document every zone-based strategy in <see cref="Strategies"/> (Barcode,
+    /// OcrZone, and eventually Similarity's reference page) draws against — one shared sample per
+    /// profile, not one per strategy, so a real separator sheet's barcode and surrounding text can
+    /// both be marked on the same page.</summary>
     public string? SampleFileName { get; set; }
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.Barcode"/> — owned
-    /// here directly rather than borrowed from an <c>IndexingProfile</c> field's own zone.</summary>
-    public ZoneRect? BarcodeZone { get; set; }
+    /// <summary>The buildable list of separation conditions — see <see cref="SeparationStrategy"/>.
+    /// Empty means no splitting (equivalent to the old <c>Trigger.None</c>): everything appends into
+    /// one document.</summary>
+    public List<SeparationStrategy> Strategies { get; set; } = [];
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.Barcode"/> — which
-    /// page of <see cref="SampleFileName"/> <see cref="BarcodeZone"/> was drawn on.</summary>
-    public int BarcodePageNumber { get; set; } = 1;
+    /// <summary>How <see cref="Strategies"/> combine into a single "does this page start a new
+    /// document" decision.</summary>
+    public SeparationMatchMode MatchMode { get; set; } = SeparationMatchMode.Any;
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.Barcode"/> — an
-    /// optional symbology filter (e.g. "CODE_128"); null/empty matches any format the decoder returns.</summary>
-    public string? BarcodeFormat { get; set; }
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.Barcode"/> — an
-    /// optional regex the decoded barcode text must match; null/empty matches any value.</summary>
-    public string? BarcodeValuePattern { get; set; }
-
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="ImportSeparationTrigger.Barcode"/> or
-    /// <see cref="ImportSeparationTrigger.BlankPage"/> — there's no separator page to discard for
-    /// EveryNPages.</summary>
-    public bool DiscardSeparatorPage { get; set; }
+    /// <summary>Only meaningful when <see cref="MatchMode"/> is <see cref="SeparationMatchMode.AtLeast"/>.</summary>
+    public int MatchMinimum { get; set; } = 1;
 
     /// <summary>The seam auto-classification will use later: which IndexingProfiles are valid for
     /// documents this Import Profile produces. Empty = no constraint (today's implicit behavior — the
@@ -70,4 +45,13 @@ public sealed class ImportProfile
 
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Short display summary for list views (e.g. the Import Profiles window's grid) — there's
+    /// no longer a single "separation method" to show now that <see cref="Strategies"/> is a list.</summary>
+    public string StrategySummary => Strategies.Count switch
+    {
+        0 => "No strategies",
+        1 => Strategies[0].Type.ToString(),
+        _ => $"{Strategies.Count} strategies ({MatchMode})"
+    };
 }

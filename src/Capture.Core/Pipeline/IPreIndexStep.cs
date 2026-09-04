@@ -31,8 +31,8 @@ public sealed class PreIndexContext
     /// </summary>
     public required IReadOnlyList<IndexingProfile> CandidateProfiles { get; init; }
 
-    /// <summary>The profile that actually drives splitting — null means "don't split, append
-    /// everything into one document" (today's <see cref="ImportSeparationTrigger.None"/> behavior).</summary>
+    /// <summary>The profile that actually drives splitting — null, or a profile with an empty
+    /// <c>Strategies</c> list, means "don't split, append everything into one document".</summary>
     public ImportProfile? ImportProfile { get; init; }
 }
 
