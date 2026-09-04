@@ -25,6 +25,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
     private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
     private readonly ILatticeBuilder? _latticeBuilder;
+    private readonly IBlankPageDetector? _blanks;
 
     public ImportProfilesViewModel(
         IImportProfileStore store,
@@ -38,7 +39,8 @@ public partial class ImportProfilesViewModel : ViewModelBase
         IImagePageImporter imageImporter,
         IToastService toasts,
         IBarcodeDecoder? barcodes = null,
-        ILatticeBuilder? latticeBuilder = null)
+        ILatticeBuilder? latticeBuilder = null,
+        IBlankPageDetector? blanks = null)
     {
         _store = store;
         _profileStore = profileStore;
@@ -52,6 +54,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
         _toasts = toasts;
         _barcodes = barcodes;
         _latticeBuilder = latticeBuilder;
+        _blanks = blanks;
     }
 
     public ObservableCollection<ImportProfile> Profiles { get; } = [];
@@ -135,7 +138,7 @@ public partial class ImportProfilesViewModel : ViewModelBase
     {
         var designer = new ImportProfileDesignerViewModel(
             profile, isNew, _store, _profileStore, _batchProfileStore, _profileDialog, _batchProfileDialog,
-            _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes, _latticeBuilder)
+            _dialogs, _paths, _pdfRasterizer, _imageImporter, _toasts, _barcodes, _latticeBuilder, _blanks)
         {
             CloseCommand = CloseDesignerCommand
         };

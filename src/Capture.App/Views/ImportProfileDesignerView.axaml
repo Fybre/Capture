@@ -125,7 +125,6 @@
                                                TextWrapping="Wrap"
                                                Classes="hint" />
                                 </StackPanel>
-                                <Button Content="Test against current sample" Command="{Binding TestMatchCommand}" HorizontalAlignment="Left" />
                                 <TextBlock Text="Load a sample document below and draw a rectangle around the barcode."
                                            TextWrapping="Wrap"
                                            Classes="hint" />
@@ -139,7 +138,6 @@
                                                TextWrapping="Wrap"
                                                Classes="hint" />
                                 </StackPanel>
-                                <Button Content="Test against current sample" Command="{Binding TestMatchCommand}" HorizontalAlignment="Left" />
                                 <TextBlock Text="Load a sample document below and draw a rectangle around the text to match."
                                            TextWrapping="Wrap"
                                            Classes="hint" />
@@ -150,7 +148,6 @@
                                     <TextBlock Text="Whole-page text to match" Classes="field-label" />
                                     <TextBox Text="{Binding SelectedStrategy.TextPattern}" Watermark="Regex — required, matched against the whole page's text" />
                                 </StackPanel>
-                                <Button Content="Test against current sample" Command="{Binding TestMatchCommand}" HorizontalAlignment="Left" />
                             </StackPanel>
 
                             <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsSimilarity}">
@@ -164,13 +161,49 @@
                                 </StackPanel>
                                 <Button Content="Compute reference embedding" IsEnabled="False" HorizontalAlignment="Left"
                                         ToolTip.Tip="Coming soon — needs an embedding model, not yet built." />
-                                <Button Content="Test against current sample" IsEnabled="False" HorizontalAlignment="Left"
-                                        ToolTip.Tip="Coming soon — needs an embedding model, not yet built." />
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
 
-                            <CheckBox Content="Discard the separator page"
-                                      IsChecked="{Binding SelectedStrategy.DiscardSeparatorPage}"
-                                      IsVisible="{Binding !SelectedStrategy.IsEveryNPages}" />
+                    <Border Classes="card" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Test strategies" Classes="section-title" />
+                            <TextBlock Text="Runs every strategy above against the current sample page and shows each one's own result here — useful for checking that All/Any/At least N will actually produce the split decision you expect."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <Button Content="Test all against current sample" Command="{Binding TestAllStrategiesCommand}" HorizontalAlignment="Left" />
+                            <ItemsControl ItemsSource="{Binding Strategies}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                                        <Grid ColumnDefinitions="140,*" Margin="0,3">
+                                            <TextBlock Grid.Column="0" Text="{Binding DisplayLabel}" FontWeight="Medium" TextWrapping="Wrap" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding TestResult, TargetNullValue='Not tested yet'}"
+                                                       Classes="hint"
+                                                       TextWrapping="Wrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Classes="card" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Discard separator page" Classes="section-title" />
+                            <TextBlock Text="When checked, the page that made a strategy match is dropped from the resulting documents instead of kept as their first/last page. A page is discarded if any strategy that matched on it says so."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <ItemsControl ItemsSource="{Binding Strategies}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                                        <CheckBox Content="{Binding DisplayLabel}"
+                                                  IsChecked="{Binding DiscardSeparatorPage}"
+                                                  IsVisible="{Binding !IsEveryNPages}"
+                                                  Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Border>
 

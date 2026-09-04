@@ -30,6 +30,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     private readonly IImagePageImporter _imageImporter;
     private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
+    private readonly IBlankPageDetector? _blanks;
     private readonly ILatticeBuilder? _latticeBuilder;
     private readonly List<string> _pageImagePaths = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
@@ -49,7 +50,8 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         IImagePageImporter imageImporter,
         IToastService toasts,
         IBarcodeDecoder? barcodes = null,
-        ILatticeBuilder? latticeBuilder = null)
+        ILatticeBuilder? latticeBuilder = null,
+        IBlankPageDetector? blanks = null)
     {
         Profile = profile;
         IsNew = isNew;
@@ -65,6 +67,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         _toasts = toasts;
         _barcodes = barcodes;
         _latticeBuilder = latticeBuilder;
+        _blanks = blanks;
 
         _name = profile.Name;
         _sampleFileName = profile.SampleFileName;
@@ -115,7 +118,6 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     private BatchProfile? _selectedBatchProfile;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(TestMatchCommand))]
     private SeparationStrategyRow? _selectedStrategy;
 
     [ObservableProperty]
@@ -143,7 +145,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ChangeSampleCommand))]
     [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
-    [NotifyCanExecuteChangedFor(nameof(TestMatchCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TestAllStrategiesCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -240,6 +242,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         var row = new SeparationStrategyRow(new SeparationStrategy { Id = Guid.NewGuid(), Type = SeparationStrategyType.EveryNPages });
         Strategies.Add(row);
         SelectedStrategy = row;
+        TestAllStrategiesCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -252,6 +255,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         if (SelectedStrategy == row)
             SelectedStrategy = null;
         RefreshHighlights();
+        TestAllStrategiesCommand.NotifyCanExecuteChanged();
     }
 
     private IReadOnlyList<string> GetPageImagePaths()
@@ -539,122 +543,104 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         return lattice;
     }
 
-    // Re-evaluates the selected strategy against the current sample and reports whether it would
-    // actually match — unlike DetectAsync (which overwrites the row's fields), this leaves them
-    // untouched. Useful after hand-editing a pattern (e.g. loosening it to a prefix).
-    [RelayCommand(CanExecute = nameof(CanTestMatch))]
-    private async Task TestMatchAsync()
+    // Re-evaluates every strategy against the current sample page and reports each one's own result
+    // right next to it in the Test card — unlike DetectAsync (which overwrites a row's fields), this
+    // leaves them untouched. Testing every strategy together (not just the selected one) matters here
+    // specifically because MatchMode combines them — seeing all their results side by side is what
+    // actually lets you confirm All/Any/AtLeast produces the split decision you expect.
+    [RelayCommand(CanExecute = nameof(CanTestAllStrategies))]
+    private async Task TestAllStrategiesAsync()
     {
-        if (SelectedStrategy is not { } row)
-            return;
-
-        if (row.IsBarcode)
-        {
-            TestBarcodeMatch(row);
-            return;
-        }
-
-        if (row.IsOcrZone)
-        {
-            await TestOcrZoneMatchAsync(row).ConfigureAwait(true);
-            return;
-        }
-
-        if (row.IsRegex)
-        {
-            await TestRegexMatchAsync(row).ConfigureAwait(true);
-            return;
-        }
-
-        if (row.IsSimilarity)
-            StatusText = "Testing isn't available yet — needs an embedding model";
+        foreach (var row in Strategies)
+            row.TestResult = await TestOneAsync(row).ConfigureAwait(true);
     }
 
-    private bool CanTestMatch() => !IsBusy && SelectedStrategy is not null;
+    private bool CanTestAllStrategies() => !IsBusy && Strategies.Count > 0;
 
-    private void TestBarcodeMatch(SeparationStrategyRow row)
+    private Task<string> TestOneAsync(SeparationStrategyRow row) => row.Type switch
+    {
+        SeparationStrategyType.Barcode => Task.FromResult(TestBarcodeMatch(row)),
+        SeparationStrategyType.OcrZone => TestOcrZoneMatchAsync(row),
+        SeparationStrategyType.Regex => TestRegexMatchAsync(row),
+        SeparationStrategyType.BlankPage => Task.FromResult(TestBlankPage(row)),
+        SeparationStrategyType.EveryNPages => Task.FromResult("Not tested here — depends on this page's position in the sequence, not on this page alone"),
+        SeparationStrategyType.Similarity => Task.FromResult("Not available yet — needs an embedding model"),
+        _ => Task.FromResult("Unknown strategy type")
+    };
+
+    private string TestBarcodeMatch(SeparationStrategyRow row)
     {
         if (_barcodes is null || row.Zone is null)
-        {
-            StatusText = "Draw a barcode zone first, then test";
-            return;
-        }
+            return "Draw a barcode zone first, then test";
 
         var pageIndex = CurrentPageNumber - 1;
         if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
-            return;
+            return "No sample page loaded";
 
         var decoded = _barcodes.Decode(_pageImagePaths[pageIndex], row.Zone);
         if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
-        {
-            StatusText = "No barcode detected in the current zone";
-            return;
-        }
+            return "No barcode detected in the current zone";
 
         var formatMatches = string.IsNullOrWhiteSpace(row.BarcodeFormat)
             || string.Equals(row.BarcodeFormat, decoded.Format, StringComparison.OrdinalIgnoreCase);
         var valueMatches = BarcodePatterns.Matches(row.BarcodeValuePattern, decoded.Text);
 
-        StatusText = formatMatches && valueMatches
+        return formatMatches && valueMatches
             ? $"Match: {BarcodePatterns.DisplayType(decoded.Format)} “{decoded.Text}”"
             : $"No match — detected {BarcodePatterns.DisplayType(decoded.Format)} “{decoded.Text}”, which doesn't satisfy the current type/value filter";
     }
 
+    private string TestBlankPage(SeparationStrategyRow row)
+    {
+        if (_blanks is null)
+            return "Blank-page detection isn't available";
+
+        var pageIndex = CurrentPageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
+            return "No sample page loaded";
+
+        return _blanks.IsBlank(_pageImagePaths[pageIndex], row.BlankInkPercent)
+            ? "Match: this page is blank"
+            : "No match — this page isn't blank";
+    }
+
     // Mirrors PageSeparator's OcrZone evaluator exactly: an empty pattern matches any non-empty zone
     // text, same as an empty BarcodeValuePattern matches any barcode value.
-    private async Task TestOcrZoneMatchAsync(SeparationStrategyRow row)
+    private async Task<string> TestOcrZoneMatchAsync(SeparationStrategyRow row)
     {
         if (row.Zone is null)
-        {
-            StatusText = "Draw a zone first, then test";
-            return;
-        }
+            return "Draw a zone first, then test";
 
         var lattice = await EnsureLatticeAsync(CurrentPageNumber).ConfigureAwait(true);
         if (lattice is null)
-        {
-            StatusText = "No text found on this page to test against";
-            return;
-        }
+            return "No text found on this page to test against";
 
         var extracted = ZonalExtractor.Extract(lattice, row.Zone);
         if (string.IsNullOrWhiteSpace(extracted.Text))
-        {
-            StatusText = "No text detected in the current zone";
-            return;
-        }
+            return "No text detected in the current zone";
 
         var text = extracted.Text.Trim();
         if (string.IsNullOrWhiteSpace(row.TextPattern))
-        {
-            StatusText = $"Match (any non-empty text): “{text}”";
-            return;
-        }
+            return $"Match (any non-empty text): “{text}”";
 
-        StatusText = TryRegexMatch(row.TextPattern, extracted.Text)
+        return TryRegexMatch(row.TextPattern, extracted.Text)
             ? $"Match: “{text}”"
             : $"No match — detected “{text}”, which doesn't satisfy the current pattern";
     }
 
     // Mirrors PageSeparator's Regex evaluator exactly: unlike OcrZone, an empty pattern never hits —
     // there's no other signal to fall back on for a whole-page match.
-    private async Task TestRegexMatchAsync(SeparationStrategyRow row)
+    private async Task<string> TestRegexMatchAsync(SeparationStrategyRow row)
     {
         if (string.IsNullOrWhiteSpace(row.TextPattern))
-        {
-            StatusText = "Enter a pattern first, then test";
-            return;
-        }
+            return "Enter a pattern first, then test";
 
         var lattice = await EnsureLatticeAsync(CurrentPageNumber).ConfigureAwait(true);
         if (lattice is null)
-        {
-            StatusText = "No text found on this page to test against";
-            return;
-        }
+            return "No text found on this page to test against";
 
         var text = LatticeText.Build(lattice.Words).Text;
-        StatusText = TryRegexMatch(row.TextPattern, text) ? "Match found on this page" : "No match on this page";
+        return TryRegexMatch(row.TextPattern, text) ? "Match found on this page" : "No match on this page";
     }
 
     private static bool TryRegexMatch(string pattern, string text)
@@ -787,6 +773,12 @@ public sealed partial class SeparationStrategyRow : ObservableObject
 
     [ObservableProperty]
     private bool _discardSeparatorPage;
+
+    /// <summary>Last "Test all against current sample" outcome for this row specifically — shown
+    /// alongside every other strategy's own result in the Test card, not tucked away in a shared
+    /// status line far from the button that produced it.</summary>
+    [ObservableProperty]
+    private string? _testResult;
 
     public bool IsBarcode => Type == SeparationStrategyType.Barcode;
     public bool IsBlankPage => Type == SeparationStrategyType.BlankPage;
