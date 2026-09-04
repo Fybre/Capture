@@ -1006,7 +1006,7 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*" />
+                                                <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="Auto" MinWidth="180" MaxWidth="420" />
                                                 <DataGridTextColumn Header="Pages" Binding="{Binding PageCount}" Width="70" />
                                                 <DataGridTemplateColumn Header="Status" Width="112">
                                                     <DataGridTemplateColumn.CellTemplate>
