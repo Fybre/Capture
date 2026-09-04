@@ -310,7 +310,15 @@
                                            Classes="hint"
                                            Foreground="{DynamicResource CriticalBrush}"
                                            IsVisible="{Binding !IsScriptingAvailable}" />
-                                <TextBlock Text="Shared functions" Classes="field-label" />
+                                <DockPanel LastChildFill="False">
+                                    <TextBlock Text="Shared functions" Classes="field-label" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                                    <Button Content="Pop out"
+                                            Command="{Binding PopOutSharedScriptCommand}"
+                                            Classes="ghost"
+                                            DockPanel.Dock="Right"
+                                            FontSize="12"
+                                            Padding="8,3" />
+                                </DockPanel>
                                 <TextBox Text="{Binding SharedScriptSource}"
                                          AcceptsReturn="True"
                                          Classes="mono"
@@ -327,6 +335,16 @@
                                                     </Grid>
                                                     <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:BatchProfileDesignerViewModel)DataContext).ScriptTriggerOptions}"
                                                               SelectedItem="{Binding Trigger}" />
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="Source" Classes="field-label" VerticalAlignment="Bottom" />
+                                                        <Button Grid.Column="1"
+                                                                Content="Pop out"
+                                                                Command="{Binding $parent[ItemsControl].((vm:BatchProfileDesignerViewModel)DataContext).PopOutScriptCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Classes="ghost"
+                                                                FontSize="12"
+                                                                Padding="8,3" />
+                                                    </Grid>
                                                     <TextBox Text="{Binding Source}"
                                                              AcceptsReturn="True"
                                                              Classes="mono"
@@ -560,7 +578,15 @@
                         </StackPanel>
 
                         <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsScript}">
-                            <TextBlock Text="Expression" Classes="field-label" />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="Expression" Classes="field-label" VerticalAlignment="Bottom" />
+                                <Button Grid.Column="1"
+                                        Content="Pop out"
+                                        Command="{Binding PopOutFieldScriptCommand}"
+                                        Classes="ghost"
+                                        FontSize="12"
+                                        Padding="8,3" />
+                            </Grid>
                             <TextBox Text="{Binding SelectedField.ScriptExpression}"
                                      Watermark="Fields[&quot;Other Field&quot;].Value"
                                      AcceptsReturn="True"
@@ -571,7 +597,15 @@
                         <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsButton}">
                             <TextBlock Text="Button label" Classes="field-label" />
                             <TextBox Text="{Binding SelectedField.ButtonLabel}" Watermark="{Binding SelectedField.Name}" />
-                            <TextBlock Text="Script" Classes="field-label" />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="Script" Classes="field-label" VerticalAlignment="Bottom" />
+                                <Button Grid.Column="1"
+                                        Content="Pop out"
+                                        Command="{Binding PopOutButtonScriptCommand}"
+                                        Classes="ghost"
+                                        FontSize="12"
+                                        Padding="8,3" />
+                            </Grid>
                             <TextBox Text="{Binding SelectedField.ButtonScriptSource}"
                                      AcceptsReturn="True"
                                      Classes="mono"

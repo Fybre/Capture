@@ -26,6 +26,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
     private readonly IBarcodeDecoder? _barcodes;
     private readonly IProfileApplicator? _applicator;
     private readonly IFieldScriptRunner? _scriptRunner;
+    private readonly IScriptEditorDialogService? _scriptEditor;
 
     public BatchProfilesViewModel(
         IBatchProfileStore store,
@@ -37,7 +38,8 @@ public partial class BatchProfilesViewModel : ViewModelBase
         IToastService toasts,
         IBarcodeDecoder? barcodes = null,
         IProfileApplicator? applicator = null,
-        IFieldScriptRunner? scriptRunner = null)
+        IFieldScriptRunner? scriptRunner = null,
+        IScriptEditorDialogService? scriptEditor = null)
     {
         _store = store;
         _dialogs = dialogs;
@@ -49,6 +51,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
         _barcodes = barcodes;
         _applicator = applicator;
         _scriptRunner = scriptRunner;
+        _scriptEditor = scriptEditor;
     }
 
     public ObservableCollection<BatchProfile> Profiles { get; } = [];
@@ -250,7 +253,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
     {
         var designer = new BatchProfileDesignerViewModel(
             profile, isNew, _store, _dialogs, _paths, _pdfRasterizer,
-            _imageImporter, _toasts, _barcodes, _latticeBuilder, _applicator, _scriptRunner)
+            _imageImporter, _toasts, _barcodes, _latticeBuilder, _applicator, _scriptRunner, _scriptEditor)
         {
             CloseCommand = CloseDesignerCommand
         };

@@ -49,6 +49,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     private readonly ILatticeBuilder? _latticeBuilder;
     private readonly IProfileApplicator? _applicator;
     private readonly IFieldScriptRunner? _scriptRunner;
+    private readonly IScriptEditorDialogService? _scriptEditor;
     private readonly List<string> _pageImagePaths = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
@@ -65,7 +66,8 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         IBarcodeDecoder? barcodes = null,
         ILatticeBuilder? latticeBuilder = null,
         IProfileApplicator? applicator = null,
-        IFieldScriptRunner? scriptRunner = null)
+        IFieldScriptRunner? scriptRunner = null,
+        IScriptEditorDialogService? scriptEditor = null)
     {
         Profile = profile;
         IsNew = isNew;
@@ -79,6 +81,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         _latticeBuilder = latticeBuilder;
         _applicator = applicator;
         _scriptRunner = scriptRunner;
+        _scriptEditor = scriptEditor;
 
         _name = profile.Name;
         _mode = profile.Mode;
@@ -910,6 +913,50 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     }
 
     private bool CanRunScriptTest() => !IsBusy && _scriptRunner is not null;
+
+    [RelayCommand]
+    private async Task PopOutSharedScriptAsync()
+    {
+        if (_scriptEditor is null || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, "Shared functions", SharedScriptSource).ConfigureAwait(true);
+        if (edited is not null)
+            SharedScriptSource = edited;
+    }
+
+    [RelayCommand]
+    private async Task PopOutScriptAsync(ScriptRow row)
+    {
+        if (_scriptEditor is null || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Script — {row.Name}", row.Source).ConfigureAwait(true);
+        if (edited is not null)
+            row.Source = edited;
+    }
+
+    [RelayCommand]
+    private async Task PopOutFieldScriptAsync()
+    {
+        if (SelectedField is not { IsScript: true } row || _scriptEditor is null || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Script expression — {row.Name}", row.ScriptExpression).ConfigureAwait(true);
+        if (edited is not null)
+            row.ScriptExpression = edited;
+    }
+
+    [RelayCommand]
+    private async Task PopOutButtonScriptAsync()
+    {
+        if (SelectedField is not { IsButton: true } row || _scriptEditor is null || _dialogs.Host is not { } host)
+            return;
+
+        var edited = await _scriptEditor.EditAsync(host, $"Button script — {row.Name}", row.ButtonScriptSource).ConfigureAwait(true);
+        if (edited is not null)
+            row.ButtonScriptSource = edited;
+    }
 
     private Task<string> TestOneAsync(SeparationStrategyRow row) => row.Type switch
     {
