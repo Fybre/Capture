@@ -168,6 +168,30 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
     [ObservableProperty]
     private IReadOnlyList<IndexHighlight> _highlights = [];
 
+    [ObservableProperty]
+    private bool _showOcrWords;
+
+    /// <summary>The current page's recognized OCR/PDF-text words, for the "OCR text" overlay toggle —
+    /// same idea as ProfileDesignerViewModel's own, so a Regex/OcrZone strategy's author can see
+    /// exactly where extraction thinks text is instead of guessing why a draw or pattern came back
+    /// empty. Built lazily via the same <see cref="EnsureLatticeAsync"/> the Detect/Test actions
+    /// already use, not eagerly for every sample page.</summary>
+    public IReadOnlyList<LatticeWord> CurrentPageWords =>
+        _lattices.TryGetValue(CurrentPageNumber, out var lattice) ? lattice.Words : [];
+
+    partial void OnShowOcrWordsChanged(bool value)
+    {
+        if (value)
+            _ = EnsureLatticeAndNotifyAsync(CurrentPageNumber);
+    }
+
+    private async Task EnsureLatticeAndNotifyAsync(int pageNumber)
+    {
+        await EnsureLatticeAsync(pageNumber).ConfigureAwait(true);
+        if (pageNumber == CurrentPageNumber)
+            OnPropertyChanged(nameof(CurrentPageWords));
+    }
+
     public async Task InitializeAsync()
     {
         await ReloadIndexingProfileOptionsAsync().ConfigureAwait(true);
@@ -402,6 +426,10 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
                 IsSelected = SelectedStrategy?.Id == row.Id
             })
             .ToList();
+
+        OnPropertyChanged(nameof(CurrentPageWords));
+        if (ShowOcrWords)
+            _ = EnsureLatticeAndNotifyAsync(CurrentPageNumber);
     }
 
     [RelayCommand]

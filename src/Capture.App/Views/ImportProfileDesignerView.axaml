@@ -299,12 +299,32 @@
                         CornerRadius="8"
                         Margin="12,0,12,10"
                         ClipToBounds="True">
-                    <controls:PagePreview PageImage="{Binding PageImage}"
-                                          Highlights="{Binding Highlights}"
-                                          AllowDraw="True"
-                                          ZoneDrawnCommand="{Binding CompleteZoneCommand}"
-                                          ZoneChangedCommand="{Binding ChangeZoneCommand}"
-                                          Margin="8" />
+                    <Grid>
+                        <controls:PagePreview PageImage="{Binding PageImage}"
+                                              Highlights="{Binding Highlights}"
+                                              OcrWords="{Binding CurrentPageWords}"
+                                              ShowOcrWords="{Binding ShowOcrWords}"
+                                              AllowDraw="True"
+                                              ZoneDrawnCommand="{Binding CompleteZoneCommand}"
+                                              ZoneChangedCommand="{Binding ChangeZoneCommand}"
+                                              Margin="8" />
+                        <Border HorizontalAlignment="Right"
+                                VerticalAlignment="Bottom"
+                                Margin="10"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderBrush1}"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="3"
+                                IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <CheckBox Content="OCR text"
+                                      IsChecked="{Binding ShowOcrWords}"
+                                      VerticalAlignment="Center"
+                                      Margin="6,0,4,0"
+                                      FontSize="11.5"
+                                      ToolTip.Tip="Show boxes around recognized text, to see why a zone or pattern draw did or didn't match" />
+                        </Border>
+                    </Grid>
                 </Border>
             </Grid>
         </Grid>
