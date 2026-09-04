@@ -144,7 +144,7 @@ public partial class MainViewModel
                 ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
                 : null;
             var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
-            var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
+            var keepsBatchOpen = batchProfile is null || batchProfile.Mode == BatchMode.Manual;
             var resumeBatch = watchFolderEntry is null && keepsBatchOpen
                 ? _lastManualBatch
                 : null;
@@ -194,11 +194,17 @@ public partial class MainViewModel
                 }
             }
 
-            if (profile is not null)
+            // Prefer the BatchProfile's own designated Indexing Profile for batch-level fields —
+            // falling back to whichever profile drove document-level extraction, today's implicit
+            // behavior, when the BatchProfile doesn't specify one.
+            var batchIndexingProfile = batchProfile?.IndexingProfileId is { } batchIndexingProfileId
+                ? Profiles.FirstOrDefault(item => item.Id == batchIndexingProfileId)
+                : profile;
+            if (batchIndexingProfile is not null)
             {
                 foreach (var (batchId, batchSource) in batchSources)
                 {
-                    await ApplyBatchFieldsAsync(batchSource, profile, batchSeparatorValues.GetValueOrDefault(batchId))
+                    await ApplyBatchFieldsAsync(batchSource, batchIndexingProfile, batchSeparatorValues.GetValueOrDefault(batchId))
                         .ConfigureAwait(true);
                     await RefreshBatchRowsAsync(batchId).ConfigureAwait(true);
                 }
@@ -314,7 +320,7 @@ public partial class MainViewModel
                 ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
                 : null;
             var batchProfile = BatchProfileResolver.Resolve(selectedBatchProfile, _watchSettings.NoBatchProfileBehavior);
-            var keepsBatchOpen = batchProfile is null || batchProfile.Trigger == BatchTrigger.Manual;
+            var keepsBatchOpen = batchProfile is null || batchProfile.Mode == BatchMode.Manual;
             var resumeBatch = keepsBatchOpen ? _lastManualBatch : null;
             var allocator = await BatchAllocator.CreateAsync(_store, batchProfile, watchFolderEntryId: null, resumeBatch)
                 .ConfigureAwait(true);
@@ -339,11 +345,17 @@ public partial class MainViewModel
                     imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true)
                 .ConfigureAwait(true);
 
-            if (profile is not null)
+            // Prefer the BatchProfile's own designated Indexing Profile for batch-level fields —
+            // falling back to whichever profile drove document-level extraction, today's implicit
+            // behavior, when the BatchProfile doesn't specify one.
+            var batchIndexingProfile = batchProfile?.IndexingProfileId is { } batchIndexingProfileId
+                ? Profiles.FirstOrDefault(item => item.Id == batchIndexingProfileId)
+                : profile;
+            if (batchIndexingProfile is not null)
             {
                 foreach (var (batchId, batchSource) in batchSources)
                 {
-                    await ApplyBatchFieldsAsync(batchSource, profile, batchSeparatorValues.GetValueOrDefault(batchId))
+                    await ApplyBatchFieldsAsync(batchSource, batchIndexingProfile, batchSeparatorValues.GetValueOrDefault(batchId))
                         .ConfigureAwait(true);
                     await RefreshBatchRowsAsync(batchId).ConfigureAwait(true);
                 }

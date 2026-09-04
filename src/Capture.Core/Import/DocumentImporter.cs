@@ -251,8 +251,9 @@ public sealed class DocumentImporter : IDocumentImporter
         var batchHitsByPage = new Dictionary<int, BatchTriggerHit>();
         if (BatchSeparator.NeedsPageScan(batchProfile))
         {
+            var latticeProvider = PageLatticeProviderFactory.Create(_latticeBuilder, sourcePath ?? originalName);
             var hits = await BatchSeparator.DetectAsync(
-                    rasters, batchProfile!, _barcodes, CreatePageTextProvider(sourcePath ?? originalName), cancellationToken)
+                    rasters, batchProfile!, _barcodes, latticeProvider, cancellationToken)
                 .ConfigureAwait(false);
             foreach (var hit in hits)
                 batchHitsByPage[hit.PageNumber] = hit;
@@ -334,17 +335,6 @@ public sealed class DocumentImporter : IDocumentImporter
         return results;
     }
 
-    // Never persisted — used only to reuse ILatticeBuilder's OCR/PDF-text extraction for whole-page
-    // regex batch-trigger matching before any document exists yet.
-    private Func<RasterPage, CancellationToken, Task<string>> CreatePageTextProvider(string sourcePath)
-    {
-        var latticeProvider = PageLatticeProviderFactory.Create(_latticeBuilder, sourcePath);
-        return async (raster, ct) =>
-        {
-            var lattice = await latticeProvider(raster, ct).ConfigureAwait(false);
-            return LatticeText.Build(lattice.Words).Text;
-        };
-    }
 
     private async Task<ImportedDocument> MaterializeSplitAsync(
         string? sourcePath,

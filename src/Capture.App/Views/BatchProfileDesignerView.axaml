@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Capture.App.ViewModels"
+             xmlns:controls="using:Capture.App.Controls"
+             xmlns:profiles="using:Capture.Core.Profiles"
              x:Class="Capture.App.Views.BatchProfileDesignerView"
              x:DataType="vm:BatchProfileDesignerViewModel">
     <Grid RowDefinitions="Auto,*" Background="{DynamicResource GroundBrush}">
@@ -32,73 +34,212 @@
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-            <Grid Margin="24,16" ColumnDefinitions="*">
-                <StackPanel Spacing="14" HorizontalAlignment="Stretch" MaxWidth="640">
+        <Grid Grid.Row="1" ColumnDefinitions="420,*">
+            <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24,16" Spacing="14" HorizontalAlignment="Stretch">
 
                     <Border Classes="card" HorizontalAlignment="Stretch">
                         <StackPanel Spacing="10">
                             <TextBlock Text="New batch when" Classes="section-title" />
-                            <ComboBox ItemsSource="{Binding TriggerOptions}"
-                                      SelectedItem="{Binding Trigger}"
+                            <ComboBox ItemsSource="{Binding ModeOptions}"
+                                      SelectedItem="{Binding Mode}"
                                       HorizontalAlignment="Stretch" />
-
-                            <StackPanel Spacing="4" IsVisible="{Binding IsEveryNPages}">
-                                <TextBlock Text="Pages per batch" Classes="field-label" />
-                                <NumericUpDown Value="{Binding PageCount}" Minimum="1" Maximum="500" HorizontalAlignment="Stretch" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="10" IsVisible="{Binding IsBarcode}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Barcode type" Classes="field-label" />
-                                    <ComboBox ItemsSource="{Binding BarcodeFormatOptions}"
-                                              SelectedItem="{Binding BarcodeFormat}"
-                                              PlaceholderText="Any format"
-                                              HorizontalAlignment="Stretch" />
-                                </StackPanel>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Barcode value to match" Classes="field-label" />
-                                    <TextBox Text="{Binding BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
-                                </StackPanel>
-                                <CheckBox Content="Discard the separator page" IsChecked="{Binding DiscardSeparatorPage}" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="10" IsVisible="{Binding IsRegexMatch}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Page text pattern" Classes="field-label" />
-                                    <TextBox Text="{Binding TextPattern}" Watermark="Regex matched against the page's whole text" />
-                                </StackPanel>
-                                <CheckBox Content="Discard the separator page" IsChecked="{Binding DiscardSeparatorPage}" />
-                            </StackPanel>
-
-                            <TextBlock Text="A batch is one imported file at a time — nothing else to configure."
+                            <TextBlock Text="New batch per file starts a fresh batch for every imported file. Manual never starts one automatically — everything appends to whatever batch is already open. Use strategies unlocks the buildable condition list below."
                                        TextWrapping="Wrap"
-                                       Classes="hint"
-                                       IsVisible="{Binding !IsEveryNPages}" />
+                                       Classes="hint" />
                         </StackPanel>
                     </Border>
 
+                    <StackPanel Spacing="14" IsVisible="{Binding IsUseStrategies}">
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Start a new batch when" Classes="section-title" />
+                                <ComboBox ItemsSource="{Binding MatchModeOptions}"
+                                          SelectedItem="{Binding MatchMode}"
+                                          HorizontalAlignment="Stretch" />
+                                <StackPanel Spacing="4" IsVisible="{Binding IsAtLeast}">
+                                    <TextBlock Text="Minimum strategies that must match" Classes="field-label" />
+                                    <NumericUpDown Value="{Binding MatchMinimum}" Minimum="1" Maximum="20" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                                <TextBlock Text="All = every strategy below must match this page. Any = at least one must match. At least N = a minimum count of them must match."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Strategies" Classes="section-title" />
+                                <ListBox ItemsSource="{Binding Strategies}"
+                                         SelectedItem="{Binding SelectedStrategy}"
+                                         MaxHeight="220">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="{Binding DisplayLabel}" FontWeight="Medium" />
+                                                    <TextBlock Text="(zone set)" Classes="hint" IsVisible="{Binding Zone, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        Content="Remove"
+                                                        Classes="ghost"
+                                                        Padding="6,2"
+                                                        FontSize="11.5"
+                                                        Command="{Binding $parent[ListBox].((vm:BatchProfileDesignerViewModel)DataContext).RemoveStrategyCommand}"
+                                                        CommandParameter="{Binding}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <Button Content="+ Add strategy" Command="{Binding AddStrategyCommand}" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card"
+                                HorizontalAlignment="Stretch"
+                                IsVisible="{Binding SelectedStrategy, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Strategy" Classes="section-title" />
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Type" Classes="field-label" />
+                                    <ComboBox ItemsSource="{Binding StrategyTypeOptions}"
+                                              SelectedItem="{Binding SelectedStrategy.Type}"
+                                              HorizontalAlignment="Stretch" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Name (optional)" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedStrategy.Name}" Watermark="e.g. Cover sheet barcode" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4" IsVisible="{Binding SelectedStrategy.IsEveryNPages}">
+                                    <TextBlock Text="Pages per batch" Classes="field-label" />
+                                    <NumericUpDown Value="{Binding SelectedStrategy.PageCount}" Minimum="1" Maximum="500" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsBarcode}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Barcode type" Classes="field-label" />
+                                        <ComboBox ItemsSource="{Binding BarcodeFormatOptions}"
+                                                  SelectedItem="{Binding SelectedStrategy.BarcodeFormat}"
+                                                  PlaceholderText="Any format"
+                                                  HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Barcode value to match" Classes="field-label" />
+                                        <TextBox Text="{Binding SelectedStrategy.BarcodeValuePattern}" Watermark="Leave empty to match any value (regex)" />
+                                        <TextBlock Text="This is a regex, not the literal value — drawing a zone auto-fills an exact-match pattern (^value$) for whatever's detected there. Edit or clear it to match more broadly."
+                                                   TextWrapping="Wrap"
+                                                   Classes="hint" />
+                                    </StackPanel>
+                                    <TextBlock Text="Load a sample document below and draw a rectangle around the barcode."
+                                               TextWrapping="Wrap"
+                                               Classes="hint" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsOcrZone}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Zone text to match" Classes="field-label" />
+                                        <TextBox Text="{Binding SelectedStrategy.TextPattern}" Watermark="Leave empty to match any text in the zone (regex)" />
+                                        <TextBlock Text="This is a regex — drawing a zone auto-fills an exact-match pattern (^text$) for whatever's detected there. Edit or clear it to match more broadly."
+                                                   TextWrapping="Wrap"
+                                                   Classes="hint" />
+                                    </StackPanel>
+                                    <TextBlock Text="Load a sample document below and draw a rectangle around the text to match."
+                                               TextWrapping="Wrap"
+                                               Classes="hint" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10" IsVisible="{Binding SelectedStrategy.IsRegex}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Whole-page text to match" Classes="field-label" />
+                                        <TextBox Text="{Binding SelectedStrategy.TextPattern}" Watermark="Regex — required, matched against the whole page's text" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Test strategies" Classes="section-title" />
+                                <TextBlock Text="Runs every strategy above against the current sample page and shows each one's own result here — useful for checking that All/Any/At least N will actually produce the batch boundary you expect."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <Button Content="Test all against current sample" Command="{Binding TestAllStrategiesCommand}" HorizontalAlignment="Left" />
+                                <ItemsControl ItemsSource="{Binding Strategies}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                                            <Grid ColumnDefinitions="140,*" Margin="0,3">
+                                                <TextBlock Grid.Column="0" Text="{Binding DisplayLabel}" FontWeight="Medium" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding TestResult, TargetNullValue='Not tested yet'}"
+                                                           Classes="hint"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Discard separator page" Classes="section-title" />
+                                <TextBlock Text="When checked, the page that made a strategy match is dropped instead of kept at the batch boundary. A page is discarded if any strategy that matched on it says so."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <ItemsControl ItemsSource="{Binding Strategies}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                                            <CheckBox Content="{Binding DisplayLabel}"
+                                                      IsChecked="{Binding DiscardSeparatorPage}"
+                                                      IsVisible="{Binding !IsEveryNPages}"
+                                                      Margin="0,2" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Sample document" Classes="section-title" />
+                                <TextBlock Text="Shared by every strategy above that needs a drawn zone."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Choose sample…" Command="{Binding ChangeSampleCommand}" />
+                                    <TextBlock Text="{Binding SampleFileName}" VerticalAlignment="Center" Classes="field-label" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+
                     <Border Classes="card" HorizontalAlignment="Stretch" Margin="0,0,0,40">
                         <StackPanel Spacing="10">
-                            <TextBlock Text="Test separation" Classes="section-title" />
-                            <TextBlock Text="Pick a document and see where this configuration would split it into batches."
+                            <TextBlock Text="Batch-level indexing profile" Classes="section-title" />
+                            <TextBlock Text="Supplies the batch-level fields (IndexLevel.Batch, including a barcode/regex strategy's captured value) shared by every document that joins a batch created under this profile. None keeps today's behavior — whichever Indexing Profile the import itself resolved is used."
                                        TextWrapping="Wrap"
                                        Classes="hint" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="Test with a document…" Command="{Binding TestCommand}" IsEnabled="{Binding !IsBusy}" />
-                                <TextBlock Text="{Binding TestFileName}" VerticalAlignment="Center" Classes="field-label" />
-                            </StackPanel>
-                            <TextBlock Text="{Binding TestSummary}"
-                                       TextWrapping="Wrap"
-                                       FontWeight="SemiBold"
-                                       IsVisible="{Binding IsTesting}" />
-                            <ItemsControl ItemsSource="{Binding TestHits}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="x:String">
-                                        <TextBlock Text="{Binding}" Classes="mono field-label" Margin="0,2" />
+                            <ComboBox ItemsSource="{Binding IndexingProfileOptions}"
+                                      SelectedItem="{Binding SelectedIndexingProfile}"
+                                      PlaceholderText="None"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="profiles:IndexingProfile">
+                                        <TextBlock Text="{Binding Name}" />
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Content="New indexing profile…"
+                                    Command="{Binding ManageIndexingProfilesCommand}"
+                                    Classes="ghost"
+                                    HorizontalAlignment="Left"
+                                    Padding="8,4"
+                                    FontSize="12.5" />
                         </StackPanel>
                     </Border>
 
@@ -107,7 +248,62 @@
                                TextWrapping="Wrap"
                                IsVisible="{Binding HasStatusText}" />
                 </StackPanel>
+            </ScrollViewer>
+
+            <Grid Grid.Column="1"
+                  RowDefinitions="Auto,*"
+                  Background="{DynamicResource SurfaceBrush}"
+                  IsVisible="{Binding IsUseStrategies}">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="12,10">
+                    <Button Classes="ghost nav" Command="{Binding PreviousPageCommand}">
+                        <Path Data="{StaticResource IconChevronLeft}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
+                    </Button>
+                    <TextBlock Grid.Column="1"
+                               Classes="mono"
+                               Text="{Binding PageLabel}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="12.5"
+                               FontWeight="Medium" />
+                    <Button Grid.Column="2" Classes="ghost nav" Command="{Binding NextPageCommand}">
+                        <Path Data="{StaticResource IconChevronRight}" Stretch="Uniform" Width="14" Height="14" Stroke="{DynamicResource InkSoftBrush}" StrokeThickness="1.6" />
+                    </Button>
+                </Grid>
+                <Border Grid.Row="1"
+                        Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{DynamicResource BorderBrush1}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="12,0,12,10"
+                        ClipToBounds="True">
+                    <Grid>
+                        <controls:PagePreview PageImage="{Binding PageImage}"
+                                              Highlights="{Binding Highlights}"
+                                              OcrWords="{Binding CurrentPageWords}"
+                                              ShowOcrWords="{Binding ShowOcrWords}"
+                                              AllowDraw="True"
+                                              ZoneDrawnCommand="{Binding CompleteZoneCommand}"
+                                              ZoneChangedCommand="{Binding ChangeZoneCommand}"
+                                              Margin="8" />
+                        <Border HorizontalAlignment="Right"
+                                VerticalAlignment="Bottom"
+                                Margin="10"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderBrush1}"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="3"
+                                IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <CheckBox Content="OCR text"
+                                      IsChecked="{Binding ShowOcrWords}"
+                                      VerticalAlignment="Center"
+                                      Margin="6,0,4,0"
+                                      FontSize="11.5"
+                                      ToolTip.Tip="Show boxes around recognized text, to see why a zone or pattern draw did or didn't match" />
+                        </Border>
+                    </Grid>
+                </Border>
             </Grid>
-        </ScrollViewer>
+        </Grid>
     </Grid>
 </UserControl>

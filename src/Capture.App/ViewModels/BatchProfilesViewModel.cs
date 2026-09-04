@@ -6,6 +6,7 @@ using Capture.Core.Import;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Paths;
+using Capture.Core.Profiles;
 using Capture.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,6 +16,8 @@ namespace Capture.App.ViewModels;
 public partial class BatchProfilesViewModel : ViewModelBase
 {
     private readonly IBatchProfileStore _store;
+    private readonly IProfileStore _profileStore;
+    private readonly IProfileDialogService _profileDialog;
     private readonly IFileDialogService _dialogs;
     private readonly IAppPaths _paths;
     private readonly IPdfRasterizer _pdfRasterizer;
@@ -25,6 +28,8 @@ public partial class BatchProfilesViewModel : ViewModelBase
 
     public BatchProfilesViewModel(
         IBatchProfileStore store,
+        IProfileStore profileStore,
+        IProfileDialogService profileDialog,
         IFileDialogService dialogs,
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
@@ -34,6 +39,8 @@ public partial class BatchProfilesViewModel : ViewModelBase
         IBarcodeDecoder? barcodes = null)
     {
         _store = store;
+        _profileStore = profileStore;
+        _profileDialog = profileDialog;
         _dialogs = dialogs;
         _paths = paths;
         _pdfRasterizer = pdfRasterizer;
@@ -109,7 +116,7 @@ public partial class BatchProfilesViewModel : ViewModelBase
     [RelayCommand]
     private async Task CloseDesignerAsync()
     {
-        Designer?.CleanupTestArtifacts();
+        Designer?.Dispose();
         Designer = null;
         IsDesignerOpen = false;
         await ReloadAsync();
@@ -238,17 +245,18 @@ public partial class BatchProfilesViewModel : ViewModelBase
 
     private bool CanImport() => !IsBusy;
 
-    private Task OpenDesignerAsync(BatchProfile profile, bool isNew)
+    private async Task OpenDesignerAsync(BatchProfile profile, bool isNew)
     {
         var designer = new BatchProfileDesignerViewModel(
-            profile, isNew, _store, _dialogs, _paths, _pdfRasterizer, _imageImporter, _latticeBuilder, _toasts, _barcodes)
+            profile, isNew, _store, _profileStore, _profileDialog, _dialogs, _paths, _pdfRasterizer,
+            _imageImporter, _toasts, _barcodes, _latticeBuilder)
         {
             CloseCommand = CloseDesignerCommand
         };
         Designer = designer;
         IsDesignerOpen = true;
         StatusText = string.Empty;
-        return Task.CompletedTask;
+        await designer.InitializeAsync();
     }
 
     private async Task ReloadAsync()

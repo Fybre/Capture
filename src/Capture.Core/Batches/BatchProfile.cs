@@ -1,57 +1,76 @@
+using Capture.Core.Import;
+
 namespace Capture.Core.Batches;
 
-public enum BatchTrigger
+public enum BatchMode
 {
     /// <summary>One batch per source file.</summary>
     NewBatchPerFile = 0,
 
-    /// <summary>Start a new batch once the running batch's page count reaches <see cref="BatchProfile.PageCount"/>.</summary>
-    EveryNPages = 1,
-
-    /// <summary>Start a new batch when a barcode is detected on a page (whole-page scan, no zone).
-    /// Independent of document splitting — see <see cref="BatchProfile.BarcodeFormat"/>/<see cref="BatchProfile.BarcodeValuePattern"/>.</summary>
-    Barcode = 2,
-
-    /// <summary>Start a new batch when a page's whole text matches <see cref="BatchProfile.TextPattern"/>.</summary>
-    RegexMatch = 3,
-
     /// <summary>Never auto-create — keep appending to the most recently created batch until the user
     /// starts a new one explicitly.</summary>
-    Manual = 4
+    Manual = 1,
+
+    /// <summary>A new batch starts when <see cref="BatchProfile.Strategies"/> (combined via
+    /// <see cref="BatchProfile.MatchMode"/>) hit on a page — the same buildable-condition-list system
+    /// <c>ImportProfile</c> uses for document splitting, applied here to batch boundaries instead.</summary>
+    UseStrategies = 2
 }
 
 /// <summary>
 /// A named, reusable configuration describing when a new <c>CaptureBatch</c> should start. Independent of
-/// any <c>IndexingProfile</c> — chosen separately, alongside an indexing profile, per watch folder or per
-/// manual import.
+/// any <c>IndexingProfile</c> for document-level field extraction — chosen separately, alongside an
+/// indexing profile, per watch folder or per manual import. Can, however, designate its own
+/// <see cref="IndexingProfileId"/> for batch-level fields — see that property.
 /// </summary>
 public sealed class BatchProfile
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New batch profile";
-    public BatchTrigger Trigger { get; set; } = BatchTrigger.NewBatchPerFile;
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="BatchTrigger.EveryNPages"/>.</summary>
-    public int PageCount { get; set; } = 1;
+    public BatchMode Mode { get; set; } = BatchMode.NewBatchPerFile;
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="BatchTrigger.Barcode"/> — an optional symbology
-    /// filter (e.g. "CODE_128"); null/empty matches any format the decoder returns.</summary>
-    public string? BarcodeFormat { get; set; }
+    /// <summary>The sample document every zone-based strategy in <see cref="Strategies"/> (Barcode,
+    /// OcrZone) draws against — one shared sample per profile, same convention <c>ImportProfile</c>
+    /// uses. Only meaningful when <see cref="Mode"/> is <see cref="BatchMode.UseStrategies"/>.</summary>
+    public string? SampleFileName { get; set; }
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="BatchTrigger.Barcode"/> — an optional regex the
-    /// decoded barcode text must match; null/empty matches any value.</summary>
-    public string? BarcodeValuePattern { get; set; }
+    /// <summary>The buildable list of batch-boundary conditions — see <see cref="SeparationStrategy"/>.
+    /// Only evaluated when <see cref="Mode"/> is <see cref="BatchMode.UseStrategies"/>.</summary>
+    public List<SeparationStrategy> Strategies { get; set; } = [];
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="BatchTrigger.RegexMatch"/> — a regex evaluated
-    /// against the page's whole flattened text.</summary>
-    public string? TextPattern { get; set; }
+    /// <summary>How <see cref="Strategies"/> combine into a single "does this page start a new batch"
+    /// decision.</summary>
+    public SeparationMatchMode MatchMode { get; set; } = SeparationMatchMode.Any;
 
-    /// <summary>Used when <see cref="Trigger"/> is <see cref="BatchTrigger.Barcode"/> or <see cref="BatchTrigger.RegexMatch"/>
-    /// — when true, the page that triggered the batch boundary is dropped from every resulting document.</summary>
-    public bool DiscardSeparatorPage { get; set; }
+    /// <summary>Only meaningful when <see cref="MatchMode"/> is <see cref="SeparationMatchMode.AtLeast"/>.</summary>
+    public int MatchMinimum { get; set; } = 1;
+
+    /// <summary>Which <c>IndexingProfile</c>'s batch-level (<c>IndexLevel.Batch</c>, including
+    /// <c>FieldKind.BatchSeparatorValue</c>) fields get extracted once and shared with every document
+    /// that joins a batch created under this profile — see
+    /// <c>MainViewModel.ApplyBatchFieldsAsync</c>/<c>IIndexValueStore.GetBatchAsync</c>. Null means
+    /// today's implicit behavior: whatever <c>IndexingProfile</c> the import itself resolved for
+    /// document-level extraction is used for batch-level fields too.</summary>
+    public Guid? IndexingProfileId { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Short display summary for list views (e.g. the Batch Profiles window's grid) — mirrors
+    /// <c>ImportProfile.StrategySummary</c>, but also has to represent <see cref="Mode"/> when it isn't
+    /// <see cref="BatchMode.UseStrategies"/> (there's no strategy list to summarize in that case).</summary>
+    public string StrategySummary => Mode switch
+    {
+        BatchMode.NewBatchPerFile => "New batch per file",
+        BatchMode.Manual => "Manual",
+        _ => Strategies.Count switch
+        {
+            0 => "No strategies",
+            1 => Strategies[0].Type.ToString(),
+            _ => $"{Strategies.Count} strategies ({MatchMode})"
+        }
+    };
 }
 
 /// <summary>Governs batching when nothing tells <see cref="BatchAllocator"/> what to do — a manual
@@ -60,18 +79,18 @@ public sealed class BatchProfile
 /// it's applied).</summary>
 public enum NoBatchProfileBehavior
 {
-    /// <summary>Start a new batch for every imported file, as if <see cref="BatchTrigger.NewBatchPerFile"/>
+    /// <summary>Start a new batch for every imported file, as if <see cref="BatchMode.NewBatchPerFile"/>
     /// had been selected.</summary>
     NewBatchPerFile = 0,
 
-    /// <summary>Keep adding to whichever batch is already open, as if <see cref="BatchTrigger.Manual"/>
+    /// <summary>Keep adding to whichever batch is already open, as if <see cref="BatchMode.Manual"/>
     /// had been selected — the same batch until the app restarts, or forever for a watch folder (see
     /// <c>IDocumentStore.GetLatestBatchForFolderAsync</c>).</summary>
     AddToOpenBatch = 1
 }
 
 /// <summary>Resolves what <see cref="BatchAllocator"/> should actually treat as the batch profile for an
-/// import — reusing <see cref="BatchProfile"/>/<see cref="BatchTrigger"/> wholesale for the no-selection
+/// import — reusing <see cref="BatchProfile"/>/<see cref="BatchMode"/> wholesale for the no-selection
 /// case instead of teaching <see cref="BatchAllocator"/> a second, parallel notion of "no profile
 /// behavior". A real selected/configured profile always wins outright.</summary>
 public static class BatchProfileResolver
@@ -81,7 +100,7 @@ public static class BatchProfileResolver
     private static readonly BatchProfile ImplicitNewBatchPerFile = new()
     {
         Name = "(no batch profile — new batch per file)",
-        Trigger = BatchTrigger.NewBatchPerFile
+        Mode = BatchMode.NewBatchPerFile
     };
 
     public static BatchProfile? Resolve(BatchProfile? selected, NoBatchProfileBehavior noProfileBehavior) =>

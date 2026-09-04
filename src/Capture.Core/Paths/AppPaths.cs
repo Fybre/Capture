@@ -25,6 +25,8 @@ public interface IAppPaths
     string BatchProfilesDirectory { get; }
     string BatchProfileDirectory(Guid batchProfileId);
     string BatchProfileJsonPath(Guid batchProfileId);
+    string BatchProfilePagesDirectory(Guid batchProfileId);
+    string BatchProfileSamplePath(Guid batchProfileId, string originalFileName);
     string ImportProfilesDirectory { get; }
     string ImportProfileDirectory(Guid importProfileId);
     string ImportProfileJsonPath(Guid importProfileId);
@@ -135,6 +137,17 @@ public sealed class AppPaths : IAppPaths
 
     public string BatchProfileJsonPath(Guid batchProfileId) =>
         Path.Combine(BatchProfileDirectory(batchProfileId), "batch-profile.json");
+
+    public string BatchProfilePagesDirectory(Guid batchProfileId) =>
+        Path.Combine(BatchProfileDirectory(batchProfileId), "pages");
+
+    public string BatchProfileSamplePath(Guid batchProfileId, string originalFileName)
+    {
+        var extension = Path.GetExtension(originalFileName);
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = ".bin";
+        return Path.Combine(BatchProfileDirectory(batchProfileId), "sample" + extension);
+    }
 
     public string ImportProfileDirectory(Guid importProfileId) =>
         Path.Combine(ImportProfilesDirectory, importProfileId.ToString("N"));

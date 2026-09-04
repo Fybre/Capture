@@ -6,21 +6,19 @@ namespace Capture.Core.Batches;
 /// <summary>
 /// Decides which <see cref="CaptureBatch"/> a newly materialized document belongs to, according to a
 /// <see cref="BatchProfile"/>. One allocator is created per import operation and asked once per document.
-/// A null profile keeps every document in one batch, matching <see cref="BatchTrigger.Manual"/>.
+/// A null profile keeps every document in one batch, matching <see cref="BatchMode.Manual"/>.
 /// </summary>
 public sealed class BatchAllocator
 {
     private readonly IDocumentStore _store;
-    private readonly BatchTrigger _trigger;
-    private readonly int _pageThreshold;
+    private readonly BatchMode _mode;
     private readonly Guid? _watchFolderEntryId;
     private int _pagesInCurrentBatch;
 
     private BatchAllocator(IDocumentStore store, BatchProfile? profile, Guid? watchFolderEntryId, CaptureBatch? seed)
     {
         _store = store;
-        _trigger = profile?.Trigger ?? BatchTrigger.Manual;
-        _pageThreshold = Math.Max(1, profile?.PageCount ?? 1);
+        _mode = profile?.Mode ?? BatchMode.Manual;
         _watchFolderEntryId = watchFolderEntryId;
         Current = seed;
     }
@@ -42,7 +40,7 @@ public sealed class BatchAllocator
     {
         var seed = resumeBatch;
         if (seed is null
-            && (profile is null || profile.Trigger == BatchTrigger.Manual)
+            && (profile is null || profile.Mode == BatchMode.Manual)
             && watchFolderEntryId is { } id)
             seed = await store.GetLatestBatchForFolderAsync(id, cancellationToken).ConfigureAwait(false);
 
@@ -55,11 +53,11 @@ public sealed class BatchAllocator
     /// </summary>
     /// <param name="isFirstDocumentOfFile">True only for the first document produced from a given source
     /// file — a file split into several documents by page separation still counts as one file for
-    /// <see cref="BatchTrigger.NewBatchPerFile"/>.</param>
+    /// <see cref="BatchMode.NewBatchPerFile"/>.</param>
     /// <param name="batchTriggerHit">Whether this document's first triggering page (if any) matched the
-    /// policy's <see cref="BatchTrigger.Barcode"/>/<see cref="BatchTrigger.RegexMatch"/> detector — computed
-    /// independently via <c>BatchSeparator</c>, not from document-level separator values.</param>
-    /// <param name="pageCount">The document's page count, accumulated for <see cref="BatchTrigger.EveryNPages"/>.</param>
+    /// policy's <see cref="BatchMode.UseStrategies"/> strategies — computed independently via
+    /// <c>BatchSeparator</c>, not from document-level separator values.</param>
+    /// <param name="pageCount">The document's page count, accumulated for tracking purposes.</param>
     public async Task<CaptureBatch> NextAsync(
         bool isFirstDocumentOfFile,
         bool batchTriggerHit,
@@ -67,9 +65,8 @@ public sealed class BatchAllocator
         CancellationToken cancellationToken = default)
     {
         var needsNew = Current is null
-            || (_trigger == BatchTrigger.NewBatchPerFile && isFirstDocumentOfFile)
-            || (_trigger is BatchTrigger.Barcode or BatchTrigger.RegexMatch && batchTriggerHit && _pagesInCurrentBatch > 0)
-            || (_trigger == BatchTrigger.EveryNPages && _pagesInCurrentBatch >= _pageThreshold);
+            || (_mode == BatchMode.NewBatchPerFile && isFirstDocumentOfFile)
+            || (_mode == BatchMode.UseStrategies && batchTriggerHit && _pagesInCurrentBatch > 0);
 
         if (needsNew)
         {

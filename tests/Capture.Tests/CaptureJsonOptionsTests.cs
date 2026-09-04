@@ -90,14 +90,24 @@ public class CaptureJsonOptionsTests
     }
 
     [Fact]
-    public void Roundtrips_batch_profile_including_trigger_enum()
+    public void Roundtrips_batch_profile_including_strategy_list_and_match_mode()
     {
+        var indexingProfileId = Guid.NewGuid();
         var profile = new BatchProfile
         {
             Name = "Barcode batches",
-            Trigger = BatchTrigger.Barcode,
-            BarcodeFormat = "CODE_128",
-            DiscardSeparatorPage = true
+            Mode = BatchMode.UseStrategies,
+            MatchMode = SeparationMatchMode.All,
+            IndexingProfileId = indexingProfileId,
+            Strategies =
+            [
+                new SeparationStrategy
+                {
+                    Type = SeparationStrategyType.Barcode,
+                    BarcodeFormat = "CODE_128",
+                    DiscardSeparatorPage = true
+                }
+            ]
         };
 
         var json = JsonSerializer.Serialize(profile, CaptureJsonOptions.Default);
@@ -105,9 +115,14 @@ public class CaptureJsonOptionsTests
 
         Assert.NotNull(roundtripped);
         Assert.Equal("Barcode batches", roundtripped!.Name);
-        Assert.Equal(BatchTrigger.Barcode, roundtripped.Trigger);
-        Assert.Equal("CODE_128", roundtripped.BarcodeFormat);
-        Assert.True(roundtripped.DiscardSeparatorPage);
+        Assert.Equal(BatchMode.UseStrategies, roundtripped.Mode);
+        Assert.Equal(SeparationMatchMode.All, roundtripped.MatchMode);
+        Assert.Equal(indexingProfileId, roundtripped.IndexingProfileId);
+
+        var strategy = Assert.Single(roundtripped.Strategies);
+        Assert.Equal(SeparationStrategyType.Barcode, strategy.Type);
+        Assert.Equal("CODE_128", strategy.BarcodeFormat);
+        Assert.True(strategy.DiscardSeparatorPage);
     }
 
     [Fact]

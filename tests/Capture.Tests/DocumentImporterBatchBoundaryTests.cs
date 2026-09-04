@@ -51,8 +51,8 @@ public class DocumentImporterBatchBoundaryTests
         var batchProfile = new BatchProfile
         {
             Name = "Barcode batches",
-            Trigger = BatchTrigger.Barcode,
-            DiscardSeparatorPage = true
+            Mode = BatchMode.UseStrategies,
+            Strategies = [new SeparationStrategy { Type = SeparationStrategyType.Barcode, DiscardSeparatorPage = true }]
         };
 
         var results = await importer.ImportAsync(pdfPath, DocumentSource.Import, indexingProfile, batchProfile, importProfile);

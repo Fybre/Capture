@@ -1,8 +1,8 @@
-using System.Text.RegularExpressions;
+using Capture.Core.Import;
 using Capture.Core.Indexing;
+using Capture.Core.Lattice;
 using Capture.Core.Models;
 using Capture.Core.Pipeline;
-using Capture.Core.Profiles;
 
 namespace Capture.Core.Batches;
 
@@ -10,94 +10,61 @@ namespace Capture.Core.Batches;
 public sealed record BatchTriggerHit(int PageNumber, string CapturedValue, bool DiscardPage);
 
 /// <summary>
-/// Detects batch boundaries independently of document splitting (<c>PageSeparator</c>). Whole-page only —
-/// no zone, matching <c>BatchProfile</c>'s barcode/regex triggers.
+/// Detects batch boundaries independently of document splitting (<c>PageSeparator</c>) — a separate
+/// scan over the same pages, evaluating <c>BatchProfile.Strategies</c> the same way
+/// <c>PageSeparator</c> evaluates <c>ImportProfile.Strategies</c> (via the shared
+/// <see cref="SeparationStrategyEvaluator"/>), combined via <c>BatchProfile.MatchMode</c>.
 /// </summary>
 public static class BatchSeparator
 {
-    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(250);
-
-    /// <summary>Whether <paramref name="profile"/>'s trigger requires scanning pages at all — <see cref="BatchTrigger.NewBatchPerFile"/>,
-    /// <see cref="BatchTrigger.EveryNPages"/>, and <see cref="BatchTrigger.Manual"/> are handled entirely by <c>BatchAllocator</c>.</summary>
+    /// <summary>Whether <paramref name="profile"/> requires scanning pages at all —
+    /// <see cref="BatchMode.NewBatchPerFile"/> and <see cref="BatchMode.Manual"/> are handled entirely
+    /// by <c>BatchAllocator</c>, with no page-level condition to evaluate.</summary>
     public static bool NeedsPageScan(BatchProfile? profile) =>
-        profile is not null && profile.Trigger is BatchTrigger.Barcode or BatchTrigger.RegexMatch;
+        profile is not null && profile.Mode == BatchMode.UseStrategies && profile.Strategies.Count > 0;
 
     public static async Task<IReadOnlyList<BatchTriggerHit>> DetectAsync(
         IReadOnlyList<RasterPage> pages,
         BatchProfile profile,
         IBarcodeDecoder? barcodes,
-        Func<RasterPage, CancellationToken, Task<string>>? pageTextProvider,
+        Func<RasterPage, CancellationToken, Task<PageLattice>>? latticeProvider,
         CancellationToken cancellationToken = default)
     {
         var hits = new List<BatchTriggerHit>();
         if (!NeedsPageScan(profile))
             return hits;
 
+        // EveryNPages strategies each track their own "pages since this strategy's own last hit"
+        // counter, independent of every other strategy in the list — same as PageSeparator's own use
+        // of the shared evaluator.
+        var everyNPagesCounters = new Dictionary<Guid, int>();
+
         foreach (var page in pages)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var hit = profile.Trigger == BatchTrigger.Barcode
-                ? DetectBarcode(page, profile, barcodes)
-                : await DetectRegexAsync(page, profile, pageTextProvider, cancellationToken).ConfigureAwait(false);
+            var pageHits = new List<(SeparationStrategy Strategy, string Value)>();
+            foreach (var strategy in profile.Strategies)
+            {
+                var value = await SeparationStrategyEvaluator.EvaluateAsync(strategy, page, barcodes, blanks: null, latticeProvider, everyNPagesCounters, cancellationToken)
+                    .ConfigureAwait(false);
+                if (value is not null)
+                    pageHits.Add((strategy, value));
+            }
 
-            if (hit is not null)
-                hits.Add(hit);
+            var isHit = SeparationStrategyEvaluator.Combine(profile.MatchMode, profile.MatchMinimum, profile.Strategies.Count, pageHits.Count);
+            if (!isHit)
+                continue;
+
+            // No natural way to combine multiple captured strings into one BatchSeparatorValue —
+            // first contributing strategy (in list order) with a non-empty value wins, documented
+            // simplification rather than inventing a concatenation scheme nobody asked for.
+            var capturedValue = pageHits.Select(hit => hit.Value).FirstOrDefault(value => !string.IsNullOrEmpty(value)) ?? string.Empty;
+            var discardPage = pageHits.Any(hit => hit.Strategy.DiscardSeparatorPage);
+            hits.Add(new BatchTriggerHit(page.PageNumber, capturedValue, discardPage));
         }
 
         return hits;
-    }
-
-    private static BatchTriggerHit? DetectBarcode(RasterPage page, BatchProfile profile, IBarcodeDecoder? barcodes)
-    {
-        var decoded = barcodes?.Decode(page.ImagePath, zone: null);
-        if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
-            return null;
-
-        if (!string.IsNullOrWhiteSpace(profile.BarcodeFormat)
-            && !string.Equals(profile.BarcodeFormat, decoded.Format, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        if (!BarcodePatterns.Matches(profile.BarcodeValuePattern, decoded.Text))
-            return null;
-
-        return new BatchTriggerHit(page.PageNumber, decoded.Text, profile.DiscardSeparatorPage);
-    }
-
-    private static async Task<BatchTriggerHit?> DetectRegexAsync(
-        RasterPage page,
-        BatchProfile profile,
-        Func<RasterPage, CancellationToken, Task<string>>? pageTextProvider,
-        CancellationToken cancellationToken)
-    {
-        if (pageTextProvider is null || string.IsNullOrWhiteSpace(profile.TextPattern))
-            return null;
-
-        var text = await pageTextProvider(page, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        Match match;
-        try
-        {
-            var regex = new Regex(profile.TextPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, MatchTimeout);
-            match = regex.Match(text);
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            return null;
-        }
-
-        if (!match.Success)
-            return null;
-
-        var group = match.Groups.Count > 1 && match.Groups[1].Success ? match.Groups[1] : match;
-        var captured = group.Value.Trim();
-        return captured.Length == 0 ? null : new BatchTriggerHit(page.PageNumber, captured, profile.DiscardSeparatorPage);
     }
 
     /// <summary>

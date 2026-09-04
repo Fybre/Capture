@@ -1,4 +1,5 @@
 using Capture.Core.Batches;
+using Capture.Core.Import;
 
 namespace Capture.Tests;
 
@@ -9,7 +10,11 @@ public class BatchProfileResolverTests
     [Fact]
     public void A_selected_profile_always_wins_regardless_of_the_no_profile_setting()
     {
-        var selected = new BatchProfile { Trigger = BatchTrigger.EveryNPages, PageCount = 5 };
+        var selected = new BatchProfile
+        {
+            Mode = BatchMode.UseStrategies,
+            Strategies = [new SeparationStrategy { Type = SeparationStrategyType.EveryNPages, PageCount = 5 }]
+        };
 
         var resolved = BatchProfileResolver.Resolve(selected, NoBatchProfileBehavior.AddToOpenBatch);
 
@@ -22,7 +27,7 @@ public class BatchProfileResolverTests
         var resolved = BatchProfileResolver.Resolve(null, NoBatchProfileBehavior.NewBatchPerFile);
 
         Assert.NotNull(resolved);
-        Assert.Equal(BatchTrigger.NewBatchPerFile, resolved!.Trigger);
+        Assert.Equal(BatchMode.NewBatchPerFile, resolved!.Mode);
     }
 
     [Fact]
