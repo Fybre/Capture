@@ -203,25 +203,6 @@
                             </StackPanel>
                         </Button>
                     </StackPanel>
-
-                    <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" />
-
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,0,2">
-                        <SplitButton Command="{Binding ExportCommand}"
-                                     ToolTip.Tip="Export selected Ready documents, or all Ready documents when nothing is selected">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Path Data="{StaticResource IconExport}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" />
-                                <TextBlock Text="Export" />
-                            </StackPanel>
-                            <SplitButton.Flyout>
-                                <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                    <MenuItem Header="Export all"
-                                              Command="{Binding ExportAllCommand}"
-                                              ToolTip.Tip="Export every Ready document in the inbox" />
-                                </MenuFlyout>
-                            </SplitButton.Flyout>
-                        </SplitButton>
-                    </StackPanel>
                 </StackPanel>
 
                 <!-- Row 2: active batch/profile selection — a subtly tinted band (bleeding past the
@@ -387,6 +368,25 @@
                                    Foreground="{DynamicResource MutedBrush}"
                                    FontSize="12"
                                    IsVisible="{Binding HasSelectedDocuments}" />
+                    </StackPanel>
+
+                    <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" DockPanel.Dock="Left" IsVisible="{Binding !ShowTrash}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left" IsVisible="{Binding !ShowTrash}">
+                        <SplitButton Command="{Binding ExportCommand}"
+                                     ToolTip.Tip="Export selected Ready documents, or all Ready documents when nothing is selected">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource IconExport}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" />
+                                <TextBlock Text="Export" />
+                            </StackPanel>
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="Export all"
+                                              Command="{Binding ExportAllCommand}"
+                                              ToolTip.Tip="Export every Ready document in the inbox" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,16,2" DockPanel.Dock="Left" IsVisible="{Binding ShowTrash}">
