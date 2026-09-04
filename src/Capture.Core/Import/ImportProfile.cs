@@ -36,6 +36,13 @@ public sealed class ImportProfile
     /// one immediate use is constraining the Indexing Profile picker to this list.</summary>
     public List<Guid> IndexingProfileIds { get; set; } = [];
 
+    /// <summary>Applied automatically when nothing else has already resolved an Indexing Profile for
+    /// an incoming document — no Indexing Profile was explicitly chosen for the import (manual toolbar
+    /// selection or watch folder configuration), and auto-classification either isn't enabled or found
+    /// no match. Null means no automatic fallback — the document is left unindexed until someone
+    /// applies a profile by hand, same as today's behavior.</summary>
+    public Guid? DefaultIndexingProfileId { get; set; }
+
     /// <summary>Which <c>BatchProfile</c> documents this import profile produces should join —
     /// batching is controlled from here rather than selected independently, so a user configuring one
     /// import profile controls both separation and batching (and, via <see cref="IndexingProfileIds"/>,

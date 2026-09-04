@@ -135,6 +135,11 @@ public partial class MainViewModel
                     ? ImportProfiles.FirstOrDefault(item => item.Id == ipId)
                     : null)
                 : SelectedImportProfile;
+            // Last resort — nothing more specific (an explicit toolbar/watch-folder choice) picked an
+            // Indexing Profile, so fall back to whatever this Import Profile designates as its default.
+            profile ??= importProfile?.DefaultIndexingProfileId is { } defaultProfileId
+                ? Profiles.FirstOrDefault(item => item.Id == defaultProfileId)
+                : null;
             var selectedBatchProfile = importProfile?.BatchProfileId is { } bpId
                 ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
                 : null;
@@ -299,8 +304,12 @@ public partial class MainViewModel
     {
         try
         {
-            var profile = SelectedIndexingProfile;
             var importProfile = SelectedImportProfile;
+            // Last resort — no explicit toolbar selection, so fall back to whatever this Import
+            // Profile designates as its default.
+            var profile = SelectedIndexingProfile ?? (importProfile?.DefaultIndexingProfileId is { } defaultProfileId
+                ? Profiles.FirstOrDefault(item => item.Id == defaultProfileId)
+                : null);
             var selectedBatchProfile = importProfile?.BatchProfileId is { } bpId
                 ? BatchProfiles.FirstOrDefault(item => item.Id == bpId)
                 : null;

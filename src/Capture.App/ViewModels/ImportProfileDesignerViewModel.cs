@@ -96,6 +96,13 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
 
     public ObservableCollection<IndexingProfileOption> IndexingProfileOptions { get; } = [];
 
+    /// <summary>Applied automatically when nothing else — an explicit toolbar/watch-folder choice, or
+    /// (once it exists) auto-classification — has already resolved an Indexing Profile. Set/restored
+    /// in <see cref="ReloadIndexingProfileOptionsAsync"/>, not in the constructor, since it needs
+    /// <see cref="IndexingProfileOptions"/> populated first.</summary>
+    [ObservableProperty]
+    private IndexingProfileOption? _defaultIndexingProfileOption;
+
     public ObservableCollection<BatchProfile> BatchProfileOptions { get; } = [];
 
     [ObservableProperty]
@@ -207,12 +214,14 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
         SelectedStrategy = Strategies.FirstOrDefault();
     }
 
-    // Preserves existing checkbox selections across a reload — used both by InitializeAsync and after
-    // returning from the "New indexing profile…" sub-dialog, so a profile created there shows up
-    // immediately without losing anything already checked.
+    // Preserves existing checkbox selections (and the Default indexing profile choice) across a
+    // reload — used both by InitializeAsync and after returning from the "New indexing profile…"
+    // sub-dialog, so a profile created there shows up immediately without losing anything already
+    // checked/selected.
     private async Task ReloadIndexingProfileOptionsAsync()
     {
         var selectedIds = IndexingProfileOptions.Where(option => option.IsSelected).Select(option => option.Id).ToHashSet();
+        var defaultId = DefaultIndexingProfileOption?.Id ?? Profile.DefaultIndexingProfileId;
         IndexingProfileOptions.Clear();
         foreach (var indexingProfile in await _profileStore.GetAllAsync().ConfigureAwait(true))
         {
@@ -221,6 +230,10 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
                 IsSelected = Profile.IndexingProfileIds.Contains(indexingProfile.Id) || selectedIds.Contains(indexingProfile.Id)
             });
         }
+
+        DefaultIndexingProfileOption = defaultId is { } id
+            ? IndexingProfileOptions.FirstOrDefault(option => option.Id == id)
+            : null;
     }
 
     // Same idea as ReloadIndexingProfileOptionsAsync — preserves the current selection (by Id) across
@@ -706,6 +719,7 @@ public partial class ImportProfileDesignerViewModel : ViewModelBase
             .Where(option => option.IsSelected)
             .Select(option => option.Id)
             .ToList();
+        Profile.DefaultIndexingProfileId = DefaultIndexingProfileOption?.Id;
 
         await _store.SaveAsync(Profile).ConfigureAwait(true);
         Saved = true;

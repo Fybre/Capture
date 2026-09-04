@@ -264,6 +264,23 @@
                                     HorizontalAlignment="Left"
                                     Padding="8,4"
                                     FontSize="12.5" />
+
+                            <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+
+                            <TextBlock Text="Default indexing profile" Classes="field-label" />
+                            <TextBlock Text="Applied automatically when nothing else has already picked an Indexing Profile — no explicit toolbar/watch-folder choice, and auto-classification isn't enabled or found no match."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <ComboBox ItemsSource="{Binding IndexingProfileOptions}"
+                                      SelectedItem="{Binding DefaultIndexingProfileOption}"
+                                      PlaceholderText="None — no automatic fallback"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:IndexingProfileOption">
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </StackPanel>
                     </Border>
 

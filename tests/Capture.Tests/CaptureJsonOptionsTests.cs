@@ -119,6 +119,7 @@ public class CaptureJsonOptionsTests
             MatchMode = SeparationMatchMode.All,
             IndexingProfileIds = [Guid.NewGuid()],
             BatchProfileId = Guid.NewGuid(),
+            DefaultIndexingProfileId = Guid.NewGuid(),
             Strategies =
             [
                 new SeparationStrategy
@@ -141,6 +142,7 @@ public class CaptureJsonOptionsTests
         Assert.Equal(SeparationMatchMode.All, roundtripped.MatchMode);
         Assert.Single(roundtripped.IndexingProfileIds);
         Assert.Equal(profile.BatchProfileId, roundtripped.BatchProfileId);
+        Assert.Equal(profile.DefaultIndexingProfileId, roundtripped.DefaultIndexingProfileId);
 
         var strategy = Assert.Single(roundtripped.Strategies);
         Assert.Equal(SeparationStrategyType.Barcode, strategy.Type);

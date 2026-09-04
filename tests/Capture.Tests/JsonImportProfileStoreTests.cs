@@ -15,6 +15,7 @@ public class JsonImportProfileStoreTests
         var store = new JsonImportProfileStore(paths);
         var indexingProfileId = Guid.NewGuid();
         var batchProfileId = Guid.NewGuid();
+        var defaultIndexingProfileId = Guid.NewGuid();
 
         var profile = new ImportProfile
         {
@@ -24,6 +25,7 @@ public class JsonImportProfileStoreTests
             MatchMinimum = 2,
             IndexingProfileIds = [indexingProfileId],
             BatchProfileId = batchProfileId,
+            DefaultIndexingProfileId = defaultIndexingProfileId,
             Strategies =
             [
                 new SeparationStrategy
@@ -61,6 +63,7 @@ public class JsonImportProfileStoreTests
         Assert.Equal(2, loaded.MatchMinimum);
         Assert.Equal([indexingProfileId], loaded.IndexingProfileIds);
         Assert.Equal(batchProfileId, loaded.BatchProfileId);
+        Assert.Equal(defaultIndexingProfileId, loaded.DefaultIndexingProfileId);
         Assert.Equal(3, loaded.Strategies.Count);
 
         var barcode = loaded.Strategies[0];
