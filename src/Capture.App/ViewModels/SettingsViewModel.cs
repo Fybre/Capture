@@ -360,6 +360,7 @@ public partial class SettingsViewModel : ViewModelBase
         DuplicateImportBehavior = settings.DuplicateImportBehavior;
         AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
         CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
+        RemoveDocumentsAfterExport = settings.RemoveDocumentsAfterExport;
         TrashRetentionDays = settings.TrashRetentionDays;
         DebugMode = settings.DebugMode;
         CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
@@ -723,6 +724,7 @@ public partial class SettingsViewModel : ViewModelBase
             DuplicateImportBehavior = DuplicateImportBehavior,
             AutoDeleteExportedDocuments = AutoDeleteExportedDocuments,
             AutoDeleteExportedDocumentsAfterDays = Math.Max(1, CleanupOlderThanDays),
+            RemoveDocumentsAfterExport = RemoveDocumentsAfterExport,
             TrashRetentionDays = Math.Max(1, TrashRetentionDays),
             DebugMode = DebugMode,
             CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
@@ -762,6 +764,11 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _cleanupOlderThanDays = 30;
+
+    /// <summary>See WatchSettings.RemoveDocumentsAfterExport — immediate, workspace-wide, distinct
+    /// from the age-gated AutoDeleteExportedDocuments sweep above.</summary>
+    [ObservableProperty]
+    private bool _removeDocumentsAfterExport;
 
     /// <summary>See WatchSettings.TrashRetentionDays.</summary>
     [ObservableProperty]
@@ -875,6 +882,7 @@ public partial class SettingsViewModel : ViewModelBase
             DuplicateImportBehavior = settings.DuplicateImportBehavior;
             AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
             CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
+            RemoveDocumentsAfterExport = settings.RemoveDocumentsAfterExport;
             TrashRetentionDays = settings.TrashRetentionDays;
             DebugMode = settings.DebugMode;
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;

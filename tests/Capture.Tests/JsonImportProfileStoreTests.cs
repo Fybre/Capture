@@ -25,8 +25,7 @@ public class JsonImportProfileStoreTests
             BarcodeFormat = "CODE_128",
             BarcodeValuePattern = "^DOC-",
             DiscardSeparatorPage = true,
-            IndexingProfileIds = [indexingProfileId],
-            RemoveAfterExport = true
+            IndexingProfileIds = [indexingProfileId]
         };
 
         await store.SaveAsync(profile);
@@ -42,7 +41,6 @@ public class JsonImportProfileStoreTests
         Assert.Equal("^DOC-", loaded.BarcodeValuePattern);
         Assert.True(loaded.DiscardSeparatorPage);
         Assert.Equal([indexingProfileId], loaded.IndexingProfileIds);
-        Assert.True(loaded.RemoveAfterExport);
     }
 
     [Fact]

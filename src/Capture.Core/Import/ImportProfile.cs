@@ -61,13 +61,6 @@ public sealed class ImportProfile
     /// one immediate use is constraining the Indexing Profile picker to this list.</summary>
     public List<Guid> IndexingProfileIds { get; set; } = [];
 
-    /// <summary>When true, a document produced by this import profile that exports successfully
-    /// (every enabled export definition succeeded) is deleted from the inbox immediately afterward
-    /// instead of being marked <see cref="Capture.Core.Models.DocumentStatus.Exported"/> and kept
-    /// around. Applies regardless of <see cref="Trigger"/> — a fact about the imported document's
-    /// lifecycle, not about how it was split.</summary>
-    public bool RemoveAfterExport { get; set; }
-
     /// <summary>Which <c>BatchProfile</c> documents this import profile produces should join —
     /// batching is controlled from here rather than selected independently, so a user configuring one
     /// import profile controls both separation and batching (and, via <see cref="IndexingProfileIds"/>,

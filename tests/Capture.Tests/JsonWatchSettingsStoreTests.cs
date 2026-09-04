@@ -24,6 +24,7 @@ public class JsonWatchSettingsStoreTests
             NoBatchProfileBehavior = NoBatchProfileBehavior.AddToOpenBatch,
             AutoDeleteExportedDocuments = true,
             AutoDeleteExportedDocumentsAfterDays = 45,
+            RemoveDocumentsAfterExport = true,
             TrashRetentionDays = 60,
             DuplicateImportBehavior = DuplicateImportBehavior.FlagForReview,
             WatchFolders =
@@ -50,6 +51,7 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal(NoBatchProfileBehavior.AddToOpenBatch, loaded.NoBatchProfileBehavior);
         Assert.True(loaded.AutoDeleteExportedDocuments);
         Assert.Equal(45, loaded.AutoDeleteExportedDocumentsAfterDays);
+        Assert.True(loaded.RemoveDocumentsAfterExport);
         Assert.Equal(60, loaded.TrashRetentionDays);
         Assert.Equal(DuplicateImportBehavior.FlagForReview, loaded.DuplicateImportBehavior);
         Assert.Equal(2, loaded.WatchFolders.Count);

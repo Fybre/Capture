@@ -78,6 +78,16 @@ public sealed class WatchSettings
 
     public int AutoDeleteExportedDocumentsAfterDays { get; set; } = 30;
 
+    /// <summary>When true, a document that exports successfully (every enabled export definition
+    /// succeeded) is deleted from the inbox immediately afterward instead of being marked
+    /// <see cref="Capture.Core.Models.DocumentStatus.Exported"/> and kept around — see
+    /// <c>MainViewModel.ExportDocumentAsync</c>. Applies workspace-wide to every export, regardless of
+    /// which Import/Indexing Profile produced the document. Distinct from
+    /// <see cref="AutoDeleteExportedDocuments"/>: that one is a delayed cleanup sweep for documents
+    /// already sitting in the Exported state after N days; this one fires immediately, right after the
+    /// export that put it there. Off by default.</summary>
+    public bool RemoveDocumentsAfterExport { get; set; }
+
     /// <summary>How long a soft-deleted (trashed) document stays recoverable before MainViewModel's
     /// auto-cleanup sweep purges it for good — see <c>Store.DocumentCleanup.SelectExpiredTrash</c>.
     /// Always active (not a separate opt-in toggle): unlike AutoDeleteExportedDocuments, which changes

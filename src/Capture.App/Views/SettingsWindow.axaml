@@ -449,6 +449,11 @@
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                         <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                        <CheckBox Content="Remove documents from the inbox immediately after a successful export" IsChecked="{Binding RemoveDocumentsAfterExport}" />
+                        <TextBlock Text="Applies to every export, workspace-wide. When on, a document is moved to Trash the moment every enabled export for it succeeds, instead of being marked Exported and kept in the list."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
                         <TextBlock Text="Trash retention" Classes="field-label" />
                         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
                             <NumericUpDown Grid.Column="0" Value="{Binding TrashRetentionDays}" Minimum="1" Maximum="3650" Width="120" />

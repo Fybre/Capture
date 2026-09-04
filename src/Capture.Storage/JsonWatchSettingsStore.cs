@@ -114,6 +114,7 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             NoBatchProfileBehavior = settings.NoBatchProfileBehavior,
             AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments,
             AutoDeleteExportedDocumentsAfterDays = settings.AutoDeleteExportedDocumentsAfterDays,
+            RemoveDocumentsAfterExport = settings.RemoveDocumentsAfterExport,
             TrashRetentionDays = settings.TrashRetentionDays,
             DuplicateImportBehavior = settings.DuplicateImportBehavior,
             ThereforeBaseUrl = settings.ThereforeBaseUrl,
