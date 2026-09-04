@@ -7,7 +7,6 @@ public sealed class IndexValue
     public Guid FieldId { get; set; }
     public string FieldName { get; set; } = string.Empty;
     public FieldFormat Format { get; set; } = FieldFormat.String;
-    public IndexLevel Level { get; set; } = IndexLevel.Document;
     public bool Mandatory { get; set; }
     public string Value { get; set; } = string.Empty;
     public float Confidence { get; set; }

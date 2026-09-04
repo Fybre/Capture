@@ -12,12 +12,13 @@ public sealed partial class IndexValueRow : ObservableObject
     private readonly int _threshold;
     private bool _suppress;
 
-    public IndexValueRow(IndexValue value, int threshold, string? locale, bool scriptingAvailable = false)
+    public IndexValueRow(IndexValue value, int threshold, string? locale, bool scriptingAvailable = false, bool isBatch = false)
     {
         Value = value;
         _threshold = threshold;
         Locale = locale;
         ScriptingAvailable = scriptingAvailable;
+        IsBatch = isBatch;
         _text = value.Value;
         LookupChoices = value.LookupOptions
             .Select(option => new LookupChoice(option.Key, option.Value))
@@ -31,7 +32,11 @@ public sealed partial class IndexValueRow : ObservableObject
 
     public string Name => Value.FieldName;
 
-    public bool IsBatch => Value.Level == IndexLevel.Batch;
+    /// <summary>Set explicitly by the caller from which store the value came from
+    /// (<c>IIndexValueStore.GetBatchAsync</c> vs <c>GetAsync</c>/document-level extraction) — no longer
+    /// derived from a per-value <c>Level</c> flag, since <c>IndexField</c>/<c>IndexValue</c> no longer
+    /// carry one (batch-level fields now live on <c>BatchProfile.Fields</c> exclusively).</summary>
+    public bool IsBatch { get; }
 
     public string ScopeLabel => IsBatch ? "Batch" : "Document";
 

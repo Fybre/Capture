@@ -79,24 +79,6 @@ public class JsonProfileStoreTests
         Assert.Equal(@"\d+", field.ValuePattern);
     }
 
-    [Fact]
-    public async Task Roundtrips_batch_level()
-    {
-        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-level-" + Guid.NewGuid().ToString("N")));
-        paths.EnsureCreated();
-        var store = new JsonProfileStore(paths);
-        var profile = new IndexingProfile
-        {
-            Name = "Batch",
-            Fields =
-            [
-                new IndexField { Name = "JobNo", Level = IndexLevel.Batch, Kind = FieldKind.Regex, ValuePattern = @"\d+" }
-            ]
-        };
-        await store.SaveAsync(profile);
-        var field = Assert.Single((await store.GetAsync(profile.Id))!.Fields);
-        Assert.Equal(IndexLevel.Batch, field.Level);
-    }
 
     [Fact]
     public async Task Roundtrips_text_and_lookup_fields()

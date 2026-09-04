@@ -50,7 +50,6 @@ public class ProfileApplicatorTests
         Assert.Equal(2, values.Count);
         Assert.Equal("00001521", values[0].Value);
         Assert.Equal("Total", values[1].Value);
-        Assert.Equal(IndexLevel.Document, values[0].Level);
         Assert.Equal(DocumentStatus.Ready, IndexFormat.StatusFor(values, 80));
     }
 

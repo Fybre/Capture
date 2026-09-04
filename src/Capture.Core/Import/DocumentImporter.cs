@@ -22,6 +22,7 @@ public sealed class DocumentImporter : IDocumentImporter
     private readonly IPdfSubsetWriter _pdfSubsetWriter;
     private readonly IPreIndexStep _preIndexStep;
     private readonly IBarcodeDecoder? _barcodes;
+    private readonly IProfileApplicator? _applicator;
 
     public DocumentImporter(
         IAppPaths paths,
@@ -32,7 +33,8 @@ public sealed class DocumentImporter : IDocumentImporter
         IPdfSubsetWriter pdfSubsetWriter,
         IBarcodeDecoder? barcodes = null,
         IBlankPageDetector? blanks = null,
-        IPreIndexStep? preIndexStep = null)
+        IPreIndexStep? preIndexStep = null,
+        IProfileApplicator? applicator = null)
     {
         _paths = paths;
         _store = store;
@@ -42,6 +44,7 @@ public sealed class DocumentImporter : IDocumentImporter
         _pdfSubsetWriter = pdfSubsetWriter;
         _barcodes = barcodes;
         _preIndexStep = preIndexStep ?? new ClassicSeparatorStep(barcodes, blanks, latticeBuilder);
+        _applicator = applicator;
     }
 
     public async Task<CaptureDocument> ImportFileAsync(
@@ -253,7 +256,7 @@ public sealed class DocumentImporter : IDocumentImporter
         {
             var latticeProvider = PageLatticeProviderFactory.Create(_latticeBuilder, sourcePath ?? originalName);
             var hits = await BatchSeparator.DetectAsync(
-                    rasters, batchProfile!, _barcodes, latticeProvider, cancellationToken)
+                    rasters, batchProfile!, _barcodes, latticeProvider, _applicator, cancellationToken)
                 .ConfigureAwait(false);
             foreach (var hit in hits)
                 batchHitsByPage[hit.PageNumber] = hit;
@@ -423,7 +426,8 @@ public sealed class DocumentImporter : IDocumentImporter
             Document = document,
             SeparatorValues = split.SeparatorValues,
             StartsNewBatch = batchHit is not null,
-            BatchSeparatorValue = batchHit?.CapturedValue
+            BatchSeparatorValue = batchHit?.CapturedValue,
+            CapturedBatchFields = batchHit?.CapturedFields ?? []
         };
     }
 

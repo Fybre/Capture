@@ -153,8 +153,6 @@ public partial class MainViewModel
 
             var index = 0;
             DocumentRow? last = null;
-            var batchSources = new Dictionary<Guid, CaptureDocument>();
-            var batchSeparatorValues = new Dictionary<Guid, string?>();
             var failedFiles = 0;
             var skippedDuplicates = 0;
             foreach (var path in paths)
@@ -177,7 +175,7 @@ public partial class MainViewModel
                             path, source, profile, batchProfile, importProfile, imageDpiOverride: dpi)
                         .ConfigureAwait(true);
                     var (fileLast, failed) = await MaterializeImportedAsync(
-                            imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true, contentHash)
+                            imported, profile, allocator, isFirstOfFile: true, contentHash)
                         .ConfigureAwait(true);
                     if (fileLast is not null)
                         last = fileLast;
@@ -191,22 +189,6 @@ public partial class MainViewModel
                     failedFiles++;
                     StatusText = ex.Message;
                     MoveWatchFile(path, watchRoot, watchFolderEntry, success: false);
-                }
-            }
-
-            // Prefer the BatchProfile's own designated Indexing Profile for batch-level fields —
-            // falling back to whichever profile drove document-level extraction, today's implicit
-            // behavior, when the BatchProfile doesn't specify one.
-            var batchIndexingProfile = batchProfile?.IndexingProfileId is { } batchIndexingProfileId
-                ? Profiles.FirstOrDefault(item => item.Id == batchIndexingProfileId)
-                : profile;
-            if (batchIndexingProfile is not null)
-            {
-                foreach (var (batchId, batchSource) in batchSources)
-                {
-                    await ApplyBatchFieldsAsync(batchSource, batchIndexingProfile, batchSeparatorValues.GetValueOrDefault(batchId))
-                        .ConfigureAwait(true);
-                    await RefreshBatchRowsAsync(batchId).ConfigureAwait(true);
                 }
             }
 
@@ -273,8 +255,6 @@ public partial class MainViewModel
         IReadOnlyList<ImportedDocument> imported,
         IndexingProfile? profile,
         BatchAllocator allocator,
-        Dictionary<Guid, CaptureDocument> batchSources,
-        Dictionary<Guid, string?> batchSeparatorValues,
         bool isFirstOfFile,
         string? contentHash = null)
     {
@@ -290,13 +270,21 @@ public partial class MainViewModel
             document.BatchId = batch.Id;
             document.ContentHash = imported.Count == 1 ? contentHash : null;
             await _store.UpdateAsync(document).ConfigureAwait(true);
+
+            // Captured once, at detection time, against the raw triggering page (see BatchSeparator.
+            // DetectAsync/BatchTriggerHit.CapturedFields) — save before document-level extraction below
+            // computes this document's Status, so a first-of-batch document's readiness already reflects
+            // its own batch's fields instead of lagging a later refresh. Sibling rows already in Documents
+            // for this same batch (from earlier files in this import, or a resumed manual batch) need an
+            // explicit refresh since only this document's own row gets created fresh below.
+            if (item.CapturedBatchFields.Count > 0)
+            {
+                await _indexes.SaveBatchAsync(batch.Id, item.CapturedBatchFields).ConfigureAwait(true);
+                await RefreshBatchRowsAsync(batch.Id).ConfigureAwait(true);
+            }
+
             await ApplyDocumentFieldsAsync(document, profile, item.SeparatorValues, item.BatchSeparatorValue)
                 .ConfigureAwait(true);
-            if (!batchSources.ContainsKey(batch.Id) && document.Status != DocumentStatus.Error)
-            {
-                batchSources[batch.Id] = document;
-                batchSeparatorValues[batch.Id] = item.BatchSeparatorValue;
-            }
             last = await CreateRowAsync(document).ConfigureAwait(true);
             Documents.Add(last);
             if (document.Status == DocumentStatus.Error)
@@ -325,8 +313,6 @@ public partial class MainViewModel
             var allocator = await BatchAllocator.CreateAsync(_store, batchProfile, watchFolderEntryId: null, resumeBatch)
                 .ConfigureAwait(true);
 
-            var batchSources = new Dictionary<Guid, CaptureDocument>();
-            var batchSeparatorValues = new Dictionary<Guid, string?>();
             StatusText = "Importing scanned pages…";
 
             IReadOnlyList<ImportedDocument> imported;
@@ -342,24 +328,8 @@ public partial class MainViewModel
             }
 
             var (last, failed) = await MaterializeImportedAsync(
-                    imported, profile, allocator, batchSources, batchSeparatorValues, isFirstOfFile: true)
+                    imported, profile, allocator, isFirstOfFile: true)
                 .ConfigureAwait(true);
-
-            // Prefer the BatchProfile's own designated Indexing Profile for batch-level fields —
-            // falling back to whichever profile drove document-level extraction, today's implicit
-            // behavior, when the BatchProfile doesn't specify one.
-            var batchIndexingProfile = batchProfile?.IndexingProfileId is { } batchIndexingProfileId
-                ? Profiles.FirstOrDefault(item => item.Id == batchIndexingProfileId)
-                : profile;
-            if (batchIndexingProfile is not null)
-            {
-                foreach (var (batchId, batchSource) in batchSources)
-                {
-                    await ApplyBatchFieldsAsync(batchSource, batchIndexingProfile, batchSeparatorValues.GetValueOrDefault(batchId))
-                        .ConfigureAwait(true);
-                    await RefreshBatchRowsAsync(batchId).ConfigureAwait(true);
-                }
-            }
 
             if (keepsBatchOpen)
                 _lastManualBatch = allocator.Current;
@@ -387,12 +357,9 @@ public partial class MainViewModel
 
     private async Task ApplyProfileToDocumentAsync(
         CaptureDocument document,
-        IndexingProfile profile,
-        bool extractBatch)
+        IndexingProfile profile)
     {
         await ApplyDocumentFieldsAsync(document, profile).ConfigureAwait(true);
-        if (extractBatch)
-            await ApplyBatchFieldsAsync(document, profile).ConfigureAwait(true);
     }
 
     private async Task ApplyDocumentFieldsAsync(
@@ -416,7 +383,7 @@ public partial class MainViewModel
             }
         }
 
-        var documentValues = extracted.Where(value => value.Level != IndexLevel.Batch).ToList();
+        var documentValues = extracted.ToList();
         await _indexes.SaveAsync(document.Id, documentValues).ConfigureAwait(true);
         document.ProfileId = profile.Id;
         var batchValues = document.BatchId is { } batchId
@@ -452,42 +419,6 @@ public partial class MainViewModel
                 Trace.TraceError($"Post-index step {step.GetType().Name} failed for document {document.Id}: {ex}");
             }
         }
-    }
-
-    private async Task ApplyBatchFieldsAsync(CaptureDocument document, IndexingProfile profile, string? batchSeparatorValue = null)
-    {
-        if (document.BatchId is not { } batchId || document.Status == DocumentStatus.Error)
-            return;
-
-        var extracted = await ExtractAsync(document, profile, batchSeparatorValue).ConfigureAwait(true);
-        var batchValues = extracted.Where(value => value.Level == IndexLevel.Batch).ToList();
-
-        if (string.IsNullOrEmpty(batchSeparatorValue))
-        {
-            // No freshly captured batch-trigger value this time (e.g. a manual "apply profile" re-run,
-            // which has no barcode/regex hit to seed from). A BatchSeparatorValue field has no other way
-            // to derive its value, so preserve whatever a real import already captured for it rather than
-            // blanking it out — but only that field kind: any other batch-level field (zone/pattern-based)
-            // can legitimately re-extract as empty, and that new result should win, not a stale one.
-            var separatorFieldIds = profile.Fields
-                .Where(field => field.Kind == FieldKind.BatchSeparatorValue)
-                .Select(field => field.Id)
-                .ToHashSet();
-            if (separatorFieldIds.Count > 0)
-            {
-                var existing = await _indexes.GetBatchAsync(batchId).ConfigureAwait(true);
-                foreach (var value in batchValues)
-                {
-                    if (separatorFieldIds.Contains(value.FieldId)
-                        && string.IsNullOrWhiteSpace(value.Value)
-                        && existing.FirstOrDefault(item => item.FieldId == value.FieldId) is { } previous
-                        && !string.IsNullOrWhiteSpace(previous.Value))
-                        value.Value = previous.Value;
-                }
-            }
-        }
-
-        await _indexes.SaveBatchAsync(batchId, batchValues).ConfigureAwait(true);
     }
 
     /// <summary>Every page's already-built lattice for a document — used both for real extraction

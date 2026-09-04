@@ -90,15 +90,14 @@ public class CaptureJsonOptionsTests
     }
 
     [Fact]
-    public void Roundtrips_batch_profile_including_strategy_list_and_match_mode()
+    public void Roundtrips_batch_profile_including_strategy_list_fields_and_scripts()
     {
-        var indexingProfileId = Guid.NewGuid();
         var profile = new BatchProfile
         {
             Name = "Barcode batches",
             Mode = BatchMode.UseStrategies,
             MatchMode = SeparationMatchMode.All,
-            IndexingProfileId = indexingProfileId,
+            SharedScriptSource = "int DoubleIt(int n) => n * 2;",
             Strategies =
             [
                 new SeparationStrategy
@@ -107,6 +106,20 @@ public class CaptureJsonOptionsTests
                     BarcodeFormat = "CODE_128",
                     DiscardSeparatorPage = true
                 }
+            ],
+            Fields =
+            [
+                new IndexField { Name = "Student No", Kind = FieldKind.BatchSeparatorValue },
+                new IndexField
+                {
+                    Name = "Student Name",
+                    Kind = FieldKind.Zonal,
+                    Zone = new ZoneRect { PageNumber = 1, X = 0.1f, Y = 0.2f, Width = 0.3f, Height = 0.05f }
+                }
+            ],
+            Scripts =
+            [
+                new FieldScript { Name = "Normalize", Trigger = ScriptTrigger.AfterFieldsPopulated, Source = "return 1;" }
             ]
         };
 
@@ -117,12 +130,21 @@ public class CaptureJsonOptionsTests
         Assert.Equal("Barcode batches", roundtripped!.Name);
         Assert.Equal(BatchMode.UseStrategies, roundtripped.Mode);
         Assert.Equal(SeparationMatchMode.All, roundtripped.MatchMode);
-        Assert.Equal(indexingProfileId, roundtripped.IndexingProfileId);
+        Assert.Equal("int DoubleIt(int n) => n * 2;", roundtripped.SharedScriptSource);
 
         var strategy = Assert.Single(roundtripped.Strategies);
         Assert.Equal(SeparationStrategyType.Barcode, strategy.Type);
         Assert.Equal("CODE_128", strategy.BarcodeFormat);
         Assert.True(strategy.DiscardSeparatorPage);
+
+        Assert.Equal(2, roundtripped.Fields.Count);
+        Assert.Equal(FieldKind.BatchSeparatorValue, roundtripped.Fields[0].Kind);
+        Assert.Equal(FieldKind.Zonal, roundtripped.Fields[1].Kind);
+        Assert.NotNull(roundtripped.Fields[1].Zone);
+
+        var script = Assert.Single(roundtripped.Scripts);
+        Assert.Equal("Normalize", script.Name);
+        Assert.Equal(ScriptTrigger.AfterFieldsPopulated, script.Trigger);
     }
 
     [Fact]

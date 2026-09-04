@@ -14,7 +14,6 @@ public class JsonBatchProfileStoreTests
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-batch-profile-" + Guid.NewGuid().ToString("N")));
         paths.EnsureCreated();
         var store = new JsonBatchProfileStore(paths);
-        var indexingProfileId = Guid.NewGuid();
 
         var profile = new BatchProfile
         {
@@ -23,7 +22,15 @@ public class JsonBatchProfileStoreTests
             Mode = BatchMode.UseStrategies,
             MatchMode = SeparationMatchMode.AtLeast,
             MatchMinimum = 2,
-            IndexingProfileId = indexingProfileId,
+            SharedScriptSource = "int DoubleIt(int n) => n * 2;",
+            Fields =
+            [
+                new IndexField { Name = "Student No", Kind = FieldKind.BatchSeparatorValue }
+            ],
+            Scripts =
+            [
+                new FieldScript { Name = "Normalize", Trigger = ScriptTrigger.AfterFieldsPopulated, Source = "return 1;" }
+            ],
             Strategies =
             [
                 new SeparationStrategy
@@ -59,8 +66,13 @@ public class JsonBatchProfileStoreTests
         Assert.Equal(BatchMode.UseStrategies, loaded.Mode);
         Assert.Equal(SeparationMatchMode.AtLeast, loaded.MatchMode);
         Assert.Equal(2, loaded.MatchMinimum);
-        Assert.Equal(indexingProfileId, loaded.IndexingProfileId);
+        Assert.Equal("int DoubleIt(int n) => n * 2;", loaded.SharedScriptSource);
         Assert.Equal(3, loaded.Strategies.Count);
+
+        var field = Assert.Single(loaded.Fields);
+        Assert.Equal(FieldKind.BatchSeparatorValue, field.Kind);
+        var script = Assert.Single(loaded.Scripts);
+        Assert.Equal("Normalize", script.Name);
 
         var barcode = loaded.Strategies[0];
         Assert.Equal(SeparationStrategyType.Barcode, barcode.Type);
@@ -97,7 +109,7 @@ public class JsonBatchProfileStoreTests
         Assert.Equal(BatchMode.NewBatchPerFile, loaded!.Mode);
         Assert.Empty(loaded.Strategies);
         Assert.Equal(SeparationMatchMode.Any, loaded.MatchMode);
-        Assert.Null(loaded.IndexingProfileId);
+        Assert.Empty(loaded.Fields);
     }
 
     [Fact]

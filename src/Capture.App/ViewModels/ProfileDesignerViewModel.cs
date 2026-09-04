@@ -1384,7 +1384,6 @@ public partial class ProfileDesignerViewModel : ViewModelBase
             or nameof(FieldRow.ConfidenceDisplay)
             or nameof(FieldRow.HasSearchZone)
             or nameof(FieldRow.KindDisplay)
-            or nameof(FieldRow.Level)
             or nameof(FieldRow.SelectedClassification)
             or nameof(FieldRow.SelectedAiType)
             or nameof(FieldRow.AiPrompt)

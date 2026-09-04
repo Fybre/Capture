@@ -26,14 +26,10 @@ public sealed class ProfileApplicator : IProfileApplicator
         IReadOnlyList<DocumentPage>? pages = null,
         string? batchSeparatorValue = null,
         IReadOnlyList<IndexValue>? existingValues = null,
-        CaptureDocument? document = null)
-    {
-        var results = ExtractAll(profile, lattices, pages, batchSeparatorValue);
-        ApplyDefaults(profile, results, context, existingValues);
-        return results;
-    }
+        CaptureDocument? document = null) =>
+        Apply(profile.Fields, lattices, profile.Name, profile.Locale, context, pages, batchSeparatorValue, existingValues, document);
 
-    public async Task<IReadOnlyList<IndexValue>> ApplyAsync(
+    public Task<IReadOnlyList<IndexValue>> ApplyAsync(
         IndexingProfile profile,
         IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context = null,
@@ -41,28 +37,61 @@ public sealed class ProfileApplicator : IProfileApplicator
         string? batchSeparatorValue = null,
         IReadOnlyList<IndexValue>? existingValues = null,
         CaptureDocument? document = null,
+        CancellationToken cancellationToken = default) =>
+        ApplyAsync(profile.Fields, profile.Scripts, profile.SharedScriptSource, lattices, profile.Name, profile.Locale,
+            context, pages, batchSeparatorValue, existingValues, document, cancellationToken);
+
+    public IReadOnlyList<IndexValue> Apply(
+        IReadOnlyList<IndexField> fields,
+        IReadOnlyList<PageLattice> lattices,
+        string? profileName = null,
+        string? locale = null,
+        DefaultValueContext? context = null,
+        IReadOnlyList<DocumentPage>? pages = null,
+        string? batchSeparatorValue = null,
+        IReadOnlyList<IndexValue>? existingValues = null,
+        CaptureDocument? document = null)
+    {
+        var results = ExtractAll(fields, locale, lattices, pages, batchSeparatorValue);
+        ApplyDefaults(fields, profileName, locale, results, context, existingValues);
+        return results;
+    }
+
+    public async Task<IReadOnlyList<IndexValue>> ApplyAsync(
+        IReadOnlyList<IndexField> fields,
+        IReadOnlyList<FieldScript> scripts,
+        string sharedScriptSource,
+        IReadOnlyList<PageLattice> lattices,
+        string? profileName = null,
+        string? locale = null,
+        DefaultValueContext? context = null,
+        IReadOnlyList<DocumentPage>? pages = null,
+        string? batchSeparatorValue = null,
+        IReadOnlyList<IndexValue>? existingValues = null,
+        CaptureDocument? document = null,
         CancellationToken cancellationToken = default)
     {
-        var results = ExtractAll(profile, lattices, pages, batchSeparatorValue);
-        await FillAiAsync(profile, lattices, results, cancellationToken).ConfigureAwait(false);
-        await FillFieldScriptsAsync(profile, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
-        await RunProfileScriptsAsync(profile, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
-        ApplyDefaults(profile, results, context, existingValues);
-        await ApplyPostProcessScriptsAsync(profile, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+        var results = ExtractAll(fields, locale, lattices, pages, batchSeparatorValue);
+        await FillAiAsync(fields, locale, lattices, results, cancellationToken).ConfigureAwait(false);
+        await FillFieldScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+        await RunProfileScriptsAsync(fields, scripts, sharedScriptSource, profileName, locale, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
+        ApplyDefaults(fields, profileName, locale, results, context, existingValues);
+        await ApplyPostProcessScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
         return results;
     }
 
     private List<IndexValue> ExtractAll(
-        IndexingProfile profile,
+        IReadOnlyList<IndexField> fields,
+        string? locale,
         IReadOnlyList<PageLattice> lattices,
         IReadOnlyList<DocumentPage>? pages,
         string? batchSeparatorValue)
     {
-        var results = new List<IndexValue>(profile.Fields.Count);
-        foreach (var field in profile.Fields)
+        var results = new List<IndexValue>(fields.Count);
+        foreach (var field in fields)
         {
             var extracted = Extract(field, lattices, pages, batchSeparatorValue);
-            extracted.ValidationError = IndexFormat.Validate(extracted.Value, field.Format, profile.Locale);
+            extracted.ValidationError = IndexFormat.Validate(extracted.Value, field.Format, locale);
             results.Add(extracted);
         }
 
@@ -70,12 +99,13 @@ public sealed class ProfileApplicator : IProfileApplicator
     }
 
     private async Task FillAiAsync(
-        IndexingProfile profile,
+        IReadOnlyList<IndexField> fields,
+        string? locale,
         IReadOnlyList<PageLattice> lattices,
         List<IndexValue> results,
         CancellationToken cancellationToken)
     {
-        var aiFields = profile.Fields.Where(field => field.Kind == FieldKind.Ai).ToList();
+        var aiFields = fields.Where(field => field.Kind == FieldKind.Ai).ToList();
         if (aiFields.Count == 0 || _ai is null || !_ai.IsConfigured)
             return;
 
@@ -90,7 +120,7 @@ public sealed class ProfileApplicator : IProfileApplicator
                 continue;
             value.Value = hit.Value;
             value.Confidence = hit.Confidence;
-            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
         }
     }
 
@@ -99,7 +129,10 @@ public sealed class ProfileApplicator : IProfileApplicator
     // reference an earlier one's already-resolved value. Read-only over every field (see
     // ReadOnlyScriptGlobals) — a field expression can only ever change its own value.
     private async Task FillFieldScriptsAsync(
-        IndexingProfile profile,
+        IReadOnlyList<IndexField> fields,
+        string sharedScriptSource,
+        string? profileName,
+        string? locale,
         List<IndexValue> results,
         IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context,
@@ -109,18 +142,18 @@ public sealed class ProfileApplicator : IProfileApplicator
         if (_scripts is null || !_scripts.IsAvailable)
             return;
 
-        var scriptFields = profile.Fields.Where(field => field.Kind == FieldKind.Script && !string.IsNullOrEmpty(field.ScriptExpression));
+        var scriptFields = fields.Where(field => field.Kind == FieldKind.Script && !string.IsNullOrEmpty(field.ScriptExpression));
         if (!scriptFields.Any())
             return;
 
-        var execContext = BuildExecutionContext(profile, results, lattices, context, document);
+        var execContext = BuildExecutionContext(profileName, results, lattices, context, document);
         foreach (var field in scriptFields)
         {
             var value = results.FirstOrDefault(item => item.FieldId == field.Id);
             if (value is null || value.IsManual)
                 continue;
 
-            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.ScriptExpression!, execContext, cancellationToken, profile.SharedScriptSource)
+            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.ScriptExpression!, execContext, cancellationToken, sharedScriptSource)
                 .ConfigureAwait(false);
 
             if (!result.Success)
@@ -132,7 +165,7 @@ public sealed class ProfileApplicator : IProfileApplicator
 
             value.Value = result.Value ?? string.Empty;
             value.Confidence = 100;
-            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
         }
     }
 
@@ -145,7 +178,10 @@ public sealed class ProfileApplicator : IProfileApplicator
     // not an input to the rest of the extraction pipeline. Confidence is left untouched: cleanup doesn't
     // change how much to trust the underlying OCR/extraction, just the text's presentation.
     private async Task ApplyPostProcessScriptsAsync(
-        IndexingProfile profile,
+        IReadOnlyList<IndexField> fields,
+        string sharedScriptSource,
+        string? profileName,
+        string? locale,
         List<IndexValue> results,
         IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context,
@@ -155,21 +191,21 @@ public sealed class ProfileApplicator : IProfileApplicator
         if (_scripts is null || !_scripts.IsAvailable)
             return;
 
-        var fields = profile.Fields
+        var postProcessFields = fields
             .Where(field => field.Kind is not (FieldKind.Script or FieldKind.Button or FieldKind.BatchSeparatorValue)
                 && !string.IsNullOrEmpty(field.PostProcessScript))
             .ToList();
-        if (fields.Count == 0)
+        if (postProcessFields.Count == 0)
             return;
 
-        var execContext = BuildExecutionContext(profile, results, lattices, context, document);
-        foreach (var field in fields)
+        var execContext = BuildExecutionContext(profileName, results, lattices, context, document);
+        foreach (var field in postProcessFields)
         {
             var value = results.FirstOrDefault(item => item.FieldId == field.Id);
             if (value is null || value.IsManual)
                 continue;
 
-            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.PostProcessScript!, execContext, cancellationToken, profile.SharedScriptSource)
+            var result = await _scripts.RunFieldExpressionAsync(field.Id, field.PostProcessScript!, execContext, cancellationToken, sharedScriptSource)
                 .ConfigureAwait(false);
 
             if (!result.Success)
@@ -179,7 +215,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             }
 
             value.Value = result.Value ?? string.Empty;
-            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
         }
     }
 
@@ -189,7 +225,11 @@ public sealed class ProfileApplicator : IProfileApplicator
     // RoslynFieldScriptRunner never lets one cross this boundary) is logged and skipped; it never
     // aborts the document, matching every other pipeline step's failure contract.
     private async Task RunProfileScriptsAsync(
-        IndexingProfile profile,
+        IReadOnlyList<IndexField> fields,
+        IReadOnlyList<FieldScript> scripts,
+        string sharedScriptSource,
+        string? profileName,
+        string? locale,
         List<IndexValue> results,
         IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context,
@@ -200,14 +240,14 @@ public sealed class ProfileApplicator : IProfileApplicator
         if (_scripts is null || !_scripts.IsAvailable)
             return;
 
-        var scripts = profile.Scripts.Where(script => script.Enabled && script.Trigger == trigger && !string.IsNullOrEmpty(script.Source)).ToList();
-        if (scripts.Count == 0)
+        var enabledScripts = scripts.Where(script => script.Enabled && script.Trigger == trigger && !string.IsNullOrEmpty(script.Source)).ToList();
+        if (enabledScripts.Count == 0)
             return;
 
-        var execContext = BuildExecutionContext(profile, results, lattices, context, document);
-        foreach (var script in scripts)
+        var execContext = BuildExecutionContext(profileName, results, lattices, context, document);
+        foreach (var script in enabledScripts)
         {
-            var result = await _scripts.RunProfileScriptAsync(script, execContext, cancellationToken, profile.SharedScriptSource).ConfigureAwait(false);
+            var result = await _scripts.RunProfileScriptAsync(script, execContext, cancellationToken, sharedScriptSource).ConfigureAwait(false);
             if (!result.Success)
                 Trace.TraceError($"Script \"{script.Name}\" failed: {result.ErrorMessage}");
         }
@@ -216,20 +256,20 @@ public sealed class ProfileApplicator : IProfileApplicator
         // trying to track which ones actually changed.
         foreach (var value in results)
         {
-            var field = profile.Fields.FirstOrDefault(item => item.Id == value.FieldId);
+            var field = fields.FirstOrDefault(item => item.Id == value.FieldId);
             if (field is not null)
-                value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+                value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
         }
     }
 
     private static ScriptExecutionContext BuildExecutionContext(
-        IndexingProfile profile,
+        string? profileName,
         List<IndexValue> results,
         IReadOnlyList<PageLattice> lattices,
         DefaultValueContext? context,
         CaptureDocument? document) => new()
     {
-        ProfileName = profile.Name,
+        ProfileName = profileName ?? string.Empty,
         DocumentNumber = context?.DocumentNumber ?? 1,
         BatchNumber = context?.BatchNumber ?? 1,
         Timestamp = context?.Timestamp ?? DateTimeOffset.Now,
@@ -238,7 +278,9 @@ public sealed class ProfileApplicator : IProfileApplicator
     };
 
     private static void ApplyDefaults(
-        IndexingProfile profile,
+        IReadOnlyList<IndexField> fields,
+        string? profileName,
+        string? locale,
         List<IndexValue> results,
         DefaultValueContext? context,
         IReadOnlyList<IndexValue>? existingValues)
@@ -249,7 +291,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         // a script's own output) would get silently reset on the next reprocess. This is also the
         // structural guarantee that a profile-level script (which runs earlier, in FillFieldScriptsAsync/
         // RunProfileScriptsAsync above) can never permanently clobber a manually-entered value.
-        foreach (var field in profile.Fields.Where(field => field.Kind is FieldKind.Text or FieldKind.Lookup or FieldKind.Script or FieldKind.Button))
+        foreach (var field in fields.Where(field => field.Kind is FieldKind.Text or FieldKind.Lookup or FieldKind.Script or FieldKind.Button))
         {
             var existing = existingValues?.FirstOrDefault(item => item.FieldId == field.Id);
             if (existing is not { IsManual: true })
@@ -262,10 +304,10 @@ public sealed class ProfileApplicator : IProfileApplicator
             value.Value = existing.Value;
             value.IsManual = true;
             value.Confidence = existing.Confidence;
-            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
         }
 
-        var templatedFieldIds = profile.Fields
+        var templatedFieldIds = fields
             .Where(field =>
                 (field.Kind == FieldKind.Text && !string.IsNullOrEmpty(field.DefaultValueTemplate)) ||
                 (field.Kind == FieldKind.Lookup && !string.IsNullOrEmpty(field.LookupKeyTemplate)))
@@ -276,11 +318,11 @@ public sealed class ProfileApplicator : IProfileApplicator
 
         // A default can't reference another field that itself has a computed default (no chaining, no
         // cycle detection needed) — simply never offer those fields' values for lookup.
-        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fieldValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in results)
         {
             if (!templatedFieldIds.Contains(item.FieldId))
-                fields[item.FieldName] = item.Value ?? string.Empty;
+                fieldValues[item.FieldName] = item.Value ?? string.Empty;
         }
 
         var evalContext = new DefaultValueContext
@@ -288,11 +330,11 @@ public sealed class ProfileApplicator : IProfileApplicator
             DocumentNumber = context?.DocumentNumber ?? 1,
             BatchNumber = context?.BatchNumber ?? 1,
             Timestamp = context?.Timestamp ?? DateTimeOffset.Now,
-            ProfileName = profile.Name,
-            Fields = fields
+            ProfileName = profileName ?? string.Empty,
+            Fields = fieldValues
         };
 
-        foreach (var field in profile.Fields)
+        foreach (var field in fields)
         {
             if (!templatedFieldIds.Contains(field.Id))
                 continue;
@@ -303,7 +345,7 @@ public sealed class ProfileApplicator : IProfileApplicator
 
             if (field.Kind == FieldKind.Lookup)
             {
-                ApplyLookupKeyTemplate(field, value, evalContext, profile.Locale);
+                ApplyLookupKeyTemplate(field, value, evalContext, locale);
                 continue;
             }
 
@@ -321,7 +363,7 @@ public sealed class ProfileApplicator : IProfileApplicator
 
             value.Value = evaluated;
             value.Confidence = 100;
-            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, profile.Locale);
+            value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
         }
     }
 
@@ -370,7 +412,6 @@ public sealed class ProfileApplicator : IProfileApplicator
             FieldId = field.Id,
             FieldName = field.Name,
             Format = field.Format,
-            Level = field.Level,
             Mandatory = field.Mandatory,
             HideFromIndexing = field.HideFromIndexing,
             IsReadOnly = field.IsReadOnly,

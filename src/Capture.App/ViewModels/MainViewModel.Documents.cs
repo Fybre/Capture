@@ -467,7 +467,7 @@ public partial class MainViewModel
 
     private async Task ApplyProfileToRowAsync(DocumentRow row, IndexingProfile profile)
     {
-        await ApplyProfileToDocumentAsync(row.Document, profile, extractBatch: true).ConfigureAwait(true);
+        await ApplyProfileToDocumentAsync(row.Document, profile).ConfigureAwait(true);
         row.ConfidenceThreshold = profile.AutoReadyThreshold;
         row.Locale = profile.Locale;
         row.ProfileName = profile.Name;
@@ -595,37 +595,30 @@ public partial class MainViewModel
             var profile = Profiles.FirstOrDefault(item => item.Id == byProfile.Key);
             var documents = byProfile.OrderBy(row => row.FileName, StringComparer.OrdinalIgnoreCase).ToList();
 
-            IReadOnlyList<string> batchFieldNames;
-            IReadOnlyList<string> documentFieldNames;
-            if (profile is not null)
-            {
-                batchFieldNames = profile.Fields
-                    .Where(field => !field.HideFromIndexing && field.Level == IndexLevel.Batch)
+            // Batch-level fields now come from BatchProfile.Fields, not this (IndexingProfile-keyed)
+            // group's own profile.Fields — and a group here can span documents from several different
+            // batches/BatchProfiles, so there's no single BatchProfile to read field names from at this
+            // point. Derive them from what the documents' batches actually carry instead (same source
+            // the "profile deleted" fallback below already used) rather than adding a BatchProfileId
+            // column to CaptureBatch just to look the definition back up.
+            var batchFieldNames = documents
+                .SelectMany(row => row.BatchIndexes)
+                .Where(value => !value.HideFromIndexing)
+                .Select(value => value.FieldName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            IReadOnlyList<string> documentFieldNames = profile is not null
+                ? profile.Fields
+                    .Where(field => !field.HideFromIndexing)
                     .Select(field => field.Name)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                documentFieldNames = profile.Fields
-                    .Where(field => !field.HideFromIndexing && field.Level == IndexLevel.Document)
-                    .Select(field => field.Name)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
-            else
-            {
-                // Profile was deleted after being applied — fall back to whatever fields the documents actually carry.
-                batchFieldNames = documents
-                    .SelectMany(row => row.BatchIndexes)
-                    .Where(value => !value.HideFromIndexing)
-                    .Select(value => value.FieldName)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                documentFieldNames = documents
+                    .ToList()
+                : documents
                     .SelectMany(row => row.DocumentIndexes)
                     .Where(value => !value.HideFromIndexing)
                     .Select(value => value.FieldName)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-            }
 
             groups.Add(new DocumentGroupViewModel
             {

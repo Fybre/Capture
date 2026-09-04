@@ -7,6 +7,7 @@ using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
+using Capture.Core.Scripting;
 using Capture.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,8 +17,6 @@ namespace Capture.App.ViewModels;
 public partial class BatchProfilesViewModel : ViewModelBase
 {
     private readonly IBatchProfileStore _store;
-    private readonly IProfileStore _profileStore;
-    private readonly IProfileDialogService _profileDialog;
     private readonly IFileDialogService _dialogs;
     private readonly IAppPaths _paths;
     private readonly IPdfRasterizer _pdfRasterizer;
@@ -25,22 +24,22 @@ public partial class BatchProfilesViewModel : ViewModelBase
     private readonly ILatticeBuilder _latticeBuilder;
     private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
+    private readonly IProfileApplicator? _applicator;
+    private readonly IFieldScriptRunner? _scriptRunner;
 
     public BatchProfilesViewModel(
         IBatchProfileStore store,
-        IProfileStore profileStore,
-        IProfileDialogService profileDialog,
         IFileDialogService dialogs,
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
         ILatticeBuilder latticeBuilder,
         IToastService toasts,
-        IBarcodeDecoder? barcodes = null)
+        IBarcodeDecoder? barcodes = null,
+        IProfileApplicator? applicator = null,
+        IFieldScriptRunner? scriptRunner = null)
     {
         _store = store;
-        _profileStore = profileStore;
-        _profileDialog = profileDialog;
         _dialogs = dialogs;
         _paths = paths;
         _pdfRasterizer = pdfRasterizer;
@@ -48,6 +47,8 @@ public partial class BatchProfilesViewModel : ViewModelBase
         _latticeBuilder = latticeBuilder;
         _toasts = toasts;
         _barcodes = barcodes;
+        _applicator = applicator;
+        _scriptRunner = scriptRunner;
     }
 
     public ObservableCollection<BatchProfile> Profiles { get; } = [];
@@ -248,8 +249,8 @@ public partial class BatchProfilesViewModel : ViewModelBase
     private async Task OpenDesignerAsync(BatchProfile profile, bool isNew)
     {
         var designer = new BatchProfileDesignerViewModel(
-            profile, isNew, _store, _profileStore, _profileDialog, _dialogs, _paths, _pdfRasterizer,
-            _imageImporter, _toasts, _barcodes, _latticeBuilder)
+            profile, isNew, _store, _dialogs, _paths, _pdfRasterizer,
+            _imageImporter, _toasts, _barcodes, _latticeBuilder, _applicator, _scriptRunner)
         {
             CloseCommand = CloseDesignerCommand
         };

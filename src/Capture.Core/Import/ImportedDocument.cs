@@ -14,4 +14,11 @@ public sealed class ImportedDocument
 
     /// <summary>The value the batch trigger captured, when <see cref="StartsNewBatch"/> is true.</summary>
     public string? BatchSeparatorValue { get; init; }
+
+    /// <summary>The batch profile's own <c>Fields</c> captured at the moment its boundary was detected
+    /// (before this page might be discarded), when <see cref="StartsNewBatch"/> is true — see
+    /// <c>BatchSeparator.DetectAsync</c>/<c>BatchTriggerHit.CapturedFields</c>. Only ever meaningful for
+    /// the one document that actually started the batch; every other document in it reads these back
+    /// via <c>IIndexValueStore.GetBatchAsync</c> instead.</summary>
+    public IReadOnlyList<IndexValue> CapturedBatchFields { get; init; } = [];
 }

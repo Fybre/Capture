@@ -624,10 +624,6 @@
                           IsChecked="{Binding SelectedField.IsReadOnly}"
                           IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}"
                           ToolTip.Tip="Can't be hand-edited in the review panel and is excluded from missing/low-confidence checks. Invalid values still require review." />
-                <TextBlock Text="Level" Classes="field-label" />
-                <ComboBox ItemsSource="{Binding SelectedField.Levels}"
-                          SelectedItem="{Binding SelectedField.Level}"
-                          IsEnabled="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsZonal}">
                     <TextBlock Text="Page" Classes="field-label" />
                     <NumericUpDown Value="{Binding SelectedFieldPageNumber}" Minimum="1" Maximum="{Binding PageCount}" />

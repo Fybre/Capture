@@ -24,7 +24,6 @@ public sealed partial class FieldRow : ObservableObject
         _buttonLabel = field.ButtonLabel ?? string.Empty;
         _buttonScriptSource = field.ButtonScriptSource;
         _buttonTimeoutSeconds = field.ButtonTimeoutSeconds;
-        _level = field.Level;
         _keyPattern = field.KeyPattern ?? string.Empty;
         _valuePattern = field.ValuePattern ?? string.Empty;
         _occurrence = field.Occurrence;
@@ -101,8 +100,6 @@ public sealed partial class FieldRow : ObservableObject
 
     public PageScope[] PageScopes { get; } = Enum.GetValues<PageScope>();
 
-    public IndexLevel[] Levels { get; } = Enum.GetValues<IndexLevel>();
-
     [ObservableProperty]
     private string _name;
 
@@ -124,9 +121,6 @@ public sealed partial class FieldRow : ObservableObject
     /// <summary>Only meaningful when <see cref="IsText"/> — see <see cref="IndexField.DefaultValueTemplate"/>.</summary>
     [ObservableProperty]
     private string _defaultValueTemplate;
-
-    [ObservableProperty]
-    private IndexLevel _level;
 
     [ObservableProperty]
     private string _keyPattern;
@@ -203,7 +197,7 @@ public sealed partial class FieldRow : ObservableObject
                 ? "—"
                 : $"{LiveConfidence:0}%";
 
-    public string PageDisplay => $"{LevelLabel}{KindDisplay} · {PageDescription}";
+    public string PageDisplay => $"{KindDisplay} · {PageDescription}";
 
     private string PageDescription
     {
@@ -230,8 +224,6 @@ public sealed partial class FieldRow : ObservableObject
             };
         }
     }
-
-    private string LevelLabel => Field.Level == IndexLevel.Batch ? "Batch · " : string.Empty;
 
     public void NotifySearchZone()
     {
@@ -271,12 +263,6 @@ public sealed partial class FieldRow : ObservableObject
     partial void OnButtonScriptSourceChanged(string value) => Field.ButtonScriptSource = value;
 
     partial void OnButtonTimeoutSecondsChanged(int value) => Field.ButtonTimeoutSeconds = Math.Max(1, value);
-
-    partial void OnLevelChanged(IndexLevel value)
-    {
-        Field.Level = value;
-        OnPropertyChanged(nameof(PageDisplay));
-    }
 
     partial void OnKeyPatternChanged(string value) => Field.KeyPattern = value;
 

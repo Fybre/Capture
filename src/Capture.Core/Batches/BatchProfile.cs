@@ -1,4 +1,5 @@
 using Capture.Core.Import;
+using Capture.Core.Profiles;
 
 namespace Capture.Core.Batches;
 
@@ -20,8 +21,8 @@ public enum BatchMode
 /// <summary>
 /// A named, reusable configuration describing when a new <c>CaptureBatch</c> should start. Independent of
 /// any <c>IndexingProfile</c> for document-level field extraction — chosen separately, alongside an
-/// indexing profile, per watch folder or per manual import. Can, however, designate its own
-/// <see cref="IndexingProfileId"/> for batch-level fields — see that property.
+/// indexing profile, per watch folder or per manual import. Configures its own batch-level indexing
+/// directly — see <see cref="Fields"/> — rather than referencing an external <c>IndexingProfile</c>.
 /// </summary>
 public sealed class BatchProfile
 {
@@ -46,13 +47,24 @@ public sealed class BatchProfile
     /// <summary>Only meaningful when <see cref="MatchMode"/> is <see cref="SeparationMatchMode.AtLeast"/>.</summary>
     public int MatchMinimum { get; set; } = 1;
 
-    /// <summary>Which <c>IndexingProfile</c>'s batch-level (<c>IndexLevel.Batch</c>, including
-    /// <c>FieldKind.BatchSeparatorValue</c>) fields get extracted once and shared with every document
-    /// that joins a batch created under this profile — see
-    /// <c>MainViewModel.ApplyBatchFieldsAsync</c>/<c>IIndexValueStore.GetBatchAsync</c>. Null means
-    /// today's implicit behavior: whatever <c>IndexingProfile</c> the import itself resolved for
-    /// document-level extraction is used for batch-level fields too.</summary>
-    public Guid? IndexingProfileId { get; set; }
+    /// <summary>Batch-level index fields — the same <see cref="IndexField"/> type, zone-drawing, and
+    /// editing UI <c>IndexingProfile</c> uses, configured directly on this profile rather than by
+    /// referencing an external <c>IndexingProfile</c>. Captured once, at the moment the batch boundary
+    /// is detected (against the raw triggering page, before any document is materialized or the page
+    /// possibly discarded — see <c>BatchSeparator.DetectAsync</c>/<c>BatchTriggerHit.CapturedFields</c>),
+    /// and shared with every document that joins the batch — write-once, never re-extracted later,
+    /// unlike an <c>IndexingProfile</c>'s own document-level fields.</summary>
+    public List<IndexField> Fields { get; set; } = [];
+
+    /// <summary>Profile-level C# scripts for <see cref="Fields"/> — same shape as
+    /// <c>IndexingProfile.Scripts</c>. Only <c>ScriptTrigger.AfterFieldsPopulated</c> is meaningful
+    /// here; there's no batch-level export for <c>BeforeExport</c>/<c>AfterExport</c> to hook into.</summary>
+    public List<FieldScript> Scripts { get; set; } = [];
+
+    /// <summary>C# helper functions available to every script/expression that runs against
+    /// <see cref="Fields"/>/<see cref="Scripts"/> — same convention as
+    /// <c>IndexingProfile.SharedScriptSource</c>.</summary>
+    public string SharedScriptSource { get; set; } = "";
 
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;

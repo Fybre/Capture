@@ -10,6 +10,7 @@ using Capture.Core.Lattice;
 using Capture.Core.Models;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
+using Capture.Core.Scripting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -23,17 +24,22 @@ namespace Capture.App.ViewModels;
 /// <see cref="SeparationStrategyType.BlankPage"/>/<see cref="SeparationStrategyType.Similarity"/>, not asked
 /// for here), plus a <see cref="BatchMode"/> selector standing in for <c>ImportProfile</c>'s always-on
 /// strategy list (since <see cref="BatchMode.NewBatchPerFile"/>/<see cref="BatchMode.Manual"/> are
-/// allocator-level policies, not per-page conditions — see <c>BatchAllocator</c>) and a single Indexing
-/// Profile picker (batch-level fields have exactly one source profile, unlike <c>ImportProfile</c>'s
-/// multi-valid-list).
+/// allocator-level policies, not per-page conditions — see <c>BatchAllocator</c>).
+///
+/// Also owns <see cref="Fields"/>/<see cref="Scripts"/> — <c>BatchProfile</c>'s own inline
+/// <c>IndexField</c>/<c>FieldScript</c> lists (same types/editing pattern <c>ProfileDesignerViewModel</c>
+/// uses for <c>IndexingProfile</c>, reusing <see cref="FieldRow"/>/<see cref="ScriptRow"/> as-is), so a
+/// batch-level field like "Student No" is configured right here rather than by referencing a separate
+/// external Indexing Profile. <see cref="Strategies"/> (triggering) and <see cref="Fields"/> (capturing)
+/// share the same sample document/zone-drawing canvas — <see cref="SelectedStrategy"/>/
+/// <see cref="SelectedField"/> are mutually exclusive, whichever is set drives <see cref="CompleteZone"/>/
+/// <see cref="ChangeZone"/>.
 /// </summary>
 public partial class BatchProfileDesignerViewModel : ViewModelBase
 {
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
     private readonly IBatchProfileStore _store;
-    private readonly IProfileStore _profileStore;
-    private readonly IProfileDialogService _profileDialog;
     private readonly IFileDialogService _dialogs;
     private readonly IAppPaths _paths;
     private readonly IPdfRasterizer _pdfRasterizer;
@@ -41,6 +47,8 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     private readonly IToastService _toasts;
     private readonly IBarcodeDecoder? _barcodes;
     private readonly ILatticeBuilder? _latticeBuilder;
+    private readonly IProfileApplicator? _applicator;
+    private readonly IFieldScriptRunner? _scriptRunner;
     private readonly List<string> _pageImagePaths = [];
     private readonly Dictionary<int, PageLattice> _lattices = [];
     private int _loadGeneration;
@@ -49,21 +57,19 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         BatchProfile profile,
         bool isNew,
         IBatchProfileStore store,
-        IProfileStore profileStore,
-        IProfileDialogService profileDialog,
         IFileDialogService dialogs,
         IAppPaths paths,
         IPdfRasterizer pdfRasterizer,
         IImagePageImporter imageImporter,
         IToastService toasts,
         IBarcodeDecoder? barcodes = null,
-        ILatticeBuilder? latticeBuilder = null)
+        ILatticeBuilder? latticeBuilder = null,
+        IProfileApplicator? applicator = null,
+        IFieldScriptRunner? scriptRunner = null)
     {
         Profile = profile;
         IsNew = isNew;
         _store = store;
-        _profileStore = profileStore;
-        _profileDialog = profileDialog;
         _dialogs = dialogs;
         _paths = paths;
         _pdfRasterizer = pdfRasterizer;
@@ -71,15 +77,22 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         _toasts = toasts;
         _barcodes = barcodes;
         _latticeBuilder = latticeBuilder;
+        _applicator = applicator;
+        _scriptRunner = scriptRunner;
 
         _name = profile.Name;
         _mode = profile.Mode;
         _sampleFileName = profile.SampleFileName;
         _matchMode = profile.MatchMode;
         _matchMinimum = Math.Max(1, profile.MatchMinimum);
+        _sharedScriptSource = profile.SharedScriptSource;
 
         foreach (var strategy in profile.Strategies)
             Strategies.Add(new SeparationStrategyRow(strategy));
+        foreach (var field in profile.Fields)
+            Fields.Add(new FieldRow(field));
+        foreach (var script in profile.Scripts)
+            Scripts.Add(new ScriptRow(script));
     }
 
     public BatchProfile Profile { get; }
@@ -108,10 +121,39 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
     public ObservableCollection<SeparationStrategyRow> Strategies { get; } = [];
 
-    public ObservableCollection<IndexingProfile> IndexingProfileOptions { get; } = [];
+    public ObservableCollection<FieldRow> Fields { get; } = [];
+
+    public ObservableCollection<ScriptRow> Scripts { get; } = [];
+
+    // Only AfterFieldsPopulated makes sense at batch level — there's no batch-level export for
+    // BeforeExport/AfterExport to hook into (a batch's fields ride along with each document's own
+    // export, they aren't separately exported).
+    public IReadOnlyList<ScriptTrigger> ScriptTriggerOptions { get; } = [ScriptTrigger.AfterFieldsPopulated];
+
+    public bool IsScriptingAvailable => _scriptRunner?.IsAvailable ?? false;
 
     [ObservableProperty]
-    private IndexingProfile? _selectedIndexingProfile;
+    private string _sharedScriptSource;
+
+    [ObservableProperty]
+    private FieldRow? _selectedField;
+
+    partial void OnSelectedFieldChanged(FieldRow? value)
+    {
+        if (value is not null && SelectedStrategy is not null)
+            SelectedStrategy = null;
+
+        if (value?.Field.Zone?.PageNumber is { } zonePage && zonePage != CurrentPageNumber
+            && zonePage >= 1 && zonePage <= SamplePageCount)
+        {
+            CurrentPageNumber = zonePage;
+            _ = ShowPageAsync();
+        }
+        else
+        {
+            RefreshHighlights();
+        }
+    }
 
     [ObservableProperty]
     private string _name;
@@ -147,6 +189,9 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
     partial void OnSelectedStrategyChanged(SeparationStrategyRow? value)
     {
+        if (value is not null && SelectedField is not null)
+            SelectedField = null;
+
         if (value?.Zone is { } zone && zone.PageNumber != CurrentPageNumber
             && zone.PageNumber >= 1 && zone.PageNumber <= SamplePageCount)
         {
@@ -210,8 +255,6 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
-        await ReloadIndexingProfileOptionsAsync().ConfigureAwait(true);
-
         _pageImagePaths.Clear();
         _pageImagePaths.AddRange(GetPageImagePaths());
         SamplePageCount = _pageImagePaths.Count;
@@ -220,31 +263,6 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         StatusText = SamplePageCount == 0 ? "No sample pages" : string.Empty;
 
         SelectedStrategy = Strategies.FirstOrDefault();
-    }
-
-    // Preserves the current selection (by Id) across a reload — used both by InitializeAsync and after
-    // returning from the "New indexing profile…" sub-dialog, so a profile created there shows up
-    // immediately without losing anything already selected.
-    private async Task ReloadIndexingProfileOptionsAsync()
-    {
-        var selectedId = SelectedIndexingProfile?.Id ?? Profile.IndexingProfileId;
-        IndexingProfileOptions.Clear();
-        foreach (var indexingProfile in await _profileStore.GetAllAsync().ConfigureAwait(true))
-            IndexingProfileOptions.Add(indexingProfile);
-
-        SelectedIndexingProfile = selectedId is { } id
-            ? IndexingProfileOptions.FirstOrDefault(p => p.Id == id)
-            : null;
-    }
-
-    [RelayCommand]
-    private async Task ManageIndexingProfilesAsync()
-    {
-        var host = _dialogs.Host;
-        if (host is null)
-            return;
-        await _profileDialog.ShowAsync(host).ConfigureAwait(true);
-        await ReloadIndexingProfileOptionsAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -271,6 +289,120 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         RefreshHighlights();
         TestAllStrategiesCommand.NotifyCanExecuteChanged();
     }
+
+    private FieldRow AddField(IndexField field)
+    {
+        var row = new FieldRow(field);
+        Fields.Add(row);
+        SelectedField = row;
+        TestFieldsCommand.NotifyCanExecuteChanged();
+        return row;
+    }
+
+    [RelayCommand]
+    private void AddZone() => AddField(new IndexField { Name = NextFieldName(FieldKind.Zonal), Kind = FieldKind.Zonal, Format = FieldFormat.String, PageNumber = CurrentPageNumber });
+
+    [RelayCommand]
+    private void AddBarcode()
+    {
+        AddField(new IndexField
+        {
+            Name = NextFieldName(FieldKind.Barcode),
+            Kind = FieldKind.Barcode,
+            Format = FieldFormat.String,
+            PageNumber = CurrentPageNumber,
+            PageScope = PageScope.Number,
+            PageScopeConfigured = true
+        });
+        StatusText = "Draw a zone around the barcode, or leave empty to scan the whole page";
+    }
+
+    [RelayCommand]
+    private void AddKeyValue()
+    {
+        AddField(new IndexField
+        {
+            Name = NextFieldName(FieldKind.KeyValue),
+            Kind = FieldKind.KeyValue,
+            Format = FieldFormat.String,
+            KeyPattern = string.Empty,
+            ValuePattern = ValuePatterns.For(FieldFormat.String),
+            Occurrence = MatchOccurrence.First,
+            PageScope = PageScope.First,
+            PageNumber = CurrentPageNumber
+        });
+    }
+
+    [RelayCommand]
+    private void AddRegexField()
+    {
+        AddField(new IndexField
+        {
+            Name = NextFieldName(FieldKind.Regex),
+            Kind = FieldKind.Regex,
+            Format = FieldFormat.String,
+            ValuePattern = @"(.+)",
+            Occurrence = MatchOccurrence.First,
+            PageScope = PageScope.First,
+            PageNumber = CurrentPageNumber
+        });
+    }
+
+    [RelayCommand]
+    private void AddText() => AddField(new IndexField { Name = NextFieldName(FieldKind.Text), Kind = FieldKind.Text, Format = FieldFormat.String });
+
+    [RelayCommand]
+    private void AddLookup() => AddField(new IndexField { Name = NextFieldName(FieldKind.Lookup), Kind = FieldKind.Lookup, Format = FieldFormat.String });
+
+    [RelayCommand]
+    private void AddScriptField() => AddField(new IndexField { Name = NextFieldName(FieldKind.Script), Kind = FieldKind.Script, Format = FieldFormat.String });
+
+    [RelayCommand]
+    private void AddButtonField() => AddField(new IndexField { Name = NextFieldName(FieldKind.Button), Kind = FieldKind.Button, Format = FieldFormat.String });
+
+    [RelayCommand]
+    private void AddBatchSeparatorValue()
+    {
+        AddField(new IndexField { Name = NextFieldName(FieldKind.BatchSeparatorValue), Kind = FieldKind.BatchSeparatorValue, Format = FieldFormat.String });
+        StatusText = "Mirrors whichever strategy above triggers the batch — nothing else to configure.";
+    }
+
+    private string NextFieldName(FieldKind kind)
+    {
+        var n = Fields.Count + 1;
+        string name;
+        do
+        {
+            name = $"Field{n}_{kind}";
+            n++;
+        } while (Fields.Any(row => string.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase)));
+
+        return name;
+    }
+
+    [RelayCommand]
+    private void RemoveField(FieldRow? row)
+    {
+        if (row is null)
+            return;
+
+        Fields.Remove(row);
+        if (SelectedField == row)
+            SelectedField = null;
+        RefreshHighlights();
+        TestFieldsCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private void AddScript()
+    {
+        Scripts.Add(new ScriptRow(new FieldScript { Trigger = ScriptTrigger.AfterFieldsPopulated }));
+    }
+
+    [RelayCommand]
+    private void RemoveScript(ScriptRow row) => Scripts.Remove(row);
+
+    partial void OnSharedScriptSourceChanged(string value) => Profile.SharedScriptSource = value;
 
     private IReadOnlyList<string> GetPageImagePaths()
     {
@@ -402,7 +534,7 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
     private void RefreshHighlights()
     {
-        Highlights = Strategies
+        var strategyHighlights = Strategies
             .Where(row => row.NeedsZone && row.Zone is { } zone && zone.PageNumber == CurrentPageNumber)
             .Select(row => new IndexHighlight
             {
@@ -413,8 +545,22 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
                 Width = row.Zone.Width,
                 Height = row.Zone.Height,
                 IsSelected = SelectedStrategy?.Id == row.Id
-            })
-            .ToList();
+            });
+
+        var fieldHighlights = Fields
+            .Where(row => row.IsZoneField && row.Field.Zone is { } zone && zone.PageNumber == CurrentPageNumber)
+            .Select(row => new IndexHighlight
+            {
+                FieldId = row.Id,
+                FieldName = row.Name,
+                X = row.Field.Zone!.X,
+                Y = row.Field.Zone.Y,
+                Width = row.Field.Zone.Width,
+                Height = row.Field.Zone.Height,
+                IsSelected = SelectedField?.Id == row.Id
+            });
+
+        Highlights = strategyHighlights.Concat(fieldHighlights).ToList();
 
         OnPropertyChanged(nameof(CurrentPageWords));
         if (ShowOcrWords)
@@ -424,7 +570,27 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     [RelayCommand]
     private void CompleteZone(NormalizedRect rect)
     {
-        if (SelectedStrategy is not { NeedsZone: true } row || rect.Width < 0.004f || rect.Height < 0.004f)
+        if (rect.Width < 0.004f || rect.Height < 0.004f)
+            return;
+
+        if (SelectedField is { IsZoneField: true } fieldRow)
+        {
+            fieldRow.Field.PageNumber = CurrentPageNumber;
+            fieldRow.Field.Zone = new ZoneRect
+            {
+                PageNumber = CurrentPageNumber,
+                X = rect.X,
+                Y = rect.Y,
+                Width = rect.Width,
+                Height = rect.Height
+            };
+            fieldRow.NotifyPage();
+            RefreshHighlights();
+            _ = DetectFieldAsync(fieldRow);
+            return;
+        }
+
+        if (SelectedStrategy is not { NeedsZone: true } row)
             return;
 
         row.Zone = new ZoneRect
@@ -443,6 +609,24 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
     [RelayCommand]
     private void ChangeZone(NormalizedRect rect)
     {
+        if (SelectedField is { IsZoneField: true } fieldRow)
+        {
+            if (fieldRow.Field.Zone is null)
+                return;
+
+            var fieldZone = fieldRow.Field.Zone;
+            fieldZone.X = Math.Clamp(rect.X, 0, 1);
+            fieldZone.Y = Math.Clamp(rect.Y, 0, 1);
+            fieldZone.Width = Math.Clamp(rect.Width, 0.002f, 1);
+            fieldZone.Height = Math.Clamp(rect.Height, 0.002f, 1);
+            fieldZone.PageNumber = CurrentPageNumber;
+            fieldRow.Field.PageNumber = CurrentPageNumber;
+            fieldRow.NotifyPage();
+            RefreshHighlights();
+            _ = DetectFieldAsync(fieldRow);
+            return;
+        }
+
         if (SelectedStrategy is not { NeedsZone: true } row || row.Zone is null)
             return;
 
@@ -455,6 +639,30 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         row.ZonePageNumber = CurrentPageNumber;
         RefreshHighlights();
         _ = DetectAsync(row);
+    }
+
+    // Mirrors DetectAsync (below, for Strategies) — pre-fills a Barcode field's ValuePattern as an
+    // exact-match regex for whatever's decoded in the zone just drawn/adjusted. Zonal fields have
+    // nothing to pre-fill (no format/pattern of their own); their live value shows via "Test fields".
+    private async Task DetectFieldAsync(FieldRow row)
+    {
+        if (row.Field.Zone is null || !row.IsBarcode || _barcodes is null)
+            return;
+
+        var pageIndex = CurrentPageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
+            return;
+
+        var decoded = _barcodes.Decode(_pageImagePaths[pageIndex], row.Field.Zone);
+        if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
+        {
+            StatusText = "Barcode zone set — no barcode detected there; enter a value pattern manually if needed";
+            return;
+        }
+
+        row.Field.BarcodeFormat = decoded.Format;
+        row.ValuePattern = $"^{Regex.Escape(decoded.Text)}$";
+        StatusText = $"Detected {BarcodePatterns.DisplayType(decoded.Format)}: {decoded.Text}";
     }
 
     // Attempts to detect a real value from the zone just drawn/adjusted and pre-fills the row's
@@ -564,6 +772,145 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
 
     private bool CanTestAllStrategies() => !IsBusy && Strategies.Count > 0;
 
+    // Extracts every Field against the current sample page in one pass (reusing the field-list
+    // ProfileApplicator overload — the same pipeline real batch-detection capture uses, see
+    // BatchSeparator.CaptureFieldsAsync) and shows each one's own result — the simpler alternative to a
+    // full live-preview-on-every-keystroke, matching the existing "Test strategies" card's shape.
+    [RelayCommand(CanExecute = nameof(CanTestFields))]
+    private async Task TestFieldsAsync()
+    {
+        if (_applicator is null)
+        {
+            StatusText = "Extraction isn't available";
+            return;
+        }
+
+        var pageIndex = CurrentPageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= _pageImagePaths.Count)
+        {
+            StatusText = "No sample page loaded";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var lattice = await EnsureLatticeAsync(CurrentPageNumber).ConfigureAwait(true);
+            var lattices = lattice is null ? [] : new List<PageLattice> { lattice };
+
+            var throwawayId = Guid.NewGuid();
+            var throwawayDocument = new CaptureDocument { OriginalFileName = string.Empty, StoredPath = _pageImagePaths[pageIndex] };
+            var pages = new List<DocumentPage>
+            {
+                new()
+                {
+                    DocumentId = throwawayId,
+                    PageNumber = CurrentPageNumber,
+                    SourcePageNumber = CurrentPageNumber,
+                    ImagePath = _pageImagePaths[pageIndex]
+                }
+            };
+
+            var values = await _applicator.ApplyAsync(
+                    Fields.Select(row => row.Field).ToList(),
+                    Scripts.Select(row => row.Script).ToList(),
+                    SharedScriptSource,
+                    lattices,
+                    profileName: Name,
+                    pages: pages,
+                    document: throwawayDocument)
+                .ConfigureAwait(true);
+
+            foreach (var row in Fields)
+            {
+                var value = values.FirstOrDefault(item => item.FieldId == row.Id);
+                row.LiveValue = value?.Value ?? string.Empty;
+                row.LiveConfidence = value?.Confidence ?? 0;
+            }
+
+            StatusText = "Tested against the current sample page";
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanTestFields() => !IsBusy && Fields.Count > 0 && _applicator is not null;
+
+    [RelayCommand(CanExecute = nameof(CanRunScriptTest))]
+    private async Task RunScriptTestAsync(ScriptRow row)
+    {
+        if (_scriptRunner is null)
+            return;
+
+        IsBusy = true;
+        StatusText = "Running script…";
+        try
+        {
+            var values = Fields.Select(fieldRow => new IndexValue
+            {
+                FieldId = fieldRow.Id,
+                FieldName = fieldRow.Name,
+                Format = fieldRow.Format,
+                Value = fieldRow.LiveValue,
+                Confidence = fieldRow.LiveConfidence
+            }).ToList();
+
+            var context = new ScriptExecutionContext
+            {
+                ProfileName = Name,
+                DocumentNumber = 1,
+                BatchNumber = 1,
+                Timestamp = DateTimeOffset.Now,
+                Values = values,
+                Document = new ScriptDocumentInfo
+                {
+                    FileName = SampleFileName ?? string.Empty,
+                    FileExtension = string.IsNullOrEmpty(SampleFileName) ? string.Empty : Path.GetExtension(SampleFileName).ToLowerInvariant(),
+                    PageCount = _pageImagePaths.Count,
+                    Text = string.Empty
+                }
+            };
+
+            var result = await _scriptRunner.RunProfileScriptAsync(row.Script, context, sharedSource: SharedScriptSource).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                StatusText = $"Script failed: {result.ErrorMessage}";
+                _toasts.ShowError(StatusText);
+                return;
+            }
+
+            foreach (var value in values)
+            {
+                var fieldRow = Fields.FirstOrDefault(item => item.Id == value.FieldId);
+                if (fieldRow is null)
+                    continue;
+                fieldRow.LiveValue = value.Value;
+                fieldRow.LiveConfidence = value.Confidence;
+            }
+
+            StatusText = "Script ran successfully";
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanRunScriptTest() => !IsBusy && _scriptRunner is not null;
+
     private Task<string> TestOneAsync(SeparationStrategyRow row) => row.Type switch
     {
         SeparationStrategyType.Barcode => Task.FromResult(TestBarcodeMatch(row)),
@@ -666,7 +1013,9 @@ public partial class BatchProfileDesignerViewModel : ViewModelBase
         Profile.Strategies = Strategies.Select(row => row.ToModel()).ToList();
         Profile.MatchMode = MatchMode;
         Profile.MatchMinimum = Math.Max(1, MatchMinimum);
-        Profile.IndexingProfileId = SelectedIndexingProfile?.Id;
+        Profile.Fields = Fields.Select(row => row.Field).ToList();
+        Profile.Scripts = Scripts.Select(row => row.Script).ToList();
+        Profile.SharedScriptSource = SharedScriptSource;
 
         await _store.SaveAsync(Profile).ConfigureAwait(true);
         Saved = true;

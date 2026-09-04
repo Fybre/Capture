@@ -91,7 +91,6 @@ public sealed class ProfileExportRunner
         FieldId = source.FieldId,
         FieldName = source.FieldName,
         Format = source.Format,
-        Level = source.Level,
         Mandatory = source.Mandatory,
         Value = source.Value,
         Confidence = source.Confidence,

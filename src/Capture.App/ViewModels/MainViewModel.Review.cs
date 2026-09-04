@@ -96,9 +96,9 @@ public partial class MainViewModel
         }
 
         foreach (var value in row.BatchIndexes.Where(index => !index.HideFromIndexing))
-            ReviewBatchIndexes.Add(CreateReviewRow(row, value));
+            ReviewBatchIndexes.Add(CreateReviewRow(row, value, isBatch: true));
         foreach (var value in row.DocumentIndexes.Where(index => !index.HideFromIndexing))
-            ReviewDocumentIndexes.Add(CreateReviewRow(row, value));
+            ReviewDocumentIndexes.Add(CreateReviewRow(row, value, isBatch: false));
 
         OnPropertyChanged(nameof(HasReviewIndexes));
         OnPropertyChanged(nameof(HasReviewBatchIndexes));
@@ -106,9 +106,9 @@ public partial class MainViewModel
         MarkReadyCommand.NotifyCanExecuteChanged();
     }
 
-    private IndexValueRow CreateReviewRow(DocumentRow document, IndexValue value)
+    private IndexValueRow CreateReviewRow(DocumentRow document, IndexValue value, bool isBatch)
     {
-        var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale, _scripts?.IsAvailable ?? false)
+        var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale, _scripts?.IsAvailable ?? false, isBatch)
         {
             Changed = () => _ = PersistReviewAsync(document)
         };

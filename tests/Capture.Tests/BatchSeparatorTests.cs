@@ -120,6 +120,77 @@ public class BatchSeparatorTests
     }
 
     [Fact]
+    public async Task CapturedFields_extracts_a_zonal_field_from_the_raw_triggering_page()
+    {
+        var strategy = Barcode();
+        var profile = Profile(strategy);
+        profile.Fields =
+        [
+            new IndexField
+            {
+                Name = "StudentName",
+                Kind = FieldKind.Zonal,
+                Zone = new ZoneRect { PageNumber = 1, X = 0f, Y = 0f, Width = 1f, Height = 1f }
+            }
+        ];
+        var pages = Pages("a.png");
+        var decoder = new MapDecoder { ["a.png"] = ("BATCH-1", "CODE_128") };
+        var lattice = new MapLattice { ["a.png"] = Lattice("Jane Doe") };
+
+        var hits = await BatchSeparator.DetectAsync(pages, profile, decoder, lattice.Provide, new ProfileApplicator());
+
+        var hit = Assert.Single(hits);
+        var field = Assert.Single(hit.CapturedFields);
+        Assert.Equal("Jane Doe", field.Value);
+    }
+
+    [Fact]
+    public async Task CapturedFields_BatchSeparatorValue_field_mirrors_the_strategys_captured_value()
+    {
+        var profile = Profile(Barcode());
+        profile.Fields = [new IndexField { Name = "BatchBarcode", Kind = FieldKind.BatchSeparatorValue }];
+        var pages = Pages("a.png");
+        var decoder = new MapDecoder { ["a.png"] = ("BATCH-77", "CODE_128") };
+        var lattice = new MapLattice();
+
+        var hits = await BatchSeparator.DetectAsync(pages, profile, decoder, lattice.Provide, new ProfileApplicator());
+
+        var hit = Assert.Single(hits);
+        var field = Assert.Single(hit.CapturedFields);
+        Assert.Equal("BATCH-77", field.Value);
+    }
+
+    [Fact]
+    public async Task CapturedFields_still_populate_when_the_separator_page_is_discarded()
+    {
+        // The actual bug this plan fixes: fields must be captured against the raw page at detection
+        // time, before DocumentImporter ever gets a chance to drop it — so DiscardSeparatorPage=true
+        // must have no bearing on whether CapturedFields comes back populated.
+        var strategy = Barcode();
+        strategy.DiscardSeparatorPage = true;
+        var profile = Profile(strategy);
+        profile.Fields =
+        [
+            new IndexField
+            {
+                Name = "StudentName",
+                Kind = FieldKind.Zonal,
+                Zone = new ZoneRect { PageNumber = 1, X = 0f, Y = 0f, Width = 1f, Height = 1f }
+            }
+        ];
+        var pages = Pages("a.png");
+        var decoder = new MapDecoder { ["a.png"] = ("BATCH-1", "CODE_128") };
+        var lattice = new MapLattice { ["a.png"] = Lattice("Jane Doe") };
+
+        var hits = await BatchSeparator.DetectAsync(pages, profile, decoder, lattice.Provide, new ProfileApplicator());
+
+        var hit = Assert.Single(hits);
+        Assert.True(hit.DiscardPage);
+        var field = Assert.Single(hit.CapturedFields);
+        Assert.Equal("Jane Doe", field.Value);
+    }
+
+    [Fact]
     public void NewBatchPerFile_and_Manual_never_scan_pages()
     {
         Assert.False(BatchSeparator.NeedsPageScan(new BatchProfile { Mode = BatchMode.NewBatchPerFile }));
@@ -143,8 +214,8 @@ public class BatchSeparatorTests
         var wholeFile = new ClassifiedSplit { Profile = null, SourcePages = [1, 2, 3, 4, 5, 6] };
         var hits = new Dictionary<int, BatchTriggerHit>
         {
-            [1] = new BatchTriggerHit(1, "BATCH-0001", DiscardPage: true),
-            [4] = new BatchTriggerHit(4, "BATCH-0002", DiscardPage: true)
+            [1] = new BatchTriggerHit(1, "BATCH-0001", DiscardPage: true, CapturedFields: []),
+            [4] = new BatchTriggerHit(4, "BATCH-0002", DiscardPage: true, CapturedFields: [])
         };
 
         var expanded = BatchSeparator.ExpandSplitsAtBoundaries([wholeFile], hits);
@@ -164,8 +235,8 @@ public class BatchSeparatorTests
         };
         var hits = new Dictionary<int, BatchTriggerHit>
         {
-            [1] = new BatchTriggerHit(1, "BATCH-0001", DiscardPage: false),
-            [4] = new BatchTriggerHit(4, "BATCH-0002", DiscardPage: false)
+            [1] = new BatchTriggerHit(1, "BATCH-0001", DiscardPage: false, CapturedFields: []),
+            [4] = new BatchTriggerHit(4, "BATCH-0002", DiscardPage: false, CapturedFields: [])
         };
 
         var expanded = BatchSeparator.ExpandSplitsAtBoundaries(splits, hits);

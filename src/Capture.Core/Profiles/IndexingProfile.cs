@@ -67,12 +67,6 @@ public sealed class FieldScript
     public int TimeoutSeconds { get; set; } = 10;
 }
 
-public enum IndexLevel
-{
-    Document = 0,
-    Batch = 1
-}
-
 public enum MatchOccurrence
 {
     First = 0,
@@ -120,7 +114,6 @@ public sealed class IndexField
     public string Name { get; set; } = string.Empty;
     public FieldKind Kind { get; set; } = FieldKind.Zonal;
     public FieldFormat Format { get; set; } = FieldFormat.String;
-    public IndexLevel Level { get; set; } = IndexLevel.Document;
     public bool Mandatory { get; set; }
     public int PageNumber { get; set; } = 1;
     public ZoneRect? Zone { get; set; }

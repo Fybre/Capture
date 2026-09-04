@@ -218,30 +218,222 @@
 
                     </StackPanel>
 
-                    <Border Classes="card" HorizontalAlignment="Stretch" Margin="0,0,0,40">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Batch-level indexing profile" Classes="section-title" />
-                            <TextBlock Text="Supplies the batch-level fields (IndexLevel.Batch, including a barcode/regex strategy's captured value) shared by every document that joins a batch created under this profile. None keeps today's behavior — whichever Indexing Profile the import itself resolved is used."
-                                       TextWrapping="Wrap"
-                                       Classes="hint" />
-                            <ComboBox ItemsSource="{Binding IndexingProfileOptions}"
-                                      SelectedItem="{Binding SelectedIndexingProfile}"
-                                      PlaceholderText="None"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="profiles:IndexingProfile">
-                                        <TextBlock Text="{Binding Name}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <Button Content="New indexing profile…"
-                                    Command="{Binding ManageIndexingProfilesCommand}"
-                                    Classes="ghost"
-                                    HorizontalAlignment="Left"
-                                    Padding="8,4"
-                                    FontSize="12.5" />
-                        </StackPanel>
-                    </Border>
+                    <StackPanel Spacing="14" IsVisible="{Binding IsUseStrategies}">
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Batch fields" Classes="section-title" />
+                                <TextBlock Text="Values captured once, at the moment a batch boundary is detected, and shared by every document that joins that batch — e.g. a Student No read from the same barcode/zone that separates batches. Configured here directly rather than by picking a separate Indexing Profile, using the same zone-drawing canvas as the Strategies above."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <ListBox ItemsSource="{Binding Fields}"
+                                         SelectedItem="{Binding SelectedField}"
+                                         MaxHeight="220">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FieldRow">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                                                    <TextBlock Text="{Binding KindDisplay}" Classes="hint" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        Content="Remove"
+                                                        Classes="ghost"
+                                                        Padding="6,2"
+                                                        FontSize="11.5"
+                                                        Command="{Binding $parent[ListBox].((vm:BatchProfileDesignerViewModel)DataContext).RemoveFieldCommand}"
+                                                        CommandParameter="{Binding}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <WrapPanel>
+                                    <Button Content="+ Zone" Command="{Binding AddZoneCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Barcode" Command="{Binding AddBarcodeCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Key/value" Command="{Binding AddKeyValueCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Regex" Command="{Binding AddRegexFieldCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Text" Command="{Binding AddTextCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Lookup" Command="{Binding AddLookupCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Script" Command="{Binding AddScriptFieldCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Button" Command="{Binding AddButtonFieldCommand}" Margin="0,0,4,4" />
+                                    <Button Content="+ Batch trigger value" Command="{Binding AddBatchSeparatorValueCommand}" Margin="0,0,4,4" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card"
+                                HorizontalAlignment="Stretch"
+                                IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Field" Classes="section-title" />
+                                </Grid>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Name" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.Name}" />
+                                </StackPanel>
+
+                                <CheckBox Content="Mandatory" IsChecked="{Binding SelectedField.Mandatory}" />
+                                <CheckBox Content="Sensitive" IsChecked="{Binding SelectedField.Sensitive}"
+                                          ToolTip.Tip="Offers this field's value for redaction when a document's Indexing Profile has Redaction enabled." />
+                                <CheckBox Content="Hidden" IsChecked="{Binding SelectedField.Hidden}"
+                                          ToolTip.Tip="Excludes this field from the index grid and Ready/NeedsReview status checks." />
+
+                                <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsBarcode}">
+                                    <TextBlock Text="Value pattern (optional)" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.ValuePattern}" Watermark="Leave empty for any barcode (regex)" />
+                                    <TextBlock Text="Draw a zone around the barcode, or leave it unset to scan the whole page."
+                                               TextWrapping="Wrap"
+                                               Classes="hint" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsZonal}">
+                                    <TextBlock Text="Draw a zone on the page to the right."
+                                               TextWrapping="Wrap"
+                                               Classes="hint" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsKeyValue}">
+                                    <TextBlock Text="Key pattern" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.KeyPattern}" Watermark="Invoice\s*No" />
+                                    <TextBlock Text="Value pattern" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.ValuePattern}" Watermark="\S+" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsRegex}">
+                                    <TextBlock Text="Regex" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.ValuePattern}" Watermark="PO[-\s]?(\d+)" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsText}">
+                                    <TextBlock Text="Default value" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.DefaultValueTemplate}" Watermark="e.g. {Batch#|000}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="8" IsVisible="{Binding SelectedField.IsLookup}">
+                                    <TextBlock Text="Options" Classes="field-label" />
+                                    <ItemsControl ItemsSource="{Binding SelectedField.LookupOptions}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:LookupOptionRow">
+                                                <Border Margin="0,0,0,8" Padding="8" BorderBrush="{DynamicResource BorderBrush1}" BorderThickness="1">
+                                                    <StackPanel Spacing="6">
+                                                        <TextBox Text="{Binding Key}" Watermark="Display text" />
+                                                        <TextBox Text="{Binding Value}" Watermark="Export value" />
+                                                        <Button Content="Remove option" Command="{Binding RemoveCommand}" HorizontalAlignment="Right" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Content="Add option" Command="{Binding SelectedField.AddLookupOptionCommand}" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsScript}">
+                                    <TextBlock Text="Expression" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.ScriptExpression}"
+                                             Watermark="Fields[&quot;Other Field&quot;].Value"
+                                             AcceptsReturn="True"
+                                             Classes="mono"
+                                             Height="70" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4" IsVisible="{Binding SelectedField.IsButton}">
+                                    <TextBlock Text="Button label" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.ButtonLabel}" Watermark="{Binding SelectedField.Name}" />
+                                    <TextBlock Text="Script" Classes="field-label" />
+                                    <TextBox Text="{Binding SelectedField.ButtonScriptSource}"
+                                             AcceptsReturn="True"
+                                             Classes="mono"
+                                             Height="70" />
+                                </StackPanel>
+
+                                <TextBlock Text="Mirrors whichever strategy above triggers the batch — nothing else to configure."
+                                           TextWrapping="Wrap"
+                                           Classes="hint"
+                                           IsVisible="{Binding SelectedField.IsBatchSeparatorValue}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Test fields" Classes="section-title" />
+                                <TextBlock Text="Runs every batch field above against the current sample page — the same extraction real batch-detection capture uses."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <Button Content="Test against current sample" Command="{Binding TestFieldsCommand}" HorizontalAlignment="Left" />
+                                <ItemsControl ItemsSource="{Binding Fields}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FieldRow">
+                                            <Grid ColumnDefinitions="140,*" Margin="0,3">
+                                                <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="Medium" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding LiveValue, TargetNullValue='Not tested yet'}"
+                                                           Classes="hint"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Scripts" Classes="section-title" />
+                                <TextBlock Text="Runs once per batch, right after fields above are populated — the same C# scripting Indexing Profiles use."
+                                           TextWrapping="Wrap"
+                                           Classes="hint" />
+                                <TextBlock Text="Scripting is off in Settings — a saved script won't run during a real import yet."
+                                           TextWrapping="Wrap"
+                                           Classes="hint"
+                                           Foreground="{DynamicResource CriticalBrush}"
+                                           IsVisible="{Binding !IsScriptingAvailable}" />
+                                <TextBlock Text="Shared functions" Classes="field-label" />
+                                <TextBox Text="{Binding SharedScriptSource}"
+                                         AcceptsReturn="True"
+                                         Classes="mono"
+                                         Height="60"
+                                         Watermark="C# helpers available to every script below" />
+                                <ItemsControl ItemsSource="{Binding Scripts}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ScriptRow">
+                                            <Border Margin="0,0,0,8" Padding="8" BorderBrush="{DynamicResource BorderBrush1}" BorderThickness="1">
+                                                <StackPanel Spacing="6">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBox Grid.Column="0" Text="{Binding Name}" Watermark="Script name" />
+                                                        <CheckBox Grid.Column="1" Content="Enabled" IsChecked="{Binding Enabled}" Margin="8,0,0,0" />
+                                                    </Grid>
+                                                    <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:BatchProfileDesignerViewModel)DataContext).ScriptTriggerOptions}"
+                                                              SelectedItem="{Binding Trigger}" />
+                                                    <TextBox Text="{Binding Source}"
+                                                             AcceptsReturn="True"
+                                                             Classes="mono"
+                                                             Height="70" />
+                                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                                        <NumericUpDown Grid.Column="0" Value="{Binding TimeoutSeconds}" Minimum="1" Maximum="120" HorizontalAlignment="Left" Width="120" />
+                                                        <Button Grid.Column="1"
+                                                                Content="Run test"
+                                                                Command="{Binding $parent[ItemsControl].((vm:BatchProfileDesignerViewModel)DataContext).RunScriptTestCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Margin="6,0,0,0" />
+                                                        <Button Grid.Column="2"
+                                                                Content="Remove"
+                                                                Classes="ghost"
+                                                                Command="{Binding $parent[ItemsControl].((vm:BatchProfileDesignerViewModel)DataContext).RemoveScriptCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Margin="6,0,0,0" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="+ Add script" Command="{Binding AddScriptCommand}" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
 
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{DynamicResource CriticalBrush}"
