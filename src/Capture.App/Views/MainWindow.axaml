@@ -178,8 +178,6 @@
                         </Button>
                     </StackPanel>
 
-                    <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" />
-
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2" IsVisible="{Binding !ShowTrash}">
                         <Button Command="{Binding ScanCommand}"
                                 ToolTip.Tip="Scan a document from the first available scanner">
