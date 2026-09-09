@@ -48,10 +48,25 @@ public partial class MainViewModel
             documents = documents.Reverse().ToList();
         }
 
+        // Each document's own index file is a genuinely separate read, but every document sharing a
+        // batch was independently re-reading and re-deserializing that same batch index file — a
+        // shared, dedup'd cache (keyed by batch id, populated at most once per batch this pass) turns an
+        // O(documents) number of batch-file reads into O(distinct batches). The per-document reads
+        // themselves are still N, but independent file I/O, so running them concurrently cuts the wall
+        // time of a full reload roughly by the available core count instead of paying every read's
+        // latency serially.
+        var batchValuesCache = new System.Collections.Concurrent.ConcurrentDictionary<Guid, Task<IReadOnlyList<IndexValue>>>();
+        var rows = new DocumentRow[documents.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, documents.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            async (index, ct) => rows[index] = await CreateRowAsync(documents[index], batchValuesCache).ConfigureAwait(false))
+            .ConfigureAwait(true);
+
         Documents.Clear();
         SelectedDocuments.Clear();
-        foreach (var document in documents)
-            Documents.Add(await CreateRowAsync(document).ConfigureAwait(true));
+        foreach (var row in rows)
+            Documents.Add(row);
         RefreshBatchAccents();
         RefreshDocumentGroups();
     }
@@ -150,15 +165,28 @@ public partial class MainViewModel
                 return;
             }
 
+            var contentHashes = new string[paths.Count];
+            for (var index = 0; index < paths.Count; index++)
+                contentHashes[index] = await ComputeContentHashAsync(paths[index]).ConfigureAwait(true);
+
+            // One batched lookup for the whole import instead of one round trip per file — the set of
+            // hashes that already exist in the store, checked below against each file's own hash.
+            var existingHashes = _watchSettings.DuplicateImportBehavior == DuplicateImportBehavior.Skip
+                ? (await _store.FindByContentHashesAsync(contentHashes).ConfigureAwait(true))
+                    .Select(document => document.ContentHash)
+                    .Where(hash => !string.IsNullOrEmpty(hash))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : [];
+
             var accepted = new List<string>();
             var acceptedHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var skippedDuplicates = 0;
-            foreach (var path in paths)
+            for (var index = 0; index < paths.Count; index++)
             {
-                var contentHash = await ComputeContentHashAsync(path).ConfigureAwait(true);
+                var path = paths[index];
+                var contentHash = contentHashes[index];
                 var skipDuplicate = _watchSettings.DuplicateImportBehavior == DuplicateImportBehavior.Skip
-                    && (!acceptedHashes.Add(contentHash)
-                        || (await _store.FindByContentHashAsync(contentHash).ConfigureAwait(true)).Count > 0);
+                    && (!acceptedHashes.Add(contentHash) || existingHashes.Contains(contentHash));
                 if (skipDuplicate)
                 {
                     skippedDuplicates++;
@@ -311,7 +339,9 @@ public partial class MainViewModel
         return lattices;
     }
 
-    private async Task<DocumentRow> CreateRowAsync(CaptureDocument document)
+    private async Task<DocumentRow> CreateRowAsync(
+        CaptureDocument document,
+        System.Collections.Concurrent.ConcurrentDictionary<Guid, Task<IReadOnlyList<IndexValue>>>? batchValuesCache = null)
     {
         var row = new DocumentRow(document);
         if (document.ProfileId is { } profileId)
@@ -325,12 +355,14 @@ public partial class MainViewModel
             }
         }
 
-        var values = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
+        var values = await _indexes.GetAsync(document.Id).ConfigureAwait(false);
         if (values.Count > 0)
             row.SetDocumentIndexes(values);
         if (document.BatchId is { } batchId)
         {
-            var batchValues = await _indexes.GetBatchAsync(batchId).ConfigureAwait(true);
+            var batchValues = await (batchValuesCache is null
+                ? _indexes.GetBatchAsync(batchId)
+                : batchValuesCache.GetOrAdd(batchId, id => _indexes.GetBatchAsync(id))).ConfigureAwait(false);
             if (batchValues.Count > 0)
                 row.SetBatchIndexes(batchValues);
         }

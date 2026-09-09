@@ -220,53 +220,67 @@ public sealed class CaptureWorkflowService(
                 ? await pdfs.RasterizeAsync(sourcePath, rasterDirectory, AnalysisDpi, cancellationToken).ConfigureAwait(false)
                 : await images.ImportAsync(sourcePath, rasterDirectory, cancellationToken).ConfigureAwait(false);
 
-            var analyzedPages = new List<AnalyzedPage>();
+            // Each page's OCR/lattice build, barcode decode, zone extraction, and blank-page check are
+            // independent of every other page — OCR in particular spawns its own Tesseract process per
+            // page, so running these serially wastes every core beyond the first on a multi-page import.
+            // Results are written into a page-indexed array so the fan-out doesn't disturb page order.
+            var pageResults = new (int PageNumber, PageLattice Lattice, AnalyzedPage Page)[rasters.Count];
+            await Parallel.ForEachAsync(
+                Enumerable.Range(0, rasters.Count),
+                new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken },
+                async (index, ct) =>
+                {
+                    var raster = rasters[index];
+                    var transientDocument = new CaptureDocument
+                    {
+                        OriginalFileName = Path.GetFileName(sourcePath),
+                        StoredPath = sourcePath,
+                        Source = source
+                    };
+                    var transientPage = new DocumentPage
+                    {
+                        DocumentId = transientDocument.Id,
+                        PageNumber = raster.PageNumber,
+                        SourcePageNumber = raster.PageNumber,
+                        ImagePath = raster.ImagePath,
+                        Width = raster.Width,
+                        Height = raster.Height,
+                        Dpi = raster.Dpi
+                    };
+                    var lattice = await latticeBuilder.BuildPageAsync(transientDocument, transientPage, ct).ConfigureAwait(false);
+
+                    var analyzedBarcodes = new List<AnalyzedBarcode>();
+                    foreach (var rule in allRules.Where(rule => rule.Type == SeparationStrategyType.Barcode))
+                    {
+                        var barcode = barcodes.Decode(raster.ImagePath, rule.Zone);
+                        if (barcode is not null)
+                            analyzedBarcodes.Add(new(barcode.Text, barcode.Format, barcode.Confidence, rule.Id));
+                    }
+
+                    var zoneTexts = allRules
+                        .Where(rule => rule.Type == SeparationStrategyType.OcrZone && rule.Zone is not null)
+                        .ToDictionary(rule => rule.Id, rule => ZonalExtractor.Extract(lattice, rule.Zone!).Text);
+                    var blankRules = allRules.Where(rule => rule.Type == SeparationStrategyType.BlankPage).ToList();
+                    var blankMatches = blankRules
+                        .Where(rule => blanks.IsBlank(raster.ImagePath, rule.BlankInkPercent))
+                        .Select(rule => rule.Id)
+                        .ToHashSet();
+                    pageResults[index] = (raster.PageNumber, lattice, new AnalyzedPage(
+                        inputId,
+                        raster.PageNumber,
+                        string.Join(" ", lattice.Words.Select(word => word.Text)),
+                        analyzedBarcodes,
+                        blankMatches.Count > 0,
+                        zoneTexts,
+                        blankMatches));
+                }).ConfigureAwait(false);
+
+            var analyzedPages = new List<AnalyzedPage>(pageResults.Length);
             var latticeMap = new Dictionary<int, PageLattice>();
-            foreach (var raster in rasters)
+            foreach (var (pageNumber, lattice, page) in pageResults)
             {
-                var transientDocument = new CaptureDocument
-                {
-                    OriginalFileName = Path.GetFileName(sourcePath),
-                    StoredPath = sourcePath,
-                    Source = source
-                };
-                var transientPage = new DocumentPage
-                {
-                    DocumentId = transientDocument.Id,
-                    PageNumber = raster.PageNumber,
-                    SourcePageNumber = raster.PageNumber,
-                    ImagePath = raster.ImagePath,
-                    Width = raster.Width,
-                    Height = raster.Height,
-                    Dpi = raster.Dpi
-                };
-                var lattice = await latticeBuilder.BuildPageAsync(transientDocument, transientPage, cancellationToken).ConfigureAwait(false);
-                latticeMap[raster.PageNumber] = lattice;
-
-                var analyzedBarcodes = new List<AnalyzedBarcode>();
-                foreach (var rule in allRules.Where(rule => rule.Type == SeparationStrategyType.Barcode))
-                {
-                    var barcode = barcodes.Decode(raster.ImagePath, rule.Zone);
-                    if (barcode is not null)
-                        analyzedBarcodes.Add(new(barcode.Text, barcode.Format, barcode.Confidence, rule.Id));
-                }
-
-                var zoneTexts = allRules
-                    .Where(rule => rule.Type == SeparationStrategyType.OcrZone && rule.Zone is not null)
-                    .ToDictionary(rule => rule.Id, rule => ZonalExtractor.Extract(lattice, rule.Zone!).Text);
-                var blankRules = allRules.Where(rule => rule.Type == SeparationStrategyType.BlankPage).ToList();
-                var blankMatches = blankRules
-                    .Where(rule => blanks.IsBlank(raster.ImagePath, rule.BlankInkPercent))
-                    .Select(rule => rule.Id)
-                    .ToHashSet();
-                analyzedPages.Add(new AnalyzedPage(
-                    inputId,
-                    raster.PageNumber,
-                    string.Join(" ", lattice.Words.Select(word => word.Text)),
-                    analyzedBarcodes,
-                    blankMatches.Count > 0,
-                    zoneTexts,
-                    blankMatches));
+                latticeMap[pageNumber] = lattice;
+                analyzedPages.Add(page);
             }
 
             analyzedInputs.Add(new AnalyzedInput(inputId, analyzedPages));

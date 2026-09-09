@@ -37,6 +37,12 @@ public interface IDocumentStore
     /// collapse those siblings into one source occurrence. A null/empty hash never matches anything.</summary>
     Task<IReadOnlyList<CaptureDocument>> FindByContentHashAsync(string contentHash, CancellationToken cancellationToken = default);
 
+    /// <summary>Batched form of <see cref="FindByContentHashAsync"/> — one query for every hash in
+    /// <paramref name="contentHashes"/> instead of one round trip per file, for callers (e.g. an import
+    /// batch's duplicate-skip check) that would otherwise call it once per file being imported. An
+    /// empty collection never matches anything.</summary>
+    Task<IReadOnlyList<CaptureDocument>> FindByContentHashesAsync(IReadOnlyCollection<string> contentHashes, CancellationToken cancellationToken = default);
+
     /// <summary>Reversible removal — sets <see cref="CaptureDocument.DeletedUtc"/>, touches no files.
     /// This is what every reviewer-initiated "delete a document" action should call (Remove,
     /// RemoveAfterExport, both cleanup sweeps) — not <see cref="PurgeAsync"/>.</summary>

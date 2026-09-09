@@ -273,4 +273,53 @@ public class DocumentStoreTests
 
         Assert.Empty(await store.FindByContentHashAsync(string.Empty));
     }
+
+    [Fact]
+    public async Task FindByContentHashesAsync_finds_active_matches_for_every_requested_hash_in_one_call()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-hashesfind-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        var first = new CaptureDocument
+        {
+            OriginalFileName = "first.pdf",
+            StoredPath = Path.Combine(root, "first.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.NeedsReview,
+            PageCount = 1,
+            ContentHash = "HASH-ONE"
+        };
+        var second = new CaptureDocument
+        {
+            OriginalFileName = "second.pdf",
+            StoredPath = Path.Combine(root, "second.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.NeedsReview,
+            PageCount = 1,
+            ContentHash = "HASH-TWO"
+        };
+        await store.SaveAsync(first, []);
+        await store.SaveAsync(second, []);
+
+        var matches = await store.FindByContentHashesAsync(["HASH-ONE", "HASH-TWO", "HASH-NOT-PRESENT"]);
+
+        Assert.Equal(2, matches.Count);
+        Assert.Contains(matches, document => document.Id == first.Id);
+        Assert.Contains(matches, document => document.Id == second.Id);
+    }
+
+    [Fact]
+    public async Task FindByContentHashesAsync_returns_empty_for_an_empty_collection()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-hashesempty-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        Assert.Empty(await store.FindByContentHashesAsync([]));
+    }
 }

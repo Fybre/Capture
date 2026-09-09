@@ -34,34 +34,40 @@ public sealed class LatticeBuilder : ILatticeBuilder
         IReadOnlyList<DocumentPage> pages,
         CancellationToken cancellationToken = default)
     {
-        foreach (var page in pages)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+        // Each page's OCR/lattice build is independent of every other page in the document — OCR spawns
+        // its own Tesseract process per page, so building pages one at a time wastes every core beyond
+        // the first on a multi-page document. Saves still happen per page (each to its own file), so
+        // there's no shared state to protect beyond the bounded degree of parallelism itself.
+        await Parallel.ForEachAsync(
+            pages,
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken },
+            async (page, ct) =>
             {
-                var lattice = await BuildPageAsync(document, page, cancellationToken).ConfigureAwait(false);
-                await _store.SaveAsync(document.Id, lattice, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // The caller's own token fired — the page was never actually processed, so it must not
-                // be recorded as a successfully-processed empty page (that would look identical to a
-                // genuine "no text found" result). Propagate so the whole import is understood to have
-                // been interrupted, not silently completed.
-                throw;
-            }
-            catch (Exception ex)
-            {
-                // A real extraction failure (missing Tesseract data, a corrupt image, a PDF rendering
-                // error, ...) must not look identical to a genuine "this page has no text" result — that
-                // silent conflation is exactly what let the tessdata/configs/tsv bug ship unnoticed
-                // earlier. ex.Message often carries real diagnostic detail already (e.g.
-                // TesseractCliOcrEngine surfaces Tesseract's own stderr) that would otherwise be thrown
-                // away here.
-                Trace.TraceError($"OCR/lattice build failed for document {document.Id} page {page.PageNumber}: {ex.Message}");
-                await _store.SaveAsync(document.Id, Empty(page), cancellationToken).ConfigureAwait(false);
-            }
-        }
+                try
+                {
+                    var lattice = await BuildPageAsync(document, page, ct).ConfigureAwait(false);
+                    await _store.SaveAsync(document.Id, lattice, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The caller's own token fired — the page was never actually processed, so it must not
+                    // be recorded as a successfully-processed empty page (that would look identical to a
+                    // genuine "no text found" result). Propagate so the whole import is understood to have
+                    // been interrupted, not silently completed.
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // A real extraction failure (missing Tesseract data, a corrupt image, a PDF rendering
+                    // error, ...) must not look identical to a genuine "this page has no text" result — that
+                    // silent conflation is exactly what let the tessdata/configs/tsv bug ship unnoticed
+                    // earlier. ex.Message often carries real diagnostic detail already (e.g.
+                    // TesseractCliOcrEngine surfaces Tesseract's own stderr) that would otherwise be thrown
+                    // away here.
+                    Trace.TraceError($"OCR/lattice build failed for document {document.Id} page {page.PageNumber}: {ex.Message}");
+                    await _store.SaveAsync(document.Id, Empty(page), ct).ConfigureAwait(false);
+                }
+            }).ConfigureAwait(false);
     }
 
     public async Task<PageLattice> BuildPageAsync(

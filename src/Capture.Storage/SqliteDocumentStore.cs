@@ -87,7 +87,15 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
               input_channel TEXT,
               state INTEGER NOT NULL DEFAULT 0
             );
-            """
+            """,
+            // Every one of these backs a query that previously had to scan the whole table: content_hash
+            // is looked up once per imported file (duplicate detection), batch_id + created_utc backs the
+            // per-document numbering query run once per materialized document, and the batches lookup
+            // backs GetOpenBatchAsync/GetLatestBatchForFolderAsync, hit on every import.
+            "CREATE INDEX IF NOT EXISTS ix_documents_content_hash ON documents(content_hash) WHERE content_hash IS NOT NULL;",
+            "CREATE INDEX IF NOT EXISTS ix_documents_batch ON documents(batch_id, created_utc);",
+            "CREATE INDEX IF NOT EXISTS ix_batches_lookup ON batches(capture_profile_id, input_channel, state);",
+            "CREATE INDEX IF NOT EXISTS ix_batches_folder ON batches(watch_folder_entry_id, created_utc);"
         };
 
         foreach (var sql in commands)
@@ -279,6 +287,32 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             ORDER BY created_utc;
             """;
         command.Parameters.AddWithValue("$hash", contentHash);
+
+        var results = new List<CaptureDocument>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            results.Add(ReadDocument(reader));
+
+        return results;
+    }
+
+    public async Task<IReadOnlyList<CaptureDocument>> FindByContentHashesAsync(IReadOnlyCollection<string> contentHashes, CancellationToken cancellationToken = default)
+    {
+        var distinctHashes = contentHashes.Where(hash => !string.IsNullOrEmpty(hash)).Distinct().ToList();
+        if (distinctHashes.Count == 0)
+            return Array.Empty<CaptureDocument>();
+
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        var parameterNames = distinctHashes.Select((_, index) => $"$hash{index}").ToList();
+        command.CommandText = $"""
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id
+            FROM documents
+            WHERE content_hash IN ({string.Join(", ", parameterNames)}) AND deleted_utc IS NULL
+            ORDER BY created_utc;
+            """;
+        for (var index = 0; index < distinctHashes.Count; index++)
+            command.Parameters.AddWithValue(parameterNames[index], distinctHashes[index]);
 
         var results = new List<CaptureDocument>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
