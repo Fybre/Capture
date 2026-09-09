@@ -95,6 +95,12 @@ public sealed class CaptureMaterializationLifecycleTests
         }
         finally
         {
+            // SqliteDocumentStore's connections are pooled (Microsoft.Data.Sqlite default) — on Windows
+            // the native file handle behind a pooled connection stays open until the pool is cleared,
+            // which fails this directory delete with "capture.db ... being used by another process"
+            // even though nothing here holds an active connection anymore. macOS/Linux allow unlinking
+            // an open file, so this only ever surfaced on Windows CI.
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             Directory.Delete(root, recursive: true);
         }
     }
@@ -163,6 +169,12 @@ public sealed class CaptureMaterializationLifecycleTests
         }
         finally
         {
+            // SqliteDocumentStore's connections are pooled (Microsoft.Data.Sqlite default) — on Windows
+            // the native file handle behind a pooled connection stays open until the pool is cleared,
+            // which fails this directory delete with "capture.db ... being used by another process"
+            // even though nothing here holds an active connection anymore. macOS/Linux allow unlinking
+            // an open file, so this only ever surfaced on Windows CI.
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             Directory.Delete(root, recursive: true);
         }
     }
