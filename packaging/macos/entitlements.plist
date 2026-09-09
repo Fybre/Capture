@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- CoreCLR's JIT needs to mmap executable memory at runtime — without these, hardened runtime
+         (required for notarization) blocks it outright and the app fails to start with
+         "Failed to create CoreCLR, HRESULT: 0x80070008" (reproduced and confirmed the fix). -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- Presidio's sidecar and various native libraries (LLamaSharp/ggml, SkiaSharp, PDFium, sqlite)
+         are signed with the same identity but not notarized/stapled as their own standalone products —
+         disable the stricter library-validation check rather than risk dlopen failures for any of them. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>

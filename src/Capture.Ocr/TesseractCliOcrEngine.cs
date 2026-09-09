@@ -1,0 +1,165 @@
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+using Capture.Core.Lattice;
+
+namespace Capture.Ocr;
+
+public sealed partial class TesseractCliOcrEngine : IOcrEngine
+{
+    [GeneratedRegex("^[A-Za-z0-9_+]+$")]
+    private static partial Regex LanguageCodePattern();
+
+    public static string? ResolveExecutable()
+    {
+        var configured = Environment.GetEnvironmentVariable("CAPTURE_TESSERACT");
+        return ResolveExecutable(
+            AppContext.BaseDirectory,
+            configured,
+            Environment.GetEnvironmentVariable("PATH"));
+    }
+
+    internal static string? ResolveExecutable(
+        string baseDirectory,
+        string? configured,
+        string? path,
+        IEnumerable<string>? wellKnownPaths = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+
+        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+            return configured;
+
+        var names = OperatingSystem.IsWindows()
+            ? new[] { "tesseract.exe", "tesseract" }
+            : new[] { "tesseract" };
+
+        var bundled = Path.Combine(baseDirectory, names[0]);
+        if (File.Exists(bundled))
+            return bundled;
+
+        foreach (var name in names)
+        {
+            var fromPath = FindOnPath(name, path);
+            if (fromPath is not null)
+                return fromPath;
+        }
+
+        wellKnownPaths ??= new[]
+        {
+            "/opt/homebrew/bin/tesseract",
+            "/usr/local/bin/tesseract",
+            @"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        };
+
+        return wellKnownPaths.FirstOrDefault(File.Exists);
+    }
+
+    internal static string? ResolveTessdataDir(string executablePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        var executableDirectory = Path.GetDirectoryName(executablePath);
+        if (string.IsNullOrWhiteSpace(executableDirectory))
+            return null;
+
+        var tessdataDirectory = Path.Combine(executableDirectory, "tessdata");
+        return Directory.Exists(tessdataDirectory) ? tessdataDirectory : null;
+    }
+
+    public async Task<OcrResult> RecognizeAsync(string imagePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+        if (!File.Exists(imagePath))
+            throw new FileNotFoundException("Image not found.", imagePath);
+
+        var executable = ResolveExecutable()
+            ?? throw new InvalidOperationException(
+                "Tesseract was not found. Restore the bundled Tesseract package or install Tesseract OCR and ensure it is on PATH.");
+
+        var language = Environment.GetEnvironmentVariable("CAPTURE_OCR_LANG");
+        if (string.IsNullOrWhiteSpace(language))
+            language = "eng";
+        else if (!LanguageCodePattern().IsMatch(language))
+            throw new InvalidOperationException(
+                $"CAPTURE_OCR_LANG value '{language}' is invalid; expected a Tesseract language code (letters, digits, '_' and '+' only).");
+
+        var start = new ProcessStartInfo
+        {
+            FileName = executable,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add(imagePath);
+        start.ArgumentList.Add("stdout");
+        start.ArgumentList.Add("-l");
+        start.ArgumentList.Add(language);
+        start.ArgumentList.Add("--psm");
+        start.ArgumentList.Add("6");
+        start.ArgumentList.Add("tsv");
+
+        var tessdataDirectory = ResolveTessdataDir(executable);
+        if (tessdataDirectory is not null)
+            start.Environment["TESSDATA_PREFIX"] = tessdataDirectory;
+
+        using var process = new Process { StartInfo = start };
+        if (!process.Start())
+            throw new InvalidOperationException("Unable to start Tesseract.");
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(60));
+
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Kill the process regardless of which token fired — Process.Dispose() (via the `using`
+            // above) only releases the managed handle, it does not terminate the OS process, so without
+            // this an orphaned tesseract keeps running to completion even after this method returns.
+            TryKill(process);
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+            throw new TimeoutException("Tesseract timed out.");
+        }
+
+        var stdout = await outputTask.ConfigureAwait(false);
+        var stderr = await errorTask.ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Tesseract failed ({process.ExitCode}): {stderr}".Trim());
+
+        return TesseractTsvParser.Parse(stdout);
+    }
+
+    private static string? FindOnPath(string fileName, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(directory, fileName);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+        }
+    }
+}

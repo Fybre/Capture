@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "mixed-accounts-payable",
+  "description": "Two consumed invoice separators create repeated Invoice instances and retain invoice numbers before a Statement changes the document type.",
+  "configuration": {
+    "batchStart": "None",
+    "batchTriggerDisposition": "IncludeInNewDocument",
+    "documentStarts": [
+      "OCR regex ^INVOICE:(?<InvoiceNumber>.+)$ => Invoice (consume trigger)",
+      "OCR contains ACCOUNT STATEMENT => Statement (retain trigger)"
+    ],
+    "fileIsDocumentBoundary": false,
+    "startNewBatchForEachFile": false
+  },
+  "inputs": [
+    {
+      "file": "accounts-payable-mixed.pdf",
+      "pages": [
+        { "page": 1, "text": "INVOICE:INV-100" },
+        { "page": 2, "text": "Invoice INV-100 detail" },
+        { "page": 3, "text": "Invoice INV-100 continuation" },
+        { "page": 4, "text": "INVOICE:INV-101" },
+        { "page": 5, "text": "Invoice INV-101 detail" },
+        { "page": 6, "text": "ACCOUNT STATEMENT" },
+        { "page": 7, "text": "Statement continuation" }
+      ]
+    }
+  ],
+  "expected": {
+    "batches": [
+      {
+        "key": "generic-1",
+        "generic": true,
+        "fields": {},
+        "documents": [
+          {
+            "type": "Invoice",
+            "pages": ["accounts-payable-mixed.pdf#2", "accounts-payable-mixed.pdf#3"],
+            "boundaryValues": { "InvoiceNumber": "INV-100" }
+          },
+          {
+            "type": "Invoice",
+            "pages": ["accounts-payable-mixed.pdf#5"],
+            "boundaryValues": { "InvoiceNumber": "INV-101" }
+          },
+          {
+            "type": "Statement",
+            "pages": ["accounts-payable-mixed.pdf#6", "accounts-payable-mixed.pdf#7"]
+          }
+        ]
+      }
+    ],
+    "consumedPages": ["accounts-payable-mixed.pdf#1", "accounts-payable-mixed.pdf#4"]
+  },
+  "covers": [
+    "document-value-survives-consumed-page",
+    "repeated-document-type-instances",
+    "document-type-change"
+  ]
+}

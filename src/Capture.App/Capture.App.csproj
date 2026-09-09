@@ -1,0 +1,99 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- Capture.Presidio.Binaries ships RID-specific native assets (runtimes/{rid}/native/...), which
+         NuGet only resolves and copies to the output directory for a build that has a concrete
+         RuntimeIdentifier. A portable build (plain "dotnet build"/"dotnet run", no explicit runtime
+         flag) silently gets none of it, so the sidecar looks "unavailable" with no error at all, not
+         "not yet configured". Defaulting to the SDK's own RID makes every local build/run/debug pick
+         it up automatically, without anyone needing to remember a command line flag. Pass an explicit
+         runtime identifier to override this for a genuine cross-platform publish. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationTitle>Capture</ApplicationTitle>
+    <!-- Windows-only: embeds the icon into the built .exe (Explorer/taskbar/Alt-Tab before the window
+         paints its own icon). Ignored on macOS/Linux — those need actual app-bundle/desktop-file
+         packaging, which doesn't exist yet for this app. -->
+    <ApplicationIcon>Assets\capture.ico</ApplicationIcon>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Defaults for local dev; the packaging workflow overrides both via -p:Version=x.y.z so a real
+         release carries a real version instead of every build claiming to be 0.1.0. FileVersion must
+         be purely numeric (major.minor.build.revision) — strip any prerelease suffix like "-ci.2"
+         before appending the revision component, or the SDK warns CS7035 and Windows file properties
+         end up with a version string it can't actually parse. -->
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <FileVersion Condition="'$(FileVersion)' == ''">$(Version.Split('-')[0]).0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Capture.Core\Capture.Core.csproj" />
+    <ProjectReference Include="..\Capture.Storage\Capture.Storage.csproj" />
+    <ProjectReference Include="..\Capture.Pdf\Capture.Pdf.csproj" />
+    <ProjectReference Include="..\Capture.Ocr\Capture.Ocr.csproj" />
+    <ProjectReference Include="..\Capture.Scanner\Capture.Scanner.csproj" />
+    <ProjectReference Include="..\Capture.Export\Capture.Export.csproj" />
+    <ProjectReference Include="..\Capture.Therefore\Capture.Therefore.csproj" />
+    <ProjectReference Include="..\Capture.LocalAi\Capture.LocalAi.csproj" />
+    <ProjectReference Include="..\Capture.Scripting\Capture.Scripting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.6" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.4.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.6">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <!-- Capture.Presidio.Binaries is only fetched when it's actually restorable — either a manually
+       downloaded .nupkg sitting in local-nuget-feed/, or GitHub Packages restore configured via
+       GITHUB_PACKAGES_TOKEN (see nuget.config/README.md) — a fresh, uncredentialed clone has
+       neither, and PII redaction is documented as gracefully optional at runtime when the package is
+       absent (see PresidioSidecarLauncher). Referencing it unconditionally would turn "package not
+       yet fetched" into a hard NU1101 build failure instead. -->
+  <PropertyGroup>
+    <PresidioLocalFeedDir>$(MSBuildThisFileDirectory)..\..\local-nuget-feed</PresidioLocalFeedDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <_PresidioPackageFiles Include="$(PresidioLocalFeedDir)\Capture.Presidio.Binaries.*.nupkg" Condition="Exists('$(PresidioLocalFeedDir)')" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(_PresidioPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
+    <PackageReference Include="Capture.Presidio.Binaries" Version="0.1.0-ci.2" />
+  </ItemGroup>
+
+  <!-- Like Presidio, the bundled OCR package is restorable from local-nuget-feed/ or GitHub Packages
+       and remains optional so a clean, uncredentialed clone can still build. At runtime Capture
+       falls back to a system Tesseract when the package is absent. -->
+  <PropertyGroup>
+    <TesseractLocalFeedDir>$(MSBuildThisFileDirectory)..\..\local-nuget-feed</TesseractLocalFeedDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <_TesseractPackageFiles Include="$(TesseractLocalFeedDir)\Capture.Tesseract.Binaries.*.nupkg" Condition="Exists('$(TesseractLocalFeedDir)')" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(_TesseractPackageFiles)' != '' Or '$(GITHUB_PACKAGES_TOKEN)' != ''">
+    <PackageReference Include="Capture.Tesseract.Binaries" Version="0.1.0-ci.3" />
+  </ItemGroup>
+
+  <!-- CaptureScanHelperMac is a small native Swift helper that talks to Apple's ImageCaptureCore
+       framework on behalf of MacScanSource — there is no public .NET binding for it, so this mirrors
+       the bundled-native-helper pattern already used for the Presidio sidecar. It must run as a signed
+       .app bundle (see native/CaptureScanHelperMac/main.swift for why), so it's built here rather than
+       shipped as a prebuilt binary. macOS-only: skipped entirely on other build platforms. -->
+  <Target Name="BuildCaptureScanHelperMac" AfterTargets="Build" Condition="'$([MSBuild]::IsOSPlatform(`OSX`))' == 'true'">
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)..\..\native\CaptureScanHelperMac\build.sh&quot; &quot;$(OutDir.TrimEnd('\/'))&quot;" />
+  </Target>
+</Project>

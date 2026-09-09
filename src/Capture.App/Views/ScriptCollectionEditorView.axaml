@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Capture.App.Views.ScriptCollectionEditorView" x:CompileBindings="False">
+  <StackPanel Spacing="10">
+    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+      <StackPanel>
+        <TextBlock Text="Scripts" Classes="section-title"/>
+        <TextBlock Text="C# actions that run after indexing or around export. Scripts can read and update fields without being fields themselves."
+                   Classes="hint" TextWrapping="Wrap"/>
+      </StackPanel>
+      <Button Grid.Column="1" Content="Scripting help" Classes="ghost"
+              Command="{Binding OpenScriptingHelpCommand}" VerticalAlignment="Top"/>
+      <Button Grid.Column="2" Content="+ Add script" Command="{Binding AddCommand}" VerticalAlignment="Top"/>
+    </Grid>
+
+    <Border Background="{DynamicResource Surface3Brush}" CornerRadius="6" Padding="10">
+      <StackPanel Spacing="6">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="Shared functions (optional)" Classes="field-label" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="Pop out" Classes="ghost" Padding="8,3"
+                  Command="{Binding PopOutSharedSourceCommand}"/>
+        </Grid>
+        <TextBox AcceptsReturn="True" MinHeight="76" MaxHeight="150"
+                 FontFamily="{DynamicResource PlexMonoFontFamily}"
+                 Watermark="Reusable C# helper methods available to every script in this section"
+                 Text="{Binding SharedSource}"/>
+      </StackPanel>
+    </Border>
+
+    <ItemsControl ItemsSource="{Binding Scripts}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Background="{DynamicResource Surface3Brush}" CornerRadius="6" Padding="10" Margin="0,0,0,8">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" ToolTip.Tip="Enable this script"/>
+                <TextBox Grid.Column="1" Text="{Binding Name}" Watermark="Script name"/>
+                <Button Grid.Column="2" Content="Remove" Classes="ghost"
+                        Command="{Binding $parent[UserControl].DataContext.RemoveCommand}"
+                        CommandParameter="{Binding}"/>
+              </Grid>
+              <Grid ColumnDefinitions="*,110" ColumnSpacing="8">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Runs" Classes="field-label"/>
+                  <ComboBox ItemsSource="{Binding TriggerChoices}"
+                            SelectedValueBinding="{Binding Value}" SelectedValue="{Binding Trigger}">
+                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <TextBlock Text="Timeout (seconds)" Classes="field-label"/>
+                  <NumericUpDown Value="{Binding TimeoutSeconds}" Minimum="1" Maximum="300"/>
+                </StackPanel>
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Source" Classes="field-label" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Pop out" Classes="ghost" Padding="8,3"
+                        Command="{Binding $parent[UserControl].DataContext.PopOutCommand}"
+                        CommandParameter="{Binding}"/>
+              </Grid>
+              <TextBox Text="{Binding Source}" AcceptsReturn="True" MinHeight="120" MaxHeight="240"
+                       FontFamily="{DynamicResource PlexMonoFontFamily}"
+                       Watermark="e.g. Fields[&quot;Total&quot;].Value = &quot;0&quot;;"/>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Button Content="Run test" Command="{Binding $parent[UserControl].DataContext.TestCommand}"
+                        CommandParameter="{Binding}"/>
+                <TextBlock Grid.Column="1" Text="{Binding TestResult}" IsVisible="{Binding HasTestResult}"
+                           Classes="hint" TextWrapping="Wrap" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

@@ -1,0 +1,810 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Capture.App.Views.HelpWindow"
+        Title="Capture Help"
+        Icon="/Assets/capture.ico"
+        Width="1120"
+        Height="780"
+        MinWidth="860"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Window.Styles>
+        <Style Selector="TabControl.help-tabs">
+            <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+        </Style>
+        <Style Selector="TabItem.help-nav">
+            <Setter Property="MinWidth" Value="220" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="16,11" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBlock.help-title">
+            <Setter Property="FontSize" Value="26" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+        </Style>
+        <Style Selector="TextBlock.help-lead">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="LineHeight" Value="22" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.help-h2">
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style Selector="TextBlock.help-h3">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.help-body">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineHeight" Value="20" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+        </Style>
+        <Style Selector="TextBlock.help-note">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="LineHeight" Value="18" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Border.help-card">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+        <Style Selector="Border.help-tip">
+            <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="13" />
+        </Style>
+        <Style Selector="Border.diagram-box">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush1}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,9" />
+        </Style>
+        <Style Selector="TextBlock.diagram-label">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.help-code">
+            <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,10" />
+        </Style>
+        <Style Selector="TextBlock.help-code">
+            <Setter Property="FontFamily" Value="{DynamicResource PlexMonoFontFamily}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*" Background="{DynamicResource GroundBrush}">
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                BorderThickness="0,0,0,1"
+                Padding="22,14">
+            <Grid ColumnDefinitions="Auto,*">
+                <Image Source="/Assets/Brand/capture-icon-48.png" Width="36" Height="36" />
+                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Capture Help" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="Keep this window open while you configure or use Capture."
+                               Classes="help-note" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TabControl x:Name="Tabs" Grid.Row="1" Classes="help-tabs" TabStripPlacement="Left" SelectedIndex="0">
+            <TabItem Header="Start here" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Start here" Classes="help-title" />
+                        <TextBlock Text="Capture turns PDFs, images, and scans into reviewed, indexed documents. A typical job moves from import through extraction and review to export."
+                                   Classes="help-lead" />
+
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="The Capture workflow" Classes="help-h3" />
+                                <Grid ColumnDefinitions="*,Auto,*,Auto,*,Auto,*,Auto,*">
+                                    <Border Grid.Column="0" Classes="diagram-box"><TextBlock Text="1  Import" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="1" Text="→" Margin="8,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush1}" />
+                                    <Border Grid.Column="2" Classes="diagram-box"><TextBlock Text="2  Extract" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="3" Text="→" Margin="8,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush1}" />
+                                    <Border Grid.Column="4" Classes="diagram-box"><TextBlock Text="3  Review" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="5" Text="→" Margin="8,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush1}" />
+                                    <Border Grid.Column="6" Classes="diagram-box"><TextBlock Text="4  Ready" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="7" Text="→" Margin="8,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush1}" />
+                                    <Border Grid.Column="8" Classes="diagram-box"><TextBlock Text="5  Export" Classes="diagram-label" /></Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Your first document" Classes="help-h2" />
+                        <Grid ColumnDefinitions="34,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                            <Border Grid.Row="0" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="1" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Choose a Capture Profile in the toolbar, then choose Import files, Import folder, or Scan." Classes="help-body" Margin="4,1,0,12" />
+                            <Border Grid.Row="1" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="2" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Select the document in the Inbox. The page appears in the centre and its index fields appear on the right." Classes="help-body" Margin="4,1,0,12" />
+                            <Border Grid.Row="2" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="3" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Correct missing or low-confidence values. Click a field or highlight to see where an extracted value came from." Classes="help-body" Margin="4,1,0,12" />
+                            <Border Grid.Row="3" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="4" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Choose Mark ready when the required review is complete. Profile-driven redaction may run at this point." Classes="help-body" Margin="4,1,0,12" />
+                            <Border Grid.Row="4" Width="25" Height="25" CornerRadius="13" Background="{DynamicResource AccentBrush1}"><TextBlock Text="5" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Choose Export for the current selection, or every Ready document when nothing is selected." Classes="help-body" Margin="4,1,0,0" />
+                        </Grid>
+
+                        <Border Classes="help-tip">
+                            <TextBlock Text="Tip  Configure one Capture Profile containing the batch definition and all document types for an incoming workflow."
+                                       Classes="help-note" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Capture profiles" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Unified Capture Profiles" Classes="help-title" />
+                        <TextBlock Text="A Capture Profile describes an entire incoming workflow in one place: batch boundaries and shared values, document classification and instance boundaries, document fields and scripts, redaction, exports, and automatic export. Open it from More › Capture profiles."
+                                   Classes="help-lead" />
+
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Processing order" Classes="help-h3" />
+                                <Grid ColumnDefinitions="*,Auto,*,Auto,*,Auto,*">
+                                    <Border Grid.Column="0" Classes="diagram-box"><TextBlock Text="Analyse page once&#10;OCR + barcodes" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="1" Text="→" Margin="10,0" VerticalAlignment="Center" />
+                                    <Border Grid.Column="2" Classes="diagram-box"><TextBlock Text="Evaluate batch&#10;start rules" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="3" Text="→" Margin="10,0" VerticalAlignment="Center" />
+                                    <Border Grid.Column="4" Classes="diagram-box"><TextBlock Text="Classify / start&#10;document" Classes="diagram-label" /></Border>
+                                    <TextBlock Grid.Column="5" Text="→" Margin="10,0" VerticalAlignment="Center" />
+                                    <Border Grid.Column="6" Classes="diagram-box"><TextBlock Text="Retain or consume&#10;the page" Classes="diagram-label" /></Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Designer navigation" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                                <TextBlock Grid.Row="0" Text="Overview" Classes="help-h3" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Name the workflow, choose the fallback document type, and decide whether the end of each input file also ends the current document. Keep Enabled off while setup is incomplete: disabled drafts can be saved, but cannot be selected for capture or watch folders. The Overview checklist summarises everything that must be fixed before the profile can be enabled." Classes="help-body" />
+                                <TextBlock Grid.Row="1" Text="Batch" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Choose None to keep adding manual inputs to one batch, or select a matching mode to configure batch start rules and trigger-page handling. Optional per-file batches, shared batch fields, and scripts are configured here too." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Text="Document types" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Add, copy, remove, or reorder types. Each type has separate Identify document type and Detect first page rules, plus fields, scripts, redaction, and exports." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="3" Text="Test Capture" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Choose representative files to run the same analysis, planning, and index extraction used by capture. Results show each batch and document, its assigned type, extracted batch and document indexes, confidence, validation issues, and Ready status. It is preview-only: nothing is imported, redacted, or exported." Classes="help-body" Margin="0,10,0,0" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Identify type and detect first pages" Classes="help-h2" />
+                        <TextBlock Text="Identify document type answers “what type does this page or document appear to be?” Detect first page of a new document answers “does this page begin another document?” Enable “When a page identifies this type, treat it as the first page” to reuse identification as the boundary when its marker occurs only on first pages. Leave that option off when continuation pages can also identify the type, or each matching continuation page would be split into another document. Separate first-page rules can still provide additional boundary signals. If several types match the same page, Test Capture reports an ambiguity."
+                                   Classes="help-body" />
+                        <TextBlock Text="Choose a fallback type for retained pages that cannot be classified. Without one, those pages become Unclassified and produce a diagnostic. Content arriving before the first batch header is placed in a real generic batch rather than being lost."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Rules and sample preview" Classes="help-h2" />
+                        <TextBlock Text="A rule can split or identify by every N pages, a blank page threshold, barcode format or value pattern, a regular expression over the page text, or text found inside a drawn OCR zone. Select a rule to edit the settings for that rule type."
+                                   Classes="help-body" />
+                        <TextBlock Text="Choose Sample in the Batch or Document Type designer to load a representative PDF or image. The large centre preview remains fixed while rule and index settings scroll independently on the right. Select a rule or field on the right to open its settings; select the same row again to collapse them. The accent line links a selected field to its properties. The preview automatically shows and refreshes what you are editing. Draw, move, or resize the area when that item uses one. Drawing a barcode or OCR rule area seeds its settings from detected sample content. Whole-page rules disable drawing because no area is needed. Hold Ctrl while using the wheel to zoom; use the wheel or middle-drag to pan. Test rule checks one rule; Test all reports the combined rule-set result. Test field manually refreshes the selected index without running scripts or AI."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="For indexes, use a fixed field zone when the value has a stable location, or draw a search area for key/value extraction. Barcode and regex indexes can be tested against the same sample before the profile is saved." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Trigger pages and captured values" Classes="help-h2" />
+                        <TextBlock Text="Each batch-start or new-document rule set has one page-handling choice: keep the matching page in the new document, or remove it. A removed batch-start page is not stored in a document, but it remains the logical first page while batch fields are extracted, so ordinary barcode and zonal batch fields can read it. A Batch separator value field stores the captured value from the batch-start rule selected under Populate value from—for example, a STUDENT:(.+) rule can populate StudentNumber=X00007 even when the header sheet is removed."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Rule order is deterministic: batch boundaries are evaluated before document classification and document starts on the same page. A batch match closes the current document and batch before opening the next batch." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Manual and automated batches" Classes="help-h2" />
+                        <TextBlock Text="Hover over the selected Capture Profile to see its batching, document-type, batch-index, and auto-export summary. The line below it shows whether a manual batch is currently open and whether new imports will join it. Choose Start new batch when the next manual import should use a new one, or enable Start a new batch for each file in the profile. Removing the last active document closes its batch so a later import cannot inherit indexes visible only in Trash; restoring that document preserves its original, now-closed batch. Watch-folder processing always closes its batch when the received input set finishes. Manual and watch-folder channels cannot accidentally share a batch."
+                                   Classes="help-body" />
+                        <TextBlock Text="When Export Ready documents automatically after import is enabled, Capture waits until the complete import operation has been processed, then exports only documents whose field validation and confidence checks produced Ready status and whose document type has an enabled export destination. Anything needing review or without a destination remains in the Inbox."
+                                   Classes="help-body" />
+                        <TextBlock Text="The input-file boundary setting is independent: turn it off when one logical document may continue into the next file. Capture merges those planned pages into the materialised document."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Capture V2 storage" Classes="help-h2" />
+                        <TextBlock Text="Capture V2 stores its database, settings, profiles, documents, and models separately from the previous application version. Capture Profiles are the only supported profile format in this version."
+                                   Classes="help-body" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Workspace" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="The workspace" Classes="help-title" />
+                        <TextBlock Text="Preview mode supports focused review and multi-selection in the Inbox. Table mode gives a spreadsheet-style overview with the same bulk actions."
+                                   Classes="help-lead" />
+                        <TextBlock Text="Ctrl/Command-click or Shift-click documents to select several at once. The page preview pauses while multiple documents are selected. Choose Merge to append their pages in displayed order; the first document keeps its filename, profile, batch, and document-level index values."
+                                   Classes="help-body" />
+
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Preview mode at a glance" Classes="help-h3" />
+                                <Grid ColumnDefinitions="1.05*,1.7*,1.05*" Height="185">
+                                    <Border Grid.Column="0" Background="{DynamicResource Surface2Brush}" CornerRadius="7,0,0,7" Padding="12">
+                                        <StackPanel Spacing="8"><TextBlock Text="INBOX" Classes="eyebrow" /><TextBlock Text="Documents and status" Classes="help-body" /><Border Height="24" Background="{DynamicResource RowSelectedBrush}" CornerRadius="4" /><Border Height="24" Background="{DynamicResource SurfaceBrush}" CornerRadius="4" /><Border Height="24" Background="{DynamicResource SurfaceBrush}" CornerRadius="4" /></StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Background="{DynamicResource Surface3Brush}" Margin="2,0" Padding="14">
+                                        <StackPanel Spacing="8"><TextBlock Text="PAGE PREVIEW" Classes="eyebrow" /><Border Height="125" Background="White" CornerRadius="3" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"><Grid><Border Width="92" Height="22" BorderBrush="#DC2828" BorderThickness="2" Background="#20DC2828" HorizontalAlignment="Center" VerticalAlignment="Center" /><TextBlock Text="zoom • highlights • regions" Foreground="#586060" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" /></Grid></Border></StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Background="{DynamicResource Surface2Brush}" CornerRadius="0,7,7,0" Padding="12">
+                                        <StackPanel Spacing="8"><TextBlock Text="INDEXES" Classes="eyebrow" /><TextBlock Text="Review and edit values" Classes="help-body" /><Border Height="32" Background="{DynamicResource SurfaceBrush}" CornerRadius="4" /><Border Height="32" Background="{DynamicResource SurfaceBrush}" CornerRadius="4" /><TextBlock Text="Mark ready" FontSize="11" HorizontalAlignment="Center" /></StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Preview mode" Classes="help-h2" />
+                        <TextBlock Text="Select an Inbox row to load it. Its document-type chip shows the type assigned by recognition, or Unclassified when no type was assigned. Use the page arrows for multi-page documents. Ctrl+wheel zooms around the pointer; the wheel scrolls vertically; drag with the left button when not drawing, or use the middle button, to pan. Click an index highlight to select its field. Red highlights are redaction candidates."
+                                   Classes="help-body" />
+                        <TextBlock Text="Drag the vertical dividers to give the Inbox, preview, or indexing panel more space. The zoom controls reset, reduce, or enlarge the page."
+                                   Classes="help-body" />
+                        <TextBlock Text="Toggle OCR text (next to the zoom controls) to see a box around every word Capture recognized on this page, with the text and confidence on hover — useful when a highlight or redaction candidate looks misplaced."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Page management" Classes="help-h2" />
+                        <TextBlock Text="Right-click a thumbnail in the page strip for Delete page(s) (works on a multi-selection) or Split here, which moves that page and everything after it into a new document inheriting the same document type, batch, and populated document values. Both resulting documents are indexed again, so first-page, last-page, barcode, zonal, AI, and scripted fields reflect their new page sets. A newly extracted value replaces the inherited value; if extraction is blank because the original separator/header page was removed, the inherited value is retained without invalid highlight coordinates. Drag a thumbnail to a new position to reorder pages within the document. Deleting, splitting, and reordering also update any redaction candidates to match the new page numbers."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Importing by drag-and-drop" Classes="help-h2" />
+                        <TextBlock Text="Drag file(s) or a folder from Finder or Explorer onto the window, the Inbox, or the page strip to import them — it behaves exactly like Import files, including the same supported-format filtering. Dropping a folder imports its top-level supported files, the same as Import folder."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Table mode" Classes="help-h2" />
+                        <TextBlock Text="Documents are grouped by document type and their index values become columns. The compact T marker beside each filename repeats that assignment without adding another column; hover it for the full type name. Select one or several rows for redaction, removal, or export. A shield beside the document status indicates pending, applied, or failed redaction; hover for details, or click an applied shield to open the redacted copy. Double-click a row to return to Preview mode. Drag selected documents onto a row in another batch to move them together."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Statuses" Classes="help-h2" />
+                        <TextBlock Text="Needs review means one or more editable values require attention. Ready means the document can be exported. Exported records a completed export. A separate redaction status may indicate review, applied, or failed without changing the indexing status."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="The page strip and most buttons dim and stop responding while an import, page edit, redaction, or export is in progress — this is normal, not a fault. A progress indicator appears in the status bar; wait for it to finish before trying again." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Profiles &amp; fields" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Document types and fields" Classes="help-title" />
+                        <TextBlock Text="Each document type inside a Capture Profile defines how to identify its type, how to detect the first page of another document, captured values, validation and review rules, redaction behaviour, and export destinations."
+                                   Classes="help-lead" />
+
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="190,*,210" Height="175">
+                                <Border Grid.Column="0" Background="{DynamicResource Surface2Brush}" CornerRadius="7" Padding="12"><StackPanel Spacing="8"><TextBlock Text="PROFILE SETTINGS" Classes="eyebrow" /><TextBlock Text="Sample" Classes="field-label" /><TextBlock Text="Page separation" Classes="field-label" /><TextBlock Text="Redaction" Classes="field-label" /><TextBlock Text="Exports" Classes="field-label" /></StackPanel></Border>
+                                <Border Grid.Column="1" Margin="10,0" Background="{DynamicResource Surface3Brush}" CornerRadius="7" Padding="12"><StackPanel><TextBlock Text="SAMPLE PAGE" Classes="eyebrow" /><Border Margin="18,10" Height="112" Background="White" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"><Border Width="120" Height="32" BorderBrush="#00A6D8" BorderThickness="2" Background="#1800A6D8" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border></StackPanel></Border>
+                                <Border Grid.Column="2" Background="{DynamicResource Surface2Brush}" CornerRadius="7" Padding="12"><StackPanel Spacing="8"><TextBlock Text="FIELD EDITOR" Classes="eyebrow" /><TextBlock Text="Name and format" Classes="field-label" /><TextBlock Text="Required / read-only" Classes="field-label" /><TextBlock Text="Page and pattern" Classes="field-label" /><TextBlock Text="Extracted value" Classes="field-label" /></StackPanel></Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Create and test a profile" Classes="help-h2" />
+                        <TextBlock Text="Open More › Capture profiles, create or edit a profile, then add a document type. Configure its rules, fields, scripts, redaction, and exports in the one designer. Use Test Capture with representative files before saving unattended workflows."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Field types" Classes="help-h2" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                            <Border Grid.Row="0" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Text and Lookup" Classes="help-h3" /><TextBlock Text="Manual entry, optional computed defaults, or a controlled list of display/export values." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="0" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Zone" Classes="help-h3" /><TextBlock Text="Draw a fixed rectangle where the value appears on a consistent layout." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="1" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Key/value" Classes="help-h3" /><TextBlock Text="Find a label pattern and extract a nearby value; optionally restrict the search area." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="1" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Regex" Classes="help-h3" /><TextBlock Text="Match text with a regular expression; capture group 1 supplies the value when present." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="2" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Barcode" Classes="help-h3" /><TextBlock Text="Decode a chosen page or zone, optionally filtering by format or value pattern." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="2" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="AI" Classes="help-h3" /><TextBlock Text="Extract a configured catalog type or describe a custom value in a prompt." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="3" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Batch separator value" Classes="help-h3" /><TextBlock Text="Copies the barcode or regex value that caused the batch boundary into an index field." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="3" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="4"><TextBlock Text="Script" Classes="help-h3" /><TextBlock Text="A C# expression, read-only over every other field and the document (Document.Text, PageCount, ...), whose result becomes this field's value. Requires &quot;Allow profile scripts&quot; in Settings." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="4" Grid.ColumnSpan="2" Classes="help-card"><StackPanel Spacing="4"><TextBlock Text="Button" Classes="help-h3" /><TextBlock Text="A button in the review panel; clicking it runs an attached C# script with full read/write access to every field. Requires &quot;Allow profile scripts&quot; in Settings." Classes="help-note" /></StackPanel></Border>
+                        </Grid>
+
+                        <TextBlock Text="Field options" Classes="help-h2" />
+                        <TextBlock Text="Format controls validation and editing. Mandatory fields block Mark ready until populated. Batch-level values are shared across documents in a batch. Hide from indexing removes a field from review and default CSV output; read-only keeps it visible but not editable. Sensitive document fields offer their extracted bounds for redaction. Sensitive batch fields are masked in review and Table view instead; they never create document-page rectangles."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Use Populate value from inside the selected field's properties to choose a first-page or batch-start rule, another document or batch field, or a known macro. The chosen source is shown again whenever the field is reopened. You can also edit the resulting value template to combine tokens—for example INV-{Doc#|000}-{Customer}. Extracted fields use templates only when extraction returns no value." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Field configuration" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Field configuration reference" Classes="help-title" />
+                        <TextBlock Text="Every field has a capture method and a set of shared rules. Configure the shared properties first, then the options for that field type, and confirm the live value against the sample."
+                                   Classes="help-lead" />
+
+                        <TextBlock Text="Shared properties" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                                <TextBlock Grid.Row="0" Text="Name" Classes="help-h3" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="The review label, export column name, and token name used when another Text field refers to this value." Classes="help-body" />
+                                <TextBlock Grid.Row="1" Text="Format" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Validates the extracted or entered value using the profile locale. It does not reformat the text automatically." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Text="Mandatory" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Requires a value before Mark ready. Blank non-mandatory values are valid." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="3" Text="Sensitive" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="For a document field, offers its located bounds as a confirmed redaction candidate when profile redaction is enabled. For a batch field, masks the shared value in review and Table view without creating a page rectangle." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="4" Text="Hidden" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Omits the field from review, readiness checks, and the default CSV field list. It remains available to explicitly configured exports." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="5" Text="Read only" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Shows the value but prevents hand editing. Missing and low-confidence checks are skipped, although an invalid format still requires review." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="6" Text="Level" Classes="help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Document stores a separate value per document. Batch stores one shared value and propagates review changes to every document in that batch." Classes="help-body" Margin="0,10,0,0" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Data formats and validation" Classes="help-h2" />
+                        <TextBlock Text="Validation uses the profile's locale, so decimal separators and date order can differ between profiles. Empty values only fail when Mandatory is selected."
+                                   Classes="help-body" />
+                        <Grid ColumnDefinitions="145,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+                            <Border Grid.Row="0" Grid.Column="0" Classes="diagram-box" Margin="0,0,10,8"><TextBlock Text="String" Classes="diagram-label" /></Border>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Any text; use this for identifiers that may contain letters, punctuation, or leading zeroes." Classes="help-body" />
+                            <Border Grid.Row="1" Grid.Column="0" Classes="diagram-box" Margin="0,0,10,8"><TextBlock Text="Integer" Classes="diagram-label" /></Border>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="A whole signed number. Do not use it for account or reference numbers whose leading zeroes matter." Classes="help-body" />
+                            <Border Grid.Row="2" Grid.Column="0" Classes="diagram-box" Margin="0,0,10,8"><TextBlock Text="Money" Classes="diagram-label" /></Border>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="A locale-valid decimal amount, optionally including a recognised currency symbol and group separators." Classes="help-body" />
+                            <Border Grid.Row="3" Grid.Column="0" Classes="diagram-box" Margin="0,0,10,8"><TextBlock Text="Date" Classes="diagram-label" /></Border>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="A locale-valid date. Date fields provide a calendar editor during review." Classes="help-body" />
+                            <Border Grid.Row="4" Grid.Column="0" Classes="diagram-box" Margin="0,0,10,8"><TextBlock Text="DateTime" Classes="diagram-label" /></Border>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="A locale-valid date and time value." Classes="help-body" />
+                            <Border Grid.Row="5" Grid.Column="0" Classes="diagram-box" Margin="0,0,10,0"><TextBlock Text="Boolean" Classes="diagram-label" /></Border>
+                            <TextBlock Grid.Row="5" Grid.Column="1" Text="Accepts true, false, yes, no, 1, or 0; words are case-insensitive." Classes="help-body" />
+                        </Grid>
+
+                        <TextBlock Text="Text defaults and macros" Classes="help-h2" />
+                        <TextBlock Text="The Populate value from chooser lists available rules, fields, and macros. Its value template is evaluated when the profile is applied. It supplies the initial value of a manual Text field, or a fallback for an extracted field when extraction is blank. Plain text and multiple macros can be combined—for example INV-{Date|yyyyMMdd}-{Doc#|0000}."
+                                   Classes="help-body" />
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="215,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                                <TextBlock Grid.Row="0" Text="Document: {Doc#}" Classes="mono help-h3" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Document counter. Add a numeric .NET format after |, such as Doc: {Doc#|000}, for 001." Classes="help-body" />
+                                <TextBlock Grid.Row="1" Text="Batch: {Batch#}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Batch counter. The same zero-padding syntax applies." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Text="Date: {Date}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Current date; default yyyy-MM-dd. Supply a .NET date format, such as Date: {Date|ddMMyyyy}." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="3" Text="Time: {Time}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Current time; default HH:mm:ss. A custom .NET time format may follow |." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="4" Text="Profile: {ProfileName}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="The name of the document type being applied." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="5" Text="Field: {InvoiceNo}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="The value of another field, matched by field name. Computed fields may refer to other computed fields; circular references are reported for review." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="6" Text="Literal: {{ and }}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Produces a literal opening or closing brace." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="7" Text="Page: {Page#}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Text="The page associated with this field; defaults to the first page for a manual field. Numeric formatting is supported." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="8" Text="Pages: {PageCount}" Classes="mono help-h3" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="8" Grid.Column="1" Text="The number of pages in the current document or batch input." Classes="help-body" Margin="0,10,0,0" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="help-tip"><TextBlock Text="Unknown field names resolve to blank. An invalid numeric/date format reports Invalid default value format. A lone opening brace with no closing brace is retained literally rather than stopping indexing." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Configuring each capture method" Classes="help-h2" />
+                        <Border Classes="help-tip"><TextBlock Text="Toggle OCR text (bottom-right of the sample page) to see a box around every word Capture actually recognized. If a zone or pattern draw comes back with no match, this shows immediately whether the text simply isn't where you drew, or genuinely wasn't recognized at all. Hover a word to see its recognized text and confidence in a tooltip." Classes="help-note" /></Border>
+                        <StackPanel Spacing="12">
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Zone" Classes="help-h3" /><TextBlock Text="Draw tightly around the value, then choose First page, Specific page, or Any page. Any page applies the same position to each page in order and uses the first non-empty value. Use zones for stable layouts; move or resize the selected rectangle with its handles." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Key/value and Regex" Classes="help-h3" /><TextBlock Text="Enter .NET regular expressions. Key/value first locates the key, then finds the value pattern nearby. Regex searches directly; capture group 1 is returned when present, otherwise the whole match. Choose First or Last and a First, numbered, or Any page scope. Select the field and draw its search area to restrict matching, or choose Pick from sample beside a key/value pattern and draw around representative text to generate a starting expression." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Barcode" Classes="help-h3" /><TextBlock Text="Choose the page scope, then choose Entire page or Selected area under Scan area. A selected area can be more precise when the barcode location is predictable. You can also filter by barcode format or a value regex. The same scan-area choice is available on barcode separation and recognition rules." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Lookup" Classes="help-h3" /><TextBlock Text="Each option has display text for the reviewer and a stored export value. For example, display Approved while exporting A. A default option is optional. &quot;Auto-fill from another field&quot; can also compute a default: enter a template like {Company Name} (same syntax as a Text field's default value), and it is matched case-insensitively against the display text above to fill in that option's export value — falling back to the fixed default option when nothing matches." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Batch separator value" Classes="help-h3" /><TextBlock Text="No zone or pattern is needed. The value comes from the barcode or regex match that triggered the current batch boundary." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Script" Classes="help-h3" /><TextBlock Text="Enter a C# expression, e.g. Fields[&quot;Company Name&quot;].Value.ToUpperInvariant() — other fields are read-only to it, and its result becomes this field's value. A later Script field (by position in the field list) can reference an earlier one's already-resolved result. &quot;Run test&quot; works even if scripting is off in Settings, since it's a single-document action you take yourself; real import/export needs &quot;Allow profile scripts&quot; turned on." Classes="help-body" /></StackPanel></Border>
+                            <Border Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Button" Classes="help-h3" /><TextBlock Text="Enter a button label and an imperative script — unlike a Script field's expression, it can write to any field, e.g. filling several fields from one REST call. It only runs when a reviewer clicks it in the review panel. &quot;Run test&quot; here always works; a real reviewer's click needs &quot;Allow profile scripts&quot; turned on in Settings." Classes="help-body" /></StackPanel></Border>
+                        </StackPanel>
+
+                        <TextBlock Text="Profile-level scripts" Classes="help-h2" />
+                        <TextBlock Text="The separate Scripts card below Fields attaches full C# — imperative, with read/write access to every field, an Http client for REST calls, and a Document object (FileName, FileExtension, PageCount, and Text — the document's full extracted OCR/PDF text) — to a named pipeline moment: after this profile's fields are extracted (can mutate the stored values), before an export runs (reshapes only what gets written, never the stored document), or after an export finishes (side effects only, e.g. a webhook; Document.Text is not available at export time). You can add document-level scripts even when the document type has no fields. Define source directly in the card or choose Pop out for a larger editor with C# syntax highlighting and line numbers. &quot;Run test&quot; runs a script against the current sample regardless of the Settings toggle. A script that throws or times out is logged and skipped — it never blocks the document."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Scripting is off by default and runs with full access to this computer — there is no sandboxing. Turn it on in Settings only for profiles you trust. Importing a profile that contains a script always asks first, regardless of that setting." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="AI fields" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="AI field configuration" Classes="help-title" />
+                        <TextBlock Text="AI fields extract structured values from the text of the whole document. They are useful when layouts vary or a value cannot be located reliably with a fixed zone or pattern."
+                                   Classes="help-lead" />
+
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="*,Auto,*,Auto,*">
+                                <Border Grid.Column="0" Classes="diagram-box"><TextBlock Text="OCR / PDF text&#10;all pages" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="1" Text="→" Margin="14,0" VerticalAlignment="Center" />
+                                <Border Grid.Column="2" Classes="diagram-box"><TextBlock Text="All AI fields&#10;one request" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="3" Text="→" Margin="14,0" VerticalAlignment="Center" />
+                                <Border Grid.Column="4" Classes="diagram-box"><TextBlock Text="Values + confidence&#10;normal validation" Classes="diagram-label" /></Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="1. Choose an AI provider" Classes="help-h2" />
+                        <TextBlock Text="Open More › Settings › AI extraction and choose one provider:"
+                                   Classes="help-body" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto">
+                            <Border Grid.Row="0" Grid.Column="0" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="5"><TextBlock Text="OpenAI-compatible (cloud)" Classes="help-h3" /><TextBlock Text="Enter the service endpoint, API key, and model. Document text is sent to that configured service. The default endpoint is compatible with OpenAI's API, and compatible providers may also work." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="0" Grid.Column="1" Classes="help-card" Margin="0,0,0,12"><StackPanel Spacing="5"><TextBlock Text="Local (on this device)" Classes="help-h3" /><TextBlock Text="Downloads a model once and keeps document text on the machine. It is slower and generally less accurate than a capable cloud model, especially on long or ambiguous documents." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="None (disabled)" Classes="help-h3" /><TextBlock Text="Leaves AI-kind fields blank. Capture never silently falls back to another provider." Classes="help-note" /></StackPanel></Border>
+                        </Grid>
+                        <TextBlock Text="The maximum document characters setting truncates longer text before extraction. Raise the cloud limit when important content occurs late in long contracts; lower it to reduce cost and latency. Keep the local limit smaller because local long-context processing is slower."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="2. Add and describe the field" Classes="help-h2" />
+                        <TextBlock Text="In the profile editor choose Add field › AI. Select a Classification to narrow the type list, then choose the closest Field type. A catalog type supplies a name, data format, and built-in meaning—for example Invoice Total means the grand total including tax, not a subtotal."
+                                   Classes="help-body" />
+                        <TextBlock Text="Use Extra instruction only to disambiguate or specialise a catalog type, such as Prefer the bill-to name or Return the total in AUD without the currency symbol. The instruction is added to the catalog meaning; it does not replace it."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Custom AI fields" Classes="help-h2" />
+                        <TextBlock Text="Choose the Custom classification and Custom Field when the catalog has no suitable meaning. Describe exactly what to extract, where it is likely to appear, and what to return when absent. The description is the AI's only semantic instruction for a custom field, so avoid vague prompts such as Get the number."
+                                   Classes="help-body" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Good custom instructions" Classes="help-h3" />
+                                <TextBlock Text="• Extract the container number stamped on the shipping label. Return only the four letters followed by seven digits." Classes="help-body" />
+                                <TextBlock Text="• Return the primary matter number beside Matter ID. Do not return an invoice or customer number." Classes="help-body" />
+                                <TextBlock Text="• Summarise the document's subject in no more than eight words." Classes="help-body" />
+                                <TextBlock Text="For identifiers, dates, and amounts, tell the AI which competing values to exclude. Only ask for a summary, title, or description when an original concise answer is genuinely intended." Classes="help-note" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="3. Test the complete AI field set" Classes="help-h2" />
+                        <TextBlock Text="Choose Extract with AI in the profile editor. Capture sends every AI field on that profile together in one request, using text from all sample pages, then shows each returned value and confidence. This combined request gives the model context and avoids one request per field."
+                                   Classes="help-body" />
+                        <TextBlock Text="Test representative documents, not only the easiest sample. Confirm that the selected Format accepts the returned text. Money and date values are validated using the profile locale, but the AI is asked to retain their document wording rather than silently normalise it. Mandatory and confidence rules work the same as for other field types."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="AI field catalog" Classes="help-h2" />
+                        <TextBlock Text="The catalog groups reusable definitions by classification and stores each type's ID, name, format, and meaning. Settings › AI field catalog opens the JSON file location. Add organisation-specific definitions there, then choose Reload catalog. Keep IDs unique and stable so existing profiles continue to resolve their selected type."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Troubleshooting AI extraction" Classes="help-h2" />
+                        <Border Classes="help-card"><StackPanel Spacing="11">
+                            <TextBlock Text="No values: confirm the provider is configured, the local model is downloaded when selected, and the document has OCR/PDF text." Classes="help-body" />
+                            <TextBlock Text="Wrong value: choose a more specific catalog type or add an instruction naming the intended label and excluding common alternatives." Classes="help-body" />
+                            <TextBlock Text="Value near the end is missed: raise the provider's character limit and retry." Classes="help-body" />
+                            <TextBlock Text="Invalid value: align the field Format and profile locale with the requested output, or instruct the AI to return only the value without commentary." Classes="help-body" />
+                            <TextBlock Text="Low confidence: keep the document in review, improve OCR quality, or use a deterministic zone/pattern when the layout is stable." Classes="help-body" />
+                        </StackPanel></Border>
+                        <Border Classes="help-tip"><TextBlock Text="Cloud privacy: only extracted document text—not page images—is sent to the configured OpenAI-compatible endpoint. Local mode keeps that text on the device. Review your provider's data-handling terms before processing sensitive material." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Batches &amp; separation" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Batches and document separation" Classes="help-title" />
+                        <TextBlock Text="Batch and document boundaries are configured together inside the selected Capture Profile and evaluated against one shared page analysis."
+                                   Classes="help-lead" />
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="*,Auto,*,Auto,*">
+                                <Border Grid.Column="0" Classes="diagram-box"><TextBlock Text="Source file&#10;24 pages" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="1" Text="→" Margin="14,0" VerticalAlignment="Center" />
+                                <Border Grid.Column="2" Classes="diagram-box"><TextBlock Text="Batch rules&#10;create groups" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="3" Text="→" Margin="14,0" VerticalAlignment="Center" />
+                                <Border Grid.Column="4" Classes="diagram-box"><TextBlock Text="Document-type rules&#10;classify and split" Classes="diagram-label" /></Border>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="Batch rules" Classes="help-h2" />
+                        <TextBlock Text="In the Capture Profile designer's Batch section, configure barcode, blank-page, page-count, regex, or OCR-zone rules. Choose whether a trigger page is retained and whether batches continue across inputs, end with each input, or remain open until explicitly closed."
+                                   Classes="help-body" />
+                        <TextBlock Text="Open batches are scoped by Capture Profile and input channel, so manual and watch-folder streams cannot accidentally share a batch. In Table mode, drag documents onto another batch to correct grouping."
+                                   Classes="help-body" />
+                        <TextBlock Text="Document separation" Classes="help-h2" />
+                        <TextBlock Text="Each document type has rules to Identify document type and separate rules to Detect first page of a new document. Identification chooses the type; a first-page match begins another document of that type. A configured fallback type handles retained pages that do not classify."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="A useful pattern is: batch rules separate envelopes or jobs; document-type rules identify and separate the documents inside each job. Batch-level fields such as customer or lodgement number then apply to every document in that batch." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Review &amp; ready" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Reviewing documents" Classes="help-title" />
+                        <TextBlock Text="Review is where extracted values become trusted index data. Capture shows both the value and its location on the document whenever bounds are available."
+                                   Classes="help-lead" />
+                        <TextBlock Text="Review checklist" Classes="help-h2" />
+                        <TextBlock Text="Select each document and inspect highlighted or missing values. Click an index row to locate it on the page, or click its page highlight to select the row. Edit incorrect values directly. Batch indexes appear separately and changes propagate to the other documents in that batch."
+                                   Classes="help-body" />
+                        <TextBlock Text="Confidence and mandatory fields" Classes="help-h2" />
+                        <TextBlock Text="Extractors assign confidence where available. A profile's auto-ready threshold determines when a document can pass without manual correction. Mandatory editable fields must have a value before Mark ready is enabled. Hidden and read-only fields do not block readiness."
+                                   Classes="help-body" />
+                        <TextBlock Text="Mark ready and override" Classes="help-h2" />
+                        <TextBlock Text="Mark ready confirms that indexing is complete and starts any configured post-index work, including redaction detection. If a document cannot be marked ready, check mandatory fields and invalid formats. Use manual override only when you intentionally accept unresolved review issues."
+                                   Classes="help-body" />
+                        <TextBlock Text="Bulk work" Classes="help-h2" />
+                        <TextBlock Text="Switch to Table mode to select multiple documents. You can apply a profile, request ad-hoc redaction, remove rows, or export the Ready documents in the selection. Profile grouping and index columns make outliers easier to spot."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="The original imported file is retained. Review changes update index data, while generated redacted and export files are derived artifacts that can be regenerated." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Redaction" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Redaction" Classes="help-title" />
+                        <TextBlock Text="Capture can detect personal information, turn Sensitive document fields into candidates, and accept rectangles you draw manually. Confirmed regions are burned into an image-only PDF; the original is never changed. Sensitive batch fields are masked metadata rather than page-redaction sources."
+                                   Classes="help-lead" />
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="*,Auto,*,Auto,*">
+                                <StackPanel Grid.Column="0" Spacing="7"><Border Classes="diagram-box"><TextBlock Text="Detected PII" Classes="diagram-label" /></Border><Border Classes="diagram-box"><TextBlock Text="Sensitive fields" Classes="diagram-label" /></Border><Border Classes="diagram-box"><TextBlock Text="Manual regions" Classes="diagram-label" /></Border></StackPanel>
+                                <TextBlock Grid.Column="1" Text="→" Margin="14,0" VerticalAlignment="Center" FontSize="20" />
+                                <Border Grid.Column="2" Classes="diagram-box" VerticalAlignment="Center"><TextBlock Text="Review candidates&#10;include or reject" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="3" Text="→" Margin="14,0" VerticalAlignment="Center" FontSize="20" />
+                                <Border Grid.Column="4" Classes="diagram-box" VerticalAlignment="Center"><TextBlock Text="Image-only&#10;redacted PDF" Classes="diagram-label" /></Border>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="Profile-driven redaction" Classes="help-h2" />
+                        <TextBlock Text="Enable Redaction on a document type, then optionally enable automatic PII detection with Presidio. Choose a redaction set and set minimum and skip-review confidence for detected PII. Detection runs when the document becomes Ready. Matches below the minimum are ignored; matches at or above skip-review are applied automatically. A document field marked Sensitive is always a 100% candidate using that document field's extracted bounds, even when Presidio detection is off or unavailable. Batch fields never contribute coordinates to this process."
+                                   Classes="help-body" />
+                        <TextBlock Text="Redact now" Classes="help-h2" />
+                        <TextBlock Text="Select one or more documents and choose Redact. Pick a redaction set to run detection even when their profiles do not enable redaction. Manage custom sets and their PII types under More › Settings › Redaction sets."
+                                   Classes="help-body" />
+                        <TextBlock Text="Review and add manual areas" Classes="help-h2" />
+                        <TextBlock Text="In Preview mode, red candidates appear in the right panel and as red page regions. Leave the checkbox selected to include a candidate or clear it to reject that region. Select a Presidio-detected region, then drag the box or its handles to correct its position or size. Choose Add manual redaction to draw additional rectangles; manual rectangles can be adjusted the same way and removed with Remove selected manual redaction. Choose Done adding redactions when finished."
+                                   Classes="help-body" />
+                        <TextBlock Text="Apply redactions" Classes="help-h2" />
+                        <TextBlock Text="Apply redactions generates the safe image-only copy. If you change checkboxes or manual regions later, choose Re-apply redactions to regenerate it. Open redacted file lets you inspect the result before export. For Attach file, Redacted — required stops safely when no successfully applied redacted copy exists. Redacted, otherwise original prefers that copy but deliberately attaches the original when it is unavailable."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Always inspect the generated PDF. Detection reduces review effort but can miss unusual layouts or context; manual regions cover anything the automatic detector did not find." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Export" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Exporting" Classes="help-title" />
+                        <TextBlock Text="Export definitions live on document types inside Capture Profiles. A document type may run several enabled destinations for each Ready document."
+                                   Classes="help-lead" />
+                        <TextBlock Text="Configure exports" Classes="help-h2" />
+                        <TextBlock Text="Open the profile editor and add an export. Give it a meaningful name, enable it, select CSV or Therefore, and configure the destination. Export runs all enabled definitions for Ready documents in the selection, or processes every Ready document in the Inbox when nothing is selected."
+                                   Classes="help-body" />
+                        <TextBlock Text="CSV" Classes="help-h2" />
+                        <TextBlock Text="Choose one file per document or append rows to a shared CSV. Select batch and document fields, include or omit the header, and optionally copy the original or redacted document beside the data. One-file mode supports filename tokens including profile fields, original filename, document ID, date, and time."
+                                   Classes="help-body" />
+                        <TextBlock Text="Therefore" Classes="help-h2" />
+                        <TextBlock Text="Configure the shared Therefore server connection once in Settings. In the profile export, choose a category and supply each Therefore field from a batch field, document field, or typed constant value. Scope labels distinguish same-named batch and document fields. Mandatory category fields must be supplied. The file mode determines whether the original or redacted document stream is attached."
+                                   Classes="help-body" />
+                        <TextBlock Text="Safe operation" Classes="help-h2" />
+                        <TextBlock Text="Only Ready documents are exported. A successful export changes the document status to Exported according to the profile's workflow; failures remain visible with an error so you can correct the configuration and retry. Check output permissions and filename tokens if a CSV destination fails."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Test every new export definition with one document before running Export all. For delivery that must never expose an original, open the generated redacted PDF first and choose Redacted — required. Use the fallback option only when sending the original is acceptable." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Scan &amp; automate" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Scanning and automation" Classes="help-title" />
+                        <TextBlock Text="Capture can acquire pages from a scanner or watch folders for newly-arrived files. Both paths feed the same batching, indexing, review, redaction, and export workflow."
+                                   Classes="help-lead" />
+                        <Border Classes="help-card">
+                            <Grid ColumnDefinitions="*,Auto,*,Auto,*">
+                                <Border Grid.Column="0" Classes="diagram-box"><TextBlock Text="Scanner or&#10;watch folder" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="1" Text="→" Margin="14,0" VerticalAlignment="Center" />
+                                <Border Grid.Column="2" Classes="diagram-box"><TextBlock Text="Capture Profile&#10;workflow" Classes="diagram-label" /></Border>
+                                <TextBlock Grid.Column="3" Text="→" Margin="14,0" VerticalAlignment="Center" />
+                                <Border Grid.Column="4" Classes="diagram-box"><TextBlock Text="Inbox for review&#10;or auto-ready" Classes="diagram-label" /></Border>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="Scanning" Classes="help-h2" />
+                        <TextBlock Text="Open Settings › Scanning, refresh the device list, select a scanner, then choose resolution, source, duplex, and grayscale options. 200 DPI is a practical text default; increase it for small print or difficult barcodes at the cost of speed and file size. Select the desired Capture Profile before choosing Scan."
+                                   Classes="help-body" />
+                        <TextBlock Text="OCR requirement" Classes="help-h2" />
+                        <TextBlock Text="Scanned images and image-only PDFs need Tesseract OCR to produce searchable text for zones, patterns, and PII detection. A packaged copy of Capture bundles Tesseract, so this works with no separate install on a standard installation. If imported text documents work but scans do not extract values, confirm the installation is a supported build for your platform — only a build run from source without the bundled package, or one where that package is missing, needs a system Tesseract install on PATH instead."
+                                   Classes="help-body" />
+                        <TextBlock Text="Watch folders" Classes="help-h2" />
+                        <TextBlock Text="In Settings, add a folder, enable it, and choose the Capture Profile that every arriving file should use. Settle seconds controls how long Capture waits for a file to stop changing before import—raise it for large files copied over a network. Each watched folder is independent."
+                                   Classes="help-body" />
+                        <TextBlock Text="Unattended processing" Classes="help-h2" />
+                        <TextBlock Text="For reliable automation, test separation rules, make field extraction robust across layouts, choose an appropriate auto-ready threshold, and decide whether redaction should await review or bypass it at high confidence. Keep the app running while watch folders are enabled."
+                                   Classes="help-body" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Settings &amp; troubleshooting" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Text="Settings and troubleshooting" Classes="help-title" />
+                        <TextBlock Text="Settings controls startup appearance, automation, external services, redaction sets, scanner defaults, the AI field catalog, and diagnostic logging."
+                                   Classes="help-lead" />
+                        <TextBlock Text="Important settings" Classes="help-h2" />
+                        <TextBlock Text="Startup chooses Preview or Table mode, the application theme, and whether the inbox shows newest or oldest batches first. The inbox order applies consistently to Preview and Table. Each watch folder selects its own Capture Profile; manual import and scanning use the toolbar selection. &quot;Check for updates on startup&quot; (off by default) asks GitHub once per launch whether a newer release exists and shows a dismissible notice if so — it only sends a version number. A &quot;Check for updates&quot; button in Help &gt; About works on demand regardless of that setting. &quot;Allow profile scripts&quot; (off by default) turns on the C# scripts described under Field configuration. AI extraction selects a cloud, local, or disabled provider and configures its model and document-text limit. Therefore configuration is shared by all Therefore exports. Redaction sets group the PII types offered in profiles and Redact now. Settings can be exported for backup and imported on another installation — by default your AI API key and Therefore password/bearer token are replaced with a placeholder rather than included; tick &quot;Include credentials&quot; (and confirm) only when you actually want them in the file. Storage has automatic and on-demand cleanup controls for exported documents."
+                                   Classes="help-body" />
+                        <TextBlock Text="AI field catalog" Classes="help-h2" />
+                        <TextBlock Text="The catalog is a JSON file containing reusable AI field types such as invoice number or supplier name. Open its folder from Settings, edit or extend the file carefully, then Reload catalog. Custom AI prompts on a profile can be used when a value does not warrant a catalog entry."
+                                   Classes="help-body" />
+                        <TextBlock Text="Where Capture stores your data" Classes="help-h2" />
+                        <TextBlock Text="Everything this Capture V2 version keeps — every document you've imported, your Capture Profiles, and your settings — lives in one folder in your user account, separate from the previous application version: on a Mac, that's ~/Library/Application Support/CaptureV2; on Windows, it's the CaptureV2 folder inside your user's AppData\Local folder."
+                                   TextWrapping="Wrap"
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Uninstalling Capture — dragging it to the Trash on a Mac, or using Windows' uninstaller — only removes the app itself. It does not touch that data folder, on either platform, so your imported documents, profiles, and settings are all still there afterward. If you want a completely clean removal, delete that folder yourself after uninstalling. Use Storage's automatic or on-demand cleanup above first if you just want to trim already-exported documents rather than remove everything." Classes="help-note" /></Border>
+                        <TextBlock Text="One difference between the two: on a Mac (or Linux), your AI API key and Therefore password/bearer token are handed off to the operating system's own secure credential storage (macOS Keychain / Linux Secret Service) rather than kept in that folder, so deleting the folder alone doesn't remove them — you'd also need to remove the matching &quot;Capture&quot; entries from Keychain Access (or your Secret Service tool) separately. On Windows, those credentials are stored encrypted inside the folder itself, so deleting it removes them too."
+                                   TextWrapping="Wrap"
+                                   Classes="help-body" />
+                        <TextBlock Text="Common problems" Classes="help-h2" />
+                        <Border Classes="help-card"><StackPanel Spacing="12">
+                            <StackPanel Spacing="3"><TextBlock Text="No text or extracted values from scans" Classes="help-h3" /><TextBlock Text="Tesseract ships bundled, so this is rarely a missing-install problem. Re-import and check that the sample and production layouts align with fixed zones; if it's a build without the bundled package, install Tesseract OCR and ensure it is on PATH." Classes="help-note" /></StackPanel>
+                            <Separator />
+                            <StackPanel Spacing="3"><TextBlock Text="Redact finds no PII" Classes="help-h3" /><TextBlock Text="Check the chosen redaction set, confidence threshold, document language/text, and that the bundled Presidio sidecar started (it ships with Capture and starts automatically; a very slow first launch while the OS verifies it is normal). Sensitive document fields and manual rectangles do not depend on PII detection; sensitive batch fields are masked metadata and are not page-redaction candidates." Classes="help-note" /></StackPanel>
+                            <Separator />
+                            <StackPanel Spacing="3"><TextBlock Text="Mark ready is disabled" Classes="help-h3" /><TextBlock Text="Populate every mandatory editable field and correct invalid formatted values. Hidden and read-only fields are excluded from the check." Classes="help-note" /></StackPanel>
+                            <Separator />
+                            <StackPanel Spacing="3"><TextBlock Text="Export does nothing or fails" Classes="help-h3" /><TextBlock Text="Confirm the document is Ready, the profile has an enabled export, the destination is writable, and required Therefore mappings are complete." Classes="help-note" /></StackPanel>
+                            <Separator />
+                            <StackPanel Spacing="3"><TextBlock Text="Watch folder does not import" Classes="help-h3" /><TextBlock Text="Confirm it is enabled, the path exists, the file format is supported, and the file has remained unchanged for the configured settle time." Classes="help-note" /></StackPanel>
+                        </StackPanel></Border>
+                        <TextBlock Text="Diagnostic logging" Classes="help-h2" />
+                        <TextBlock Text="Enable detailed activity logging in Settings when investigating imports, exports, watch folders, or errors. Reproduce the issue, use Open folder to locate the log, then disable continuous logging when it is no longer needed. Error messages also appear in the status bar and on affected documents."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="When asking for support, include the Capture version from More › About Capture, your operating system, the exact action that failed, and the relevant diagnostic log. Remove or mask sensitive document data before sharing files." Classes="help-note" /></Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="ScriptingTab" Header="Scripting" Classes="help-nav">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,26,38,38" Spacing="18" MaxWidth="860" HorizontalAlignment="Left">
+                        <TextBlock Text="Scripting" Classes="help-title" />
+                        <TextBlock Text="Real C#, compiled and run with Roslyn, for logic a Text/Lookup default or a Script field's own expression can't express — branching, string manipulation, and REST calls against external systems."
+                                   Classes="help-lead" />
+                        <Border Classes="help-tip"><TextBlock Text="Off by default (Settings &gt; Allow profile scripts) — a script runs with the full trust of this computer, there is no sandboxing. A field editor's individual &quot;Run test&quot; works regardless because it is an explicit single-script action. Capture Profile › Test Capture runs index extraction and enabled scripts, but does not persist, redact, or export anything. Importing settings that carry scripts always asks first." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Four shapes" Classes="help-h2" />
+                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+                            <Border Grid.Column="0" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Profile-level scripts" Classes="help-h3" /><TextBlock Text="Separate Scripts card below Fields. Free-form, multiple statements, full read/write access to every field. It does not require a field. Runs at a chosen moment: after fields are populated, before export, or after export." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Column="1" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Script field kind" Classes="help-h3" /><TextBlock Text="A single expression on one field. Read-only over every other field and the document; the expression's result becomes this field's value. Can reference an earlier Script field's already-resolved result." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Column="2" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Button field kind" Classes="help-h3" /><TextBlock Text="Renders as a button in the review panel instead of a value control. Like a profile-level script — imperative, full read/write over every field — but only runs when someone clicks it, not automatically." Classes="help-note" /></StackPanel></Border>
+                            <Border Grid.Column="3" Classes="help-card"><StackPanel Spacing="5"><TextBlock Text="Post-process script" Classes="help-h3" /><TextBlock Text="Field properties panel, below any field's own configuration (every kind except Script and Button). A single expression, same read-only shape as a Script field, but it runs after that field's own value is already extracted or captured — for example, to remove a prefix from a batch separator value or clean up stray OCR noise." Classes="help-note" /></StackPanel></Border>
+                        </Grid>
+
+                        <Border Classes="help-tip"><TextBlock Text="Shared functions (Scripts section, above the script list) are C# available to all four shapes above on this profile — write a helper once there instead of pasting it into every script/expression that needs it. Declare functions only; the box itself isn't run." Classes="help-note" /></Border>
+
+                        <TextBlock Text="Run order" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="1. Each field's own extraction (zone OCR, key/value, regex, barcode) &#8594; 2. AI fields &#8594; 3. Script fields, in field-list order &#8594; 4. Profile-level AfterFieldsPopulated scripts &#8594; 5. Text/Lookup default templates, and preserving any manually-edited field &#8594; 6. Post-process scripts, in field-list order."
+                                           TextWrapping="Wrap"
+                                           Classes="help-body" />
+                                <TextBlock Text="Post-process runs dead last, on purpose, so it always sees a field's true final value — but that cuts both ways: nothing earlier in this list (a Script field, a profile-level script, another field's default template) ever sees a Post-process result, since those have all already run by the time it fires. A Script field's result, by contrast, is visible to everything after it — later Script fields, profile-level scripts, and Post-process scripts alike. If a computed value needs to feed other fields or scripts in the same pass, it needs to be a Script field, not a Post-process script."
+                                           TextWrapping="Wrap"
+                                           Classes="help-note" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="What a script can see" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="10">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Fields" Classes="help-h3" />
+                                    <TextBlock Text="Fields[&quot;Name&quot;] gets one field in the current script scope by name (case-insensitive), or loop over Fields directly. The collection is Fields (plural); Field[&quot;Name&quot;] is not valid. Each has .Value, .Confidence, and .IsManual. Profile-level scripts can set .Value/.Confidence; a Script field's own expression only reads — see IsManual below."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Value (Script fields and Post-process scripts only)" Classes="help-h3" />
+                                    <TextBlock Text="Shorthand for this field's own pre-evaluation value — the same as Fields[&quot;this field's own name&quot;].Value, without needing to spell out (and keep in sync with) the field's own name. Not available to profile-level or Button field scripts, which write with Fields[...] = ... instead of reading Value."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Document" Classes="help-h3" />
+                                    <TextBlock Text="Document.FileName, Document.FileExtension (e.g. &quot;.pdf&quot;), Document.PageCount, and Document.Text — the same full OCR/PDF text extraction sent to AI fields. Document.Text is empty for a BeforeExport/AfterExport script (no page text available at export time)."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Http" Classes="help-h3" />
+                                    <TextBlock Text="A ready-to-use HttpClient — await Http.GetStringAsync(url) etc. work directly, no setup needed. One shared client per app, not a new connection per script run."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Log" Classes="help-h3" />
+                                    <TextBlock Text="Log.Info(...) / Log.Warn(...) / Log.Error(...) write to the same debug log Settings &gt; diagnostic logging captures — useful for troubleshooting a script running during real import, where errors are logged rather than shown."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="ProfileName, DocumentNumber, BatchNumber, Timestamp, CancellationToken" Classes="help-h3" />
+                                    <TextBlock Text="The same document/batch context a Text field's default value template can reference."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="SetConfidence(0–100)" Classes="help-h3" />
+                                    <TextBlock Text="Available in a Script field expression or post-process expression. It sets only that field's resulting confidence; other fields remain read-only. If omitted, Script fields default to 100% and post-processing preserves the extracted confidence."
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Context (unified Capture Profiles)" Classes="help-h3" />
+                                    <TextBlock Text="In a batch-level script, Fields is the batch field collection. During document processing, read a batch field with Context.Batch.Fields[&quot;BatchFieldName&quot;].Value; Fields refers to document fields. Context.Document.Number, Context.Document.Type, Context.Document.Fields, and Context.Document.Text expose document scope. Context.Trigger.Matches retains each matching rule ID, captured value, and confidence even when the trigger page was consumed. BeforeExport and AfterExport scripts receive the combined export snapshot through Fields."
+                                               Classes="help-note" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="IsManual is informational, not enforced by the script itself — a script's write to a field the indexer already edited manually is silently reverted afterward regardless, so checking it just avoids pointless work."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Available namespaces" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="System, System.Linq, System.Text, System.Text.Json, System.Text.RegularExpressions, System.Net.Http, and System.Threading.Tasks are already imported — no using statement needed for anything in those, e.g. Regex.Replace(...), Enumerable.Select/Where(...), JsonDocument/JsonSerializer, or async/await itself."
+                                           TextWrapping="Wrap"
+                                           Classes="help-body" />
+                                <TextBlock Text="You can add your own using statement at the top of a script/expression for anything else — but only for a namespace from an assembly Capture already loads into the script (the ones above, plus whatever mscorlib/System.Private.CoreLib provides). A using for a namespace from an assembly that isn't referenced won't resolve; that needs a Capture code change, not just a using line."
+                                           TextWrapping="Wrap"
+                                           Classes="help-note" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Examples" Classes="help-h2" />
+
+                        <TextBlock Text="Fill a blank field, combine two fields" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="if (Fields[&quot;Country&quot;].Value == &quot;&quot;)&#10;    Fields[&quot;Country&quot;].Value = &quot;Unknown&quot;;&#10;&#10;Fields[&quot;Full Name&quot;].Value = Fields[&quot;First Name&quot;].Value + &quot; &quot; + Fields[&quot;Last Name&quot;].Value;" /></Border>
+
+                        <TextBlock Text="React to the document itself" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="if (Document.Text.Contains(&quot;URGENT&quot;, StringComparison.OrdinalIgnoreCase))&#10;    Fields[&quot;Priority&quot;].Value = &quot;High&quot;;&#10;&#10;Log.Info($&quot;Processed a {Document.PageCount}-page {Document.FileExtension} document&quot;);" /></Border>
+
+                        <TextBlock Text="Look up a value with a REST call" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="var customerId = Fields[&quot;Customer Id&quot;].Value;&#10;var json = await Http.GetStringAsync($&quot;https://api.example.com/customers/{customerId}&quot;);&#10;using var doc = JsonDocument.Parse(json);&#10;Fields[&quot;Customer Name&quot;].Value = doc.RootElement.GetProperty(&quot;name&quot;).GetString() ?? &quot;&quot;;" /></Border>
+                        <TextBlock Text="A failed or slow request just fails this script — see the timeout note below — it never crashes the import."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Use unified batch and trigger context" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="// In a batch-level script:&#10;var batchValue = Fields[&quot;BatchFieldName&quot;].Value;&#10;&#10;// In a document-level import script or field expression:&#10;var inheritedValue = Context.Batch.Fields[&quot;BatchFieldName&quot;].Value;&#10;&#10;// Optional batch field: use the fallback when it is missing or blank.&#10;var category = Context.Batch is { } batch&#10;    &amp;&amp; batch.Fields.TryGet(&quot;Category Type&quot;, out var field)&#10;    &amp;&amp; !string.IsNullOrWhiteSpace(field.Value)&#10;        ? field.Value&#10;        : &quot;General&quot;;&#10;&#10;var captured = Context.Trigger.Matches.FirstOrDefault()?.CapturedValue ?? &quot;&quot;;" /></Border>
+
+                        <TextBlock Text="A Script field's expression (result becomes the field's value)" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="Fields[&quot;Company Name&quot;].Value.ToUpperInvariant()" /></Border>
+                        <TextBlock Text="A field expression is read-only over Fields and Document — it can't write to another field, only return this field's own value. That restriction is enforced by the type the expression runs against, not just documentation."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="A post-process script cleaning up a Zonal field's OCR text" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="SetConfidence(100);&#10;Value.Replace(&quot; . &quot;, &quot; &quot;).Trim()" /></Border>
+                        <TextBlock Text="Runs after this field's own extraction (zone OCR, key/value, regex, barcode, AI — whatever the field's Kind produces). Value is this field's own pre-cleanup result. Useful when a scan's OCR introduces noise (stray punctuation, doubled whitespace) that the extraction step itself has no way to filter out."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="A batch separator field's own post-process expression" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="Value.Replace(&quot;Student|&quot;, &quot;&quot;)" /></Border>
+                        <TextBlock Text="Use Value for the field currently being post-processed. It is shorter and safer than repeating the field name as Fields[&quot;BatchFieldName&quot;].Value. The expression's returned text replaces the captured separator value."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="A Button field that looks up and fills several fields" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="var customerId = Fields[&quot;Customer Id&quot;].Value;&#10;var json = await Http.GetStringAsync($&quot;https://api.example.com/customers/{customerId}&quot;);&#10;using var doc = JsonDocument.Parse(json);&#10;var root = doc.RootElement;&#10;Fields[&quot;Customer Name&quot;].Value = root.GetProperty(&quot;name&quot;).GetString() ?? &quot;&quot;;&#10;Fields[&quot;Customer Country&quot;].Value = root.GetProperty(&quot;country&quot;).GetString() ?? &quot;&quot;;&#10;Fields[&quot;Lookup customer&quot;].Value = $&quot;Found: {root.GetProperty(&quot;name&quot;).GetString()}&quot;;" /></Border>
+                        <TextBlock Text="Unlike a Script field's expression, a Button field's script is imperative and can write to any field — here it fills two others from one REST call, plus a status note on the button's own field, shown under the button after it runs. It only runs when someone clicks it, and (unlike Run test) needs &quot;Allow profile scripts&quot; turned on for a real reviewer to click it."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Writing a helper function" Classes="help-h3" />
+                        <Border Classes="help-code"><TextBlock Classes="help-code" Text="string Combine(string first, string last) =&gt; $&quot;{last}, {first}&quot;;&#10;Fields[&quot;Full Name&quot;].Value = Combine(Fields[&quot;First Name&quot;].Value, Fields[&quot;Last Name&quot;].Value);" /></Border>
+                        <TextBlock Text="A script is compiled as an ordinary C# class body, so it can declare its own local functions (or full methods) anywhere in the script text and call them from later statements in that same script — no special syntax needed. A function declared this way in one script isn't visible to another; each script/expression compiles on its own. To share a helper across several scripts on the same profile, put it in Shared functions instead (Scripts section, above the script list) — it compiles ahead of every profile-level script, Script field expression, and Button field script on that profile, so it only needs to be written once."
+                                   TextWrapping="Wrap"
+                                   Classes="help-note" />
+
+                        <TextBlock Text="Editing" Classes="help-h2" />
+                        <TextBlock Text="Every script/expression box has a &quot;Pop out&quot; button that opens it in a larger, resizable window with C# syntax highlighting and line numbers — useful once a script grows past a few lines. Save there to write the edited text back; Cancel discards it."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Reliability" Classes="help-h2" />
+                        <TextBlock Text="Each script has its own timeout (default 10 seconds, adjustable per profile-level script). .NET's cancellation is cooperative — an await-heavy script like the REST example above stops cleanly on timeout, but a tight loop with no await inside it can't be preempted. A throwing or timed-out script is logged and skipped; it never blocks the document. Compiled scripts are cached, so a batch import doesn't recompile per document."
+                                   Classes="help-body" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

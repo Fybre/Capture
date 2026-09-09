@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        x:Class="Capture.App.Views.CaptureProfilesWindow"
+        x:DataType="vm:CaptureProfilesViewModel"
+        Title="Capture Profiles" Width="620" Height="480" MinWidth="480" MinHeight="340"
+        WindowStartupLocation="CenterOwner">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <TextBlock Text="Capture Profiles" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,14"/>
+    <ListBox Grid.Row="1"
+             ItemsSource="{Binding Profiles}"
+             SelectedItem="{Binding SelectedProfile}"
+             DoubleTapped="OnProfileDoubleTapped">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <Grid ColumnDefinitions="*,Auto,Auto" Margin="8" ColumnSpacing="8">
+            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="1" Text="Disabled" Classes="hint" IsVisible="{Binding !Enabled}"/>
+            <TextBlock Grid.Column="2" Text="{Binding DocumentTypes.Count, StringFormat={}{0} document types}" Classes="hint"/>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,14,0,0">
+      <Button Content="New" Command="{Binding NewCommand}"/>
+      <Button Grid.Column="1" Content="Edit" Command="{Binding EditCommand}"/>
+      <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteCommand}" Classes="ghost"/>
+      <Button Grid.Column="3"
+              Content="Close"
+              HorizontalAlignment="Right"
+              IsCancel="True"
+              Click="OnCloseClick"/>
+    </Grid>
+  </Grid>
+</Window>

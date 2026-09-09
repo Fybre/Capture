@@ -1,0 +1,498 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        xmlns:captureProfiles="using:Capture.Core.CaptureProfiles"
+        xmlns:redaction="using:Capture.Core.Redaction"
+        xmlns:scanner="using:Capture.Scanner"
+        xmlns:watch="using:Capture.Core.Watch"
+        xmlns:store="using:Capture.Core.Store"
+        xmlns:conv="using:Capture.App.Converters"
+        x:Class="Capture.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="640"
+        Height="680"
+        MinWidth="560"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+        <TextBlock Grid.Row="0"
+                   Text="Settings"
+                   FontSize="17"
+                   FontWeight="SemiBold"
+                    Margin="24,18,24,4" />
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
+
+                <Border Grid.Row="0" Classes="card" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Startup" Classes="section-title" />
+                        <TextBlock Text="Start view" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding StartViewOptions}"
+                                  SelectedItem="{Binding StartView}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="Preview opens straight to a document; Table opens a spreadsheet-style summary of the whole inbox."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Theme" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                  SelectedItem="{Binding Theme}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="System follows your OS's light/dark setting."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Inbox order" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding InboxOrderOptions}"
+                                  SelectedItem="{Binding InboxOrder}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="watch:InboxOrder">
+                                    <TextBlock Text="{Binding Converter={x:Static conv:InboxOrderDisplayConverter.Instance}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Sets the default batch order in both Preview and Table views. Documents within each batch use the same direction."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="When an imported file matches one already imported" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding DuplicateImportBehaviorOptions}"
+                                  SelectedItem="{Binding DuplicateImportBehavior}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="store:DuplicateImportBehavior">
+                                    <TextBlock Text="{Binding Converter={x:Static conv:DuplicateImportBehaviorDisplayConverter.Instance}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="A match is based on the file's exact content, not its name — checked at import time against every currently-active (non-trashed) document. &quot;Skip&quot; doesn't import the file at all. &quot;Import and flag for review&quot; imports it normally, but every matching document shows a small &quot;Duplicate&quot; indicator until one of them is removed."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}" />
+                        <TextBlock Text="Checks GitHub for a newer release each time Capture starts. Only a version number is requested — no document or usage data is sent."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <CheckBox Content="Allow profile scripts" IsChecked="{Binding AllowFieldScripts}" Margin="0,8,0,0" />
+                        <TextBlock Text="Lets Capture Profiles run C# scripts (Scripts tab in the profile designer, or a field's Script kind) after fields are extracted or around export. Off by default: a script runs with full access to this computer, same as any program you'd run yourself — there is no sandboxing. &quot;Run test&quot; in the profile designer always works, since that's a single-document action you take yourself."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Watch folders" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="Add folder"
+                                    Command="{Binding AddWatchFolderCommand}"
+                                    Classes="ghost"
+                                    DockPanel.Dock="Right"
+                                    FontSize="12.5"
+                                    Padding="9,5" />
+                        </DockPanel>
+                        <TextBlock Text="Each folder is watched independently and imported with its own profile."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="No folders configured yet — add one to enable auto-import."
+                                   TextWrapping="Wrap"
+                                   Classes="hint"
+                                   IsVisible="{Binding !HasWatchFolders}" />
+
+                        <ItemsControl ItemsSource="{Binding WatchFolders}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:WatchFolderEntryViewModel">
+                                    <Border Background="{DynamicResource Surface2Brush}"
+                                            CornerRadius="8"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
+                                                <Button Grid.Column="2"
+                                                        Content="Remove"
+                                                        Command="{Binding RemoveCommand}"
+                                                        Classes="ghost"
+                                                        Foreground="{DynamicResource CriticalBrush}"
+                                                        FontSize="12"
+                                                        Padding="8,4" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBox Text="{Binding Folder}" Watermark="Folder to watch" />
+                                                <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseCommand}" Margin="8,0,0,0" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="Capture profile" Classes="field-label" />
+                                                    <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).CaptureProfiles}"
+                                                              SelectedItem="{Binding SelectedCaptureProfile}"
+                                                              PlaceholderText="None"
+                                                              HorizontalAlignment="Stretch">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="captureProfiles:CaptureProfile">
+                                                                <TextBlock Text="{Binding Name}" />
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+                                                    <TextBlock Text="Settle sec" Classes="field-label" />
+                                                    <NumericUpDown Value="{Binding SettleSeconds}" Minimum="1" Maximum="60" HorizontalAlignment="Stretch" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="AI extraction" Classes="section-title" />
+                        <TextBlock Text="Provider" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding AiProviderOptions}"
+                                  SelectedItem="{Binding AiProvider}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="watch:AiProvider">
+                                    <TextBlock Text="{Binding Converter={x:Static conv:AiProviderDisplayConverter.Instance}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Local runs entirely on this machine — no document text is sent anywhere. It needs a one-time model download and is slower and less accurate than the cloud provider."
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding IsAiLocal}"
+                                   Classes="hint" />
+                        <TextBlock Text="AI extraction is disabled. AI-kind fields on every profile will be left blank."
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding IsAiNone}"
+                                   Classes="hint" />
+
+                        <StackPanel Spacing="10" IsVisible="{Binding IsAiOpenAiCompatible}">
+                            <TextBlock Text="Endpoint" Classes="field-label" />
+                            <TextBox Text="{Binding AiEndpoint}" Watermark="https://api.openai.com/v1" />
+                            <TextBlock Text="API key" Classes="field-label" />
+                            <TextBox Text="{Binding AiApiKey}" PasswordChar="•" />
+                            <TextBlock Text="Model" Classes="field-label" />
+                            <TextBox Text="{Binding AiModel}" Watermark="gpt-4o-mini" />
+                            <TextBlock Text="Max document characters sent to AI" Classes="field-label" />
+                            <NumericUpDown Value="{Binding AiMaxDocumentChars}"
+                                           Minimum="1000"
+                                           Maximum="1000000"
+                                           Increment="1000"
+                                           FormatString="0"
+                                           HorizontalAlignment="Stretch" />
+                            <TextBlock Text="Longer documents are truncated to this length before being sent — raise it for long contracts, lower it to cut cost/latency."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="10" IsVisible="{Binding IsAiLocal}">
+                            <TextBlock Text="Model" Classes="field-label" />
+                            <TextBlock Text="{Binding LocalAiModelFileName}" Classes="mono field-label" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding LocalAiModelStatus}" />
+                            <ProgressBar Value="{Binding LocalAiDownloadProgress}"
+                                         Minimum="0" Maximum="1"
+                                         IsVisible="{Binding IsDownloadingLocalAiModel}"
+                                         Height="6" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Download model"
+                                        Command="{Binding DownloadLocalAiModelCommand}"
+                                        IsEnabled="{Binding !IsDownloadingLocalAiModel}" />
+                                <Button Content="Open folder" Command="{Binding OpenLocalAiModelFolderCommand}" />
+                            </StackPanel>
+                            <TextBlock Text="Max document characters sent to the local model" Classes="field-label" />
+                            <NumericUpDown Value="{Binding LocalAiMaxDocumentChars}"
+                                           Minimum="1000"
+                                           Maximum="80000"
+                                           Increment="1000"
+                                           FormatString="0"
+                                           HorizontalAlignment="Stretch" />
+                            <TextBlock Text="Kept smaller than the cloud limit — long-context inference on CPU is slow, and small local models are weaker over very long documents anyway."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="3" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Therefore" Classes="section-title" />
+                        <TextBlock Text="Server" Classes="field-label" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding ThereforeConnectionDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1" Content="Configure…" Click="OnConfigureThereforeClick" Margin="6,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="Shared by every Therefore export across all profiles — configured once here."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="4" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Redaction sets" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="New set"
+                                    Command="{Binding NewRedactionSetCommand}"
+                                    Classes="ghost"
+                                    DockPanel.Dock="Right"
+                                    FontSize="12.5"
+                                    Padding="9,5" />
+                        </DockPanel>
+                        <TextBlock Text="A redaction set is a named list of PII types. Profiles and the ad-hoc Redact button pick from these instead of a raw checklist of every type."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+
+                        <ItemsControl ItemsSource="{Binding RedactionSets}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RedactionEntitySetRow">
+                                    <Border Background="{DynamicResource Surface2Brush}"
+                                            CornerRadius="8"
+                                            Padding="10"
+                                            Margin="0,0,0,8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                                                    <TextBlock Text="Built-in"
+                                                               Classes="hint"
+                                                               FontSize="10.5"
+                                                               VerticalAlignment="Center"
+                                                               IsVisible="{Binding IsBuiltIn}" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding EntitiesSummary}"
+                                                           Classes="hint"
+                                                           TextWrapping="Wrap"
+                                                           FontSize="11" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1"
+                                                        Orientation="Horizontal"
+                                                        Spacing="6"
+                                                        IsVisible="{Binding IsCustom}">
+                                                <Button Content="Edit"
+                                                        Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).EditRedactionSetCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        Classes="ghost"
+                                                        FontSize="12"
+                                                        Padding="8,4" />
+                                                <Button Content="Delete"
+                                                        Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteRedactionSetCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        Classes="ghost"
+                                                        Foreground="{DynamicResource CriticalBrush}"
+                                                        FontSize="12"
+                                                        Padding="8,4" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border IsVisible="{Binding IsEditingRedactionSet}"
+                                Background="{DynamicResource Surface3Brush}"
+                                BorderBrush="{DynamicResource BorderBrush1}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Name" Classes="field-label" />
+                                <TextBox Text="{Binding RedactionSetName}" Watermark="e.g. Core + NZ" />
+
+                                <ItemsControl ItemsSource="{Binding RedactionSetGroups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:RedactionEntityGroupRow">
+                                            <StackPanel Spacing="4" Margin="0,8,0,0">
+                                                <DockPanel LastChildFill="False">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Classes="field-label"
+                                                               DockPanel.Dock="Left"
+                                                               VerticalAlignment="Center" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="4" DockPanel.Dock="Right">
+                                                        <Button Content="All"
+                                                                Command="{Binding SelectAllCommand}"
+                                                                Classes="ghost"
+                                                                FontSize="11"
+                                                                Padding="6,2" />
+                                                        <Button Content="None"
+                                                                Command="{Binding SelectNoneCommand}"
+                                                                Classes="ghost"
+                                                                FontSize="11"
+                                                                Padding="6,2" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                                <ItemsControl ItemsSource="{Binding Entities}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:RedactionEntityRow">
+                                                            <CheckBox Content="{Binding DisplayName}"
+                                                                      IsChecked="{Binding IsSelected}"
+                                                                      Margin="0,0,16,4" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                    <Button Content="Save set" Command="{Binding SaveRedactionSetCommand}" />
+                                    <Button Content="Cancel" Classes="ghost" Command="{Binding CancelRedactionSetEditCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="5"
+                        Classes="card"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,14,0,0"
+                        IsVisible="{Binding IsScanningAvailable}">
+                    <StackPanel Spacing="10">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Scanning" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="Refresh"
+                                    Command="{Binding RefreshScanDevicesCommand}"
+                                    Classes="ghost"
+                                    DockPanel.Dock="Right"
+                                    FontSize="12.5"
+                                    Padding="9,5" />
+                        </DockPanel>
+                        <TextBlock Text="Scanner" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ScanDevices}"
+                                  SelectedItem="{Binding SelectedScanDevice}"
+                                  PlaceholderText="No scanner detected"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="scanner:ScanDevice">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Resolution (DPI)" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ScanDpiOptions}"
+                                  SelectedItem="{Binding ScanDpi}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="Higher DPI captures more detail but scans slower and produces a larger file — 200 is a good default for text documents."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="Source" Classes="field-label" />
+                        <ComboBox ItemsSource="{Binding ScanSourceOptions}"
+                                  SelectedItem="{Binding SelectedScanSource}"
+                                  HorizontalAlignment="Stretch" />
+                        <CheckBox Content="Scan both sides (duplex)"
+                                  IsChecked="{Binding ScanDuplex}"
+                                  IsEnabled="{Binding CanScanDuplex}" />
+                        <CheckBox Content="Scan in grayscale"
+                                  IsChecked="{Binding ScanGrayscale}"
+                                  IsEnabled="{Binding CanScanGrayscale}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="6" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="AI field catalog" Classes="section-title" />
+                        <TextBlock Text="The list of AI field types (Invoice No, Supplier Name, etc.) is a JSON file you can edit directly to add your own."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="{Binding AiFieldCatalogPath}"
+                                   Classes="mono field-label"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Open folder" Command="{Binding OpenCatalogFolderCommand}" />
+                            <Button Content="Reload catalog" Command="{Binding ReloadCatalogCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="7" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Storage" Classes="section-title" />
+                        <TextBlock Text="Capture keeps a full copy of every document you import — the original file plus everything generated for it — until you remove it, even after it's been exported. Over time that can add up to a lot of disk space."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <CheckBox Content="Automatically delete exported documents older than" IsChecked="{Binding AutoDeleteExportedDocuments}" />
+                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="24,0,0,0">
+                            <NumericUpDown Grid.Column="0" Value="{Binding CleanupOlderThanDays}" Minimum="1" Maximum="3650" Width="120" />
+                            <TextBlock Grid.Column="1" Text="day(s)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="Checked at startup and whenever Settings is saved. Only ever considers documents that have already been exported — anything still needing review, or not yet exported, is never touched regardless of age. Moves matching documents to Trash rather than deleting them outright — see below."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                        <Button Content="Clean up now" Command="{Binding CleanUpOldDocumentsCommand}" HorizontalAlignment="Left" />
+                        <TextBlock Text="Immediately moves every already-exported document to Trash, regardless of age — not limited by the day count above. Asks for confirmation and shows how many documents matched before doing anything."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                        <CheckBox Content="Remove documents from the inbox immediately after a successful export" IsChecked="{Binding RemoveDocumentsAfterExport}" />
+                        <TextBlock Text="Applies to every export, workspace-wide. When on, a document is moved to Trash the moment every enabled export for it succeeds, instead of being marked Exported and kept in the list."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <Border Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,4" />
+                        <TextBlock Text="Trash retention" Classes="field-label" />
+                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                            <NumericUpDown Grid.Column="0" Value="{Binding TrashRetentionDays}" Minimum="1" Maximum="3650" Width="120" />
+                            <TextBlock Grid.Column="1" Text="day(s)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="A document in Trash (Table mode) can be restored any time before this many days pass, after which it's permanently deleted the next time Capture checks (startup, or Settings save)."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="8" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Debug logging" Classes="section-title" />
+                        <CheckBox Content="Write a detailed activity log to disk" IsChecked="{Binding DebugMode}" />
+                        <TextBlock Text="Records imports, exports, watch-folder activity, and errors — useful when troubleshooting, but left off by default since it writes continuously."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="{Binding DebugLogPath}"
+                                   Classes="mono field-label"
+                                   TextWrapping="Wrap" />
+                        <Button Content="Open folder" Command="{Binding OpenDebugLogFolderCommand}" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Grid.Row="9"
+                           Text="{Binding StatusText}"
+                           Foreground="{DynamicResource InkSoftBrush}"
+                           Classes.critical="{Binding StatusIsError}"
+                           TextWrapping="Wrap"
+                           Margin="0,10,0,0"
+                           IsVisible="{Binding HasStatusText}" />
+            </Grid>
+        </ScrollViewer>
+
+        <Border Grid.Row="2"
+                 Padding="24,14"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                Background="{DynamicResource Surface2Brush}">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8">
+                    <Button Content="Import settings…" Command="{Binding ImportSettingsCommand}" />
+                    <Button Content="Export settings…" Command="{Binding ExportSettingsCommand}" />
+                    <CheckBox Content="Include credentials"
+                              IsChecked="{Binding IncludeCredentialsInExport}"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="Off by default: an export replaces your AI API key and Therefore password/bearer token with a placeholder, so a routine backup or config share doesn't leak them. Turn this on (and confirm) only when you actually want those credentials in the exported file, e.g. your own encrypted backup." />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

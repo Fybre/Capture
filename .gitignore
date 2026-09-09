@@ -1,0 +1,25 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+.DS_Store
+.claude/*.lock
+
+# Locally-downloaded native binary packages (see README.md). Never commit the packages themselves;
+# each dev/build machine fetches its own copies. The directory is tracked (via .gitkeep) so it exists
+# on a clean clone; Capture.App.csproj only references packages that are actually present there.
+local-nuget-feed/*
+!local-nuget-feed/.gitkeep
+
+# CaptureScanHelperMac build output — build.sh (re)generates these; only the source (main.swift,
+# entitlements.plist, build.sh) belongs in git.
+native/CaptureScanHelperMac/.build/
+native/CaptureScanHelperMac/CaptureScanHelperMac
+native/CaptureScanHelperMac/CaptureScanHelperMac.app/
+
+# Packaging build/output — build-dmg.sh and iscc (re)generate these; only the scripts belong in git.
+packaging/macos/.build/
+packaging/macos/out/
+packaging/windows/out/

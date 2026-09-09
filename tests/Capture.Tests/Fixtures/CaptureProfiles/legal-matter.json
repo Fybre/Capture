@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "legal-matter",
+  "description": "Loose content creates a generic batch, then one retained page starts both a matter batch and a typed document; the matter continues through a multi-file manual import.",
+  "configuration": {
+    "batchStart": "Barcode ^MATTER:(?<MatterNumber>[0-9]+)$",
+    "batchTriggerDisposition": "IncludeInNewDocument",
+    "documentStarts": [
+      "OCR contains CORRESPONDENCE => Correspondence",
+      "OCR contains WITNESS STATEMENT => Witness Statement"
+    ],
+    "fileIsDocumentBoundary": false,
+    "startNewBatchForEachFile": false
+  },
+  "inputs": [
+    {
+      "file": "legal-intake.pdf",
+      "pages": [
+        { "page": 1, "text": "Loose cover note received before a matter header" },
+        { "page": 2, "text": "CORRESPONDENCE MATTER:4711", "barcode": "MATTER:4711" },
+        { "page": 3, "text": "Correspondence continuation" }
+      ]
+    },
+    {
+      "file": "legal-evidence.pdf",
+      "pages": [
+        { "page": 1, "text": "WITNESS STATEMENT" },
+        { "page": 2, "text": "Witness statement continuation" }
+      ]
+    }
+  ],
+  "expected": {
+    "batches": [
+      {
+        "key": "generic-1",
+        "generic": true,
+        "fields": {},
+        "documents": [
+          { "type": "Unclassified", "pages": ["legal-intake.pdf#1"] }
+        ]
+      },
+      {
+        "key": "matter-4711",
+        "generic": false,
+        "fields": { "MatterNumber": "4711" },
+        "documents": [
+          { "type": "Correspondence", "pages": ["legal-intake.pdf#2", "legal-intake.pdf#3"] },
+          { "type": "Witness Statement", "pages": ["legal-evidence.pdf#1", "legal-evidence.pdf#2"] }
+        ]
+      }
+    ],
+    "consumedPages": []
+  },
+  "covers": [
+    "content-before-first-batch-header",
+    "same-page-batch-and-document-start",
+    "strategy-batch-across-input-files"
+  ]
+}

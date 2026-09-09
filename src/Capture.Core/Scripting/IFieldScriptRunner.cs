@@ -1,0 +1,48 @@
+using Capture.Core.Profiles;
+
+namespace Capture.Core.Scripting;
+
+/// <summary>Compiles and runs the C# scripts attached to a capture profile definition — both
+/// profile-level <see cref="FieldScript"/>s (imperative, full read/write over every field) and
+/// per-field <see cref="IndexField.ScriptExpression"/>s (a single expression, read-only over every
+/// other field, whose result becomes that field's value). Never throws — a script failure always
+/// comes back as a failed <see cref="ScriptRunResult"/>, never an exception out of these methods,
+/// mirroring the "a step's own failure must never abort import" contract already used by
+/// <c>IPostIndexStep</c> and <c>DefaultValueTemplateEvaluator</c>.</summary>
+public interface IFieldScriptRunner
+{
+    /// <summary>False when scripting is turned off in Settings (<c>WatchSettings.AllowFieldScripts</c>)
+    /// — callers should skip script execution entirely rather than call Run*Async, exactly like
+    /// <c>IAiExtractor.IsConfigured</c> gates AI extraction.</summary>
+    bool IsAvailable { get; }
+
+    /// <summary>Runs one profile-level script. <paramref name="context"/>'s <c>Values</c> are the real,
+    /// mutable <see cref="Capture.Core.Models.IndexValue"/> instances — a successful run's mutations are
+    /// already reflected in them; there is no separate result payload to copy back.</summary>
+    /// <param name="sharedSource">Compiled as a prefix ahead of <paramref name="script"/>'s own source —
+    /// typically a capture profile definition's SharedScriptSource of reusable
+    /// helper functions. Empty by default; the compiled cache key already covers this text, so changing
+    /// it correctly invalidates every script that used the old version.</param>
+    Task<ScriptRunResult> RunProfileScriptAsync(
+        FieldScript script,
+        ScriptExecutionContext context,
+        CancellationToken cancellationToken = default,
+        string sharedSource = "");
+
+    /// <summary>Evaluates one field's <see cref="IndexField.ScriptExpression"/> against a read-only view
+    /// of <paramref name="context"/>'s fields. On success, <see cref="ScriptRunResult.Value"/> holds the
+    /// resolved value to assign to that field. An expression can request its own confidence through
+    /// <c>SetConfidence</c>; this is returned as result metadata rather than exposing mutable fields.</summary>
+    /// <param name="scriptCacheKey">Doubles as the id of the field this expression belongs to: every
+    /// real caller passes that field's own <see cref="IndexField.Id"/>, both to key the compiled-script
+    /// cache and to resolve the field's own pre-evaluation value (looked up in
+    /// <paramref name="context"/>'s <c>Values</c> by matching <c>FieldId</c>) for the expression's
+    /// <c>Value</c> shorthand.</param>
+    /// <param name="sharedSource">See <see cref="RunProfileScriptAsync"/>'s parameter of the same name.</param>
+    Task<ScriptRunResult> RunFieldExpressionAsync(
+        Guid scriptCacheKey,
+        string expression,
+        ScriptExecutionContext context,
+        CancellationToken cancellationToken = default,
+        string sharedSource = "");
+}

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "student-records",
+  "description": "Consumed student headers create batches and capture StudentNumber before enrolment and transcript documents are classified.",
+  "configuration": {
+    "batchStart": "Barcode ^STUDENT:(?<StudentNumber>[0-9]+)$",
+    "batchTriggerDisposition": "Consume",
+    "documentStarts": [
+      "OCR contains ENROLMENT FORM => Enrolment Form",
+      "OCR contains ACADEMIC TRANSCRIPT => Transcript"
+    ],
+    "fileIsDocumentBoundary": false,
+    "startNewBatchForEachFile": false
+  },
+  "inputs": [
+    {
+      "file": "student-records-1.pdf",
+      "pages": [
+        { "page": 1, "text": "STUDENT:1001", "barcode": "STUDENT:1001" },
+        { "page": 2, "text": "ENROLMENT FORM" },
+        { "page": 3, "text": "Enrolment continuation" },
+        { "page": 4, "text": "ACADEMIC TRANSCRIPT" },
+        { "page": 5, "text": "Transcript continuation" }
+      ]
+    },
+    {
+      "file": "student-records-2.pdf",
+      "pages": [
+        { "page": 1, "text": "STUDENT:1002", "barcode": "STUDENT:1002" },
+        { "page": 2, "text": "ACADEMIC TRANSCRIPT" }
+      ]
+    }
+  ],
+  "expected": {
+    "batches": [
+      {
+        "key": "student-1001",
+        "generic": false,
+        "fields": { "StudentNumber": "1001" },
+        "documents": [
+          { "type": "Enrolment Form", "pages": ["student-records-1.pdf#2", "student-records-1.pdf#3"] },
+          { "type": "Transcript", "pages": ["student-records-1.pdf#4", "student-records-1.pdf#5"] }
+        ]
+      },
+      {
+        "key": "student-1002",
+        "generic": false,
+        "fields": { "StudentNumber": "1002" },
+        "documents": [
+          { "type": "Transcript", "pages": ["student-records-2.pdf#2"] }
+        ]
+      }
+    ],
+    "consumedPages": ["student-records-1.pdf#1", "student-records-2.pdf#1"]
+  },
+  "covers": ["batch-value-survives-consumed-page", "student-record"]
+}

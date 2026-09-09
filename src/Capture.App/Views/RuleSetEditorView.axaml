@@ -1,0 +1,125 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Capture.App.ViewModels"
+             x:Class="Capture.App.Views.RuleSetEditorView"
+             x:DataType="vm:RuleSetEditorViewModel">
+    <StackPanel Spacing="14">
+        <Border Classes="card" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="10">
+                <TextBlock Text="{Binding DecisionTitle}" Classes="section-title" />
+                <ComboBox ItemsSource="{Binding MatchModeChoices}"
+                          SelectedValueBinding="{Binding Value}"
+                          SelectedValue="{Binding MatchMode}"
+                          HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:MatchModeChoice"><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+                <StackPanel Spacing="4" IsVisible="{Binding IsAtLeast}">
+                    <TextBlock Text="Minimum strategies that must match" Classes="field-label" />
+                    <NumericUpDown Value="{Binding MatchMinimum}"
+                                   Minimum="1"
+                                   Maximum="20"
+                                   HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <TextBlock Text="Choose whether one, every, or a minimum number of the rules below must match the page."
+                           TextWrapping="Wrap"
+                           Classes="hint"
+                           IsVisible="{Binding RulesEnabled}" />
+                <TextBlock Text="Pages do not start new batches. Manual inputs keep using the current batch until you choose Start new batch."
+                           TextWrapping="Wrap"
+                           Classes="hint"
+                           IsVisible="{Binding IsNone}" />
+            </StackPanel>
+        </Border>
+
+        <Border Classes="card" HorizontalAlignment="Stretch" IsVisible="{Binding RulesEnabled}">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Strategies" Classes="section-title" />
+                <ListBox ItemsSource="{Binding Strategies}"
+                         SelectedItem="{Binding SelectedStrategy}"
+                         SelectionMode="Toggle"
+                         ToolTip.Tip="Select a strategy to edit it; select it again to collapse its settings."
+                         MaxHeight="220">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SeparationStrategyRow">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding DisplayLabel}" FontWeight="Medium" />
+                                    <TextBlock Text="(zone set)"
+                                               Classes="hint"
+                                               IsVisible="{Binding Zone, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="Remove"
+                                        Classes="ghost"
+                                        Padding="6,2"
+                                        FontSize="11.5"
+                                        Command="{Binding $parent[ListBox].((vm:RuleSetEditorViewModel)DataContext).RemoveStrategyCommand}"
+                                        CommandParameter="{Binding}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <Button Content="+ Add strategy"
+                        Command="{Binding AddStrategyCommand}"
+                        HorizontalAlignment="Left" />
+            </StackPanel>
+        </Border>
+
+        <Border Classes="card"
+                HorizontalAlignment="Stretch"
+                Margin="0,0,8,0"
+                BorderBrush="{DynamicResource AccentBrush1}"
+                BorderThickness="2,1,1,1"
+                IsVisible="{Binding SelectedStrategy, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="9" DataContext="{Binding SelectedStrategy}">
+                <TextBlock Text="Selected strategy" Classes="section-title" />
+                <TextBlock Text="Type" Classes="field-label" />
+                <ComboBox ItemsSource="{Binding $parent[UserControl].((vm:RuleSetEditorViewModel)DataContext).StrategyTypeChoices}"
+                          SelectedValueBinding="{Binding Value}" SelectedValue="{Binding Type}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:StrategyTypeChoice"><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="Label (optional)" Classes="field-label" />
+                <TextBox Text="{Binding Name}" Watermark="e.g. Student header" />
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsEveryNPages}">
+                    <TextBlock Text="Pages per document" Classes="field-label" />
+                    <NumericUpDown Value="{Binding PageCount}" Minimum="1" Maximum="10000" />
+                </StackPanel>
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsBlankPage}">
+                    <TextBlock Text="Treat as blank when ink is below (%)" Classes="field-label" />
+                    <NumericUpDown Value="{Binding BlankInkPercent}" Minimum="0" Maximum="100" />
+                </StackPanel>
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsBarcode}">
+                    <TextBlock Text="Scan area" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding BarcodeScanAreaOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding BarcodeScanArea}">
+                        <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="{Binding BarcodeAreaStatus}" Classes="hint" TextWrapping="Wrap" />
+                    <TextBlock Text="Barcode format (optional)" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding $parent[UserControl].((vm:RuleSetEditorViewModel)DataContext).BarcodeFormatOptions}"
+                              SelectedItem="{Binding BarcodeFormat}" PlaceholderText="Any format" />
+                    <TextBlock Text="Barcode value pattern (regular expression, optional)" Classes="field-label" />
+                    <TextBox Text="{Binding BarcodeValuePattern}" Watermark="e.g. ^STUDENT:(.+)$" />
+                </StackPanel>
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsRegex}">
+                    <TextBlock Text="Page must contain (regular expression)" Classes="field-label" />
+                    <TextBox Text="{Binding TextPattern}" Watermark="e.g. (?i)ACADEMIC\s+TRANSCRIPT" />
+                </StackPanel>
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsOcrZone}">
+                    <TextBlock Text="Text to match in this area (regular expression, optional)" Classes="field-label" />
+                    <TextBox Text="{Binding TextPattern}" Watermark="Empty matches any non-empty zone text" />
+                </StackPanel>
+
+                <TextBlock Text="Select this rule, then draw its area on the sample." Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsOcrZone}" />
+                <TextBlock Text="{Binding TestResult}" Classes="hint" TextWrapping="Wrap"
+                           IsVisible="{Binding TestResult, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

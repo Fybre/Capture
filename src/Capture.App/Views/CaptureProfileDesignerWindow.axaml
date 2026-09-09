@@ -1,0 +1,5 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="using:Capture.App.Views"
+        x:Class="Capture.App.Views.CaptureProfileDesignerWindow" Title="Capture Profile Designer"
+        Width="1450" Height="900" MinWidth="1000" MinHeight="680">
+  <views:CaptureProfileDesignerView/>
+</Window>
