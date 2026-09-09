@@ -10,10 +10,14 @@ public partial class CaptureProfilesViewModel(ICaptureProfileStore store) : View
     public ObservableCollection<CaptureProfile> Profiles { get; } = [];
     public Func<CaptureProfile, Task>? EditRequested { get; set; }
     public Func<CaptureProfile, Task<bool>>? DeleteConfirmed { get; set; }
+    public Func<CaptureProfile, Task>? ExportRequested { get; set; }
+    public Func<Task>? ExportAllRequested { get; set; }
+    public Func<Task<CaptureProfile?>>? ImportRequested { get; set; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(EditCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
     private CaptureProfile? _selectedProfile;
 
     public async Task InitializeAsync() => await ReloadAsync();
@@ -41,6 +45,28 @@ public partial class CaptureProfilesViewModel(ICaptureProfileStore store) : View
         if (DeleteConfirmed is not null && !await DeleteConfirmed(profile)) return;
         await store.DeleteAsync(profile.Id);
         await ReloadAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task ExportAsync()
+    {
+        if (SelectedProfile is not { } profile || ExportRequested is null) return;
+        await ExportRequested(profile);
+    }
+
+    [RelayCommand]
+    private async Task ExportAllAsync()
+    {
+        if (ExportAllRequested is null) return;
+        await ExportAllRequested();
+    }
+
+    [RelayCommand]
+    private async Task ImportAsync()
+    {
+        if (ImportRequested is null) return;
+        var imported = await ImportRequested();
+        if (imported is not null) await ReloadAsync(imported.Id);
     }
 
     private bool HasSelection() => SelectedProfile is not null;

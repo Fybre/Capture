@@ -45,12 +45,14 @@ public partial class MainViewModel
         _scanCancellation = new CancellationTokenSource();
         var cancellationToken = _scanCancellation.Token;
         var scannedPages = new List<ScannedPageInfo>();
+        StatusIsError = false;
         try
         {
             var devices = await _scanSource.ListDevicesAsync(cancellationToken).ConfigureAwait(true);
             if (devices.Count == 0)
             {
                 StatusText = "No scanner found";
+                StatusIsError = true;
                 return;
             }
 
@@ -84,6 +86,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = $"Scan failed: {ex.Message}";
+            StatusIsError = true;
         }
         finally
         {

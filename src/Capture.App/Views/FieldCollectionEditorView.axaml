@@ -62,6 +62,9 @@
             <CheckBox Content="Hide from review" IsChecked="{Binding Hidden}" Margin="0,0,12,0"/>
             <CheckBox Content="Sensitive" IsChecked="{Binding Sensitive}"/>
           </WrapPanel>
+          <TextBlock Text="Batch fields are shared metadata — marking this Sensitive masks it in review and Table view, but it will not create a page redaction."
+                     Classes="hint" TextWrapping="Wrap"
+                     IsVisible="{Binding ShowBatchSensitiveHint}"/>
 
           <StackPanel IsVisible="{Binding CanPopulateValue}" Spacing="5" Margin="0,0,18,0">
             <TextBlock Text="Populate value from (optional)" Classes="field-label" IsVisible="{Binding !IsBatchSeparatorValue}"/>

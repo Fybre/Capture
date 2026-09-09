@@ -102,6 +102,7 @@ public partial class MainViewModel
             StatusText = parts.Count == 0 ? "Nothing to export" : string.Join(", ", parts);
             if (exported > 0 || removed > 0 || failed > 0)
             {
+                StatusIsError = failed > 0;
                 if (failed > 0) _toasts.ShowError(StatusText); else _toasts.ShowSuccess(StatusText);
             }
         }

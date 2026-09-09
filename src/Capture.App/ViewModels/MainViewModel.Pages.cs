@@ -127,11 +127,13 @@ public partial class MainViewModel
             await RefreshDocumentRowInPlaceAsync(row, updated).ConfigureAwait(true);
             RefreshDocumentGroups();
             StatusText = pageNumbers.Count == 1 ? "Deleted 1 page" : $"Deleted {pageNumbers.Count} pages";
+            StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -168,11 +170,13 @@ public partial class MainViewModel
             StatusText = indexErrors.Count == 0
                 ? "Split into two documents and refreshed their indexes"
                 : $"Split into two documents, but indexing needs attention: {string.Join("; ", indexErrors)}";
+            StatusIsError = indexErrors.Count != 0;
             if (indexErrors.Count == 0) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -290,6 +294,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -336,6 +341,7 @@ public partial class MainViewModel
         {
             if (generation == _loadGeneration)
                 StatusText = ex.Message;
+                StatusIsError = true;
         }
         finally
         {
@@ -435,6 +441,7 @@ public partial class MainViewModel
             {
                 if (generation == _loadGeneration)
                     StatusText = ex.Message;
+                    StatusIsError = true;
                 return;
             }
         }

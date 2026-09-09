@@ -130,6 +130,7 @@ public partial class MainViewModel
         if (_scripts is null || !_scripts.IsAvailable)
         {
             StatusText = "Scripting is off — turn on \"Allow profile scripts\" in Settings";
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
             return;
         }
@@ -140,6 +141,7 @@ public partial class MainViewModel
         if (field is null || string.IsNullOrWhiteSpace(field.ButtonScriptSource))
         {
             StatusText = "This button has no script configured";
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
             return;
         }
@@ -184,6 +186,7 @@ public partial class MainViewModel
             {
                 Trace.TraceError($"Button script \"{field.Name}\" failed: {result.ErrorMessage}");
                 StatusText = $"Script failed: {result.ErrorMessage}";
+                StatusIsError = true;
                 _toasts.ShowError(StatusText);
                 return;
             }
@@ -194,11 +197,13 @@ public partial class MainViewModel
             foreach (var visibleRow in ReviewBatchIndexes.Concat(ReviewDocumentIndexes))
                 visibleRow.Refresh();
             StatusText = "Script ran successfully";
+            StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -274,6 +279,7 @@ public partial class MainViewModel
             : skippedReadOnly > 0
                 ? "The matching field is read only on the other selected document(s)"
                 : "No other selected documents have this field";
+        StatusIsError = applied == 0;
         if (applied > 0)
             _toasts.ShowSuccess(StatusText);
         else
@@ -311,6 +317,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
         }
     }
 

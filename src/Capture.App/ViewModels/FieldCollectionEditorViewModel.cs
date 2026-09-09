@@ -60,7 +60,7 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
             .ToList();
         foreach (var field in fields ?? [])
         {
-            var row = new FieldRow(field);
+            var row = new FieldRow(field, isBatchScope);
             Watch(row);
             Fields.Add(row);
         }
@@ -78,7 +78,7 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
 
     public FieldRow Add(IndexField field)
     {
-        var row = new FieldRow(field);
+        var row = new FieldRow(field, _isBatchScope);
         Watch(row);
         Fields.Add(row);
         SelectedField = row;

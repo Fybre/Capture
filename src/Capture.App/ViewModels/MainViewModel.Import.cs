@@ -86,6 +86,7 @@ public partial class MainViewModel
         if (files.Count == 0)
         {
             StatusText = "No supported files in the dropped item(s)";
+            StatusIsError = true;
             return;
         }
 
@@ -110,6 +111,7 @@ public partial class MainViewModel
             if (files.Count == 0)
             {
                 StatusText = "No supported files in that folder";
+                StatusIsError = true;
                 return;
             }
 
@@ -118,6 +120,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
         }
         finally
         {
@@ -143,6 +146,7 @@ public partial class MainViewModel
             if (profile is null)
             {
                 StatusText = "Choose a Capture Profile before importing";
+                StatusIsError = true;
                 return;
             }
 
@@ -193,10 +197,12 @@ public partial class MainViewModel
             StatusText = string.IsNullOrEmpty(autoExportStatus)
                 ? importedStatus
                 : $"{importedStatus} — {autoExportStatus}";
+            StatusIsError = false;
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             foreach (var path in paths) MoveWatchFile(path, watchRoot, watchFolderEntry, success: false);
         }
         finally

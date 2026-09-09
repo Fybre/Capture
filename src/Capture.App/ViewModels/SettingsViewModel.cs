@@ -633,8 +633,22 @@ public partial class SettingsViewModel : ViewModelBase
         if (row.IsBuiltIn)
             return;
 
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var confirmed = await _confirm.ConfirmAsync(
+            host,
+            "Delete redaction set?",
+            $"Delete '{row.Name}'? Any document type currently using it will fall back to no custom set. This can't be undone.",
+            confirmText: "Delete",
+            cancelText: "Cancel");
+        if (!confirmed)
+            return;
+
         await _redactionEntitySets.DeleteAsync(row.Id);
         await LoadRedactionSetsAsync();
+        StatusText = $"Deleted redaction set '{row.Name}'";
+        _toasts.ShowSuccess(StatusText);
     }
 
     private WatchFolderEntryViewModel WrapEntry(WatchFolderEntry entry)

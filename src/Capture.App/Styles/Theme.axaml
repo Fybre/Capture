@@ -111,6 +111,9 @@
       <StreamGeometry x:Key="IconPreviewMode">M2 2.5h4.5v11H2zM7.7 2.5h6.3v11H7.7z</StreamGeometry>
       <StreamGeometry x:Key="IconTableMode">M2 3h12v10H2zM2 6.5h12M6.3 6.5v6.5M10.6 6.5v6.5</StreamGeometry>
       <StreamGeometry x:Key="IconRestore">M3.5 8a4.5 4.5 0 114.5 4.5H6.5M3.5 8L2 6.3M3.5 8l1.7-1.5</StreamGeometry>
+      <StreamGeometry x:Key="IconLock">M4.5 7V5a3.5 3.5 0 017 0v2M3.5 7h9v6.5a1 1 0 01-1 1h-7a1 1 0 01-1-1V7z</StreamGeometry>
+      <StreamGeometry x:Key="IconCopyToSelection">M3 3h6v6H3zM7 7h6v6H7z</StreamGeometry>
+      <StreamGeometry x:Key="IconFitToWindow">M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10</StreamGeometry>
     </ResourceDictionary>
   </Styles.Resources>
 

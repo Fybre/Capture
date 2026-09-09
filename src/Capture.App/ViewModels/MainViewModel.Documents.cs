@@ -86,11 +86,13 @@ public partial class MainViewModel
 
             await ReloadDocumentsAsync().ConfigureAwait(true);
             StatusText = $"Restored {rows.Count} document(s)";
+            StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -129,11 +131,13 @@ public partial class MainViewModel
 
             await ReloadDocumentsAsync().ConfigureAwait(true);
             StatusText = $"Permanently deleted {rows.Count} document(s)";
+            StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -181,10 +185,14 @@ public partial class MainViewModel
             }
 
             StatusText = $"Removed {rows.Count} document(s)";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
         }
         finally
         {
@@ -218,11 +226,13 @@ public partial class MainViewModel
             RefreshBatchAccents();
             RefreshDocumentGroups();
             StatusText = $"Merged {rows.Count} documents into {merged.PageCount} pages";
+            StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally
@@ -248,6 +258,8 @@ public partial class MainViewModel
             await _store.UpdateAsync(document);
             SelectedDocument.NotifyIndexes();
             StatusText = "Marked ready";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
 
             // Reaching Ready by manual override should trigger the same post-index steps (redaction,
             // etc.) as reaching it automatically through indexing — otherwise a document only gets
@@ -329,6 +341,7 @@ public partial class MainViewModel
                 ? $"Marked {marked} document(s) ready"
                 : $"Marked {marked} document(s) ready — {skipped} skipped (missing a required field)";
 
+            StatusIsError = marked == 0;
             if (marked > 0)
                 _toasts.ShowSuccess(StatusText);
             else
@@ -337,6 +350,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally

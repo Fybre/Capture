@@ -158,6 +158,7 @@ public partial class MainViewModel
             StatusText = failures == 0
                 ? $"Redaction checked for {rows.Count} document(s)"
                 : $"Redaction checked for {rows.Count} document(s) — {failures} failed";
+            StatusIsError = failures != 0;
             if (failures == 0) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
         }
         finally
@@ -290,6 +291,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = $"Couldn't save redaction edits: {ex.Message}";
+            StatusIsError = true;
         }
     }
 
@@ -300,6 +302,7 @@ public partial class MainViewModel
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
             StatusText = "Redacted file not found on disk";
+            StatusIsError = true;
             return;
         }
 
@@ -312,10 +315,12 @@ public partial class MainViewModel
                     : new ProcessStartInfo("xdg-open", $"\"{path}\"");
             psi.UseShellExecute = false;
             Process.Start(psi);
+            StatusIsError = false;
         }
         catch (Exception ex)
         {
             StatusText = $"Couldn't open the redacted file: {ex.Message}";
+            StatusIsError = true;
         }
     }
 
@@ -348,11 +353,13 @@ public partial class MainViewModel
             StatusText = document.RedactionStatus == RedactionStatus.Applied
                 ? $"Redacted PDF saved to {document.RedactedPath}"
                 : $"Redaction failed: {document.RedactionError}";
+            StatusIsError = document.RedactionStatus != RedactionStatus.Applied;
             if (document.RedactionStatus == RedactionStatus.Applied) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
         finally

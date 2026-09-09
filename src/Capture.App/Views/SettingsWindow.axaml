@@ -10,23 +10,33 @@
         x:Class="Capture.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
-        Width="640"
+        Width="760"
         Height="680"
-        MinWidth="560"
+        MinWidth="620"
         MinHeight="420"
         WindowStartupLocation="CenterOwner"
         CanResize="True">
-    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+    <Window.Styles>
+        <Style Selector="TabItem.settings-nav">
+            <Setter Property="MinWidth" Value="150" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="Auto,*,Auto,Auto" Background="{DynamicResource GroundBrush}">
         <TextBlock Grid.Row="0"
                    Text="Settings"
                    FontSize="17"
                    FontWeight="SemiBold"
                     Margin="24,18,24,4" />
 
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-            <Grid Margin="24,8,24,8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*">
+        <TabControl Grid.Row="1" TabStripPlacement="Left">
+            <TabItem Header="Startup" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
 
-                <Border Grid.Row="0" Classes="card" HorizontalAlignment="Stretch">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Startup" Classes="section-title" />
                         <TextBlock Text="Start view" Classes="field-label" />
@@ -79,8 +89,14 @@
                                    Classes="hint" />
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="1" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+            <TabItem Header="Watch folders" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <DockPanel LastChildFill="False">
                             <TextBlock Text="Watch folders" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
@@ -147,8 +163,14 @@
                         </ItemsControl>
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="2" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+            <TabItem Header="AI extraction" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <TextBlock Text="AI extraction" Classes="section-title" />
                         <TextBlock Text="Provider" Classes="field-label" />
@@ -216,8 +238,14 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="3" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+            <TabItem Header="Therefore" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Therefore" Classes="section-title" />
                         <TextBlock Text="Server" Classes="field-label" />
@@ -230,8 +258,14 @@
                                    Classes="hint" />
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="4" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+            <TabItem Header="Redaction sets" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <DockPanel LastChildFill="False">
                             <TextBlock Text="Redaction sets" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
@@ -351,12 +385,14 @@
                         </Border>
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="5"
-                        Classes="card"
-                        HorizontalAlignment="Stretch"
-                        Margin="0,14,0,0"
-                        IsVisible="{Binding IsScanningAvailable}">
+            <TabItem Header="Scanning" Classes="settings-nav" IsVisible="{Binding IsScanningAvailable}">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <DockPanel LastChildFill="False">
                             <TextBlock Text="Scanning" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
@@ -397,8 +433,14 @@
                                   IsEnabled="{Binding CanScanGrayscale}" />
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="6" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+            <TabItem Header="AI field catalog" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <TextBlock Text="AI field catalog" Classes="section-title" />
                         <TextBlock Text="The list of AI field types (Invoice No, Supplier Name, etc.) is a JSON file you can edit directly to add your own."
@@ -413,8 +455,14 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="7" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,0">
+            <TabItem Header="Storage" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Storage" Classes="section-title" />
                         <TextBlock Text="Capture keeps a full copy of every document you import — the original file plus everything generated for it — until you remove it, even after it's been exported. Over time that can add up to a lot of disk space."
@@ -449,8 +497,14 @@
                                    Classes="hint" />
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
 
-                <Border Grid.Row="8" Classes="card" HorizontalAlignment="Stretch" Margin="0,14,0,40">
+            <TabItem Header="Debug logging" Classes="settings-nav">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="24,8,24,8" ColumnDefinitions="*">
+                <Border Classes="card" HorizontalAlignment="Stretch" Margin="0,0,0,16">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Debug logging" Classes="section-title" />
                         <CheckBox Content="Write a detailed activity log to disk" IsChecked="{Binding DebugMode}" />
@@ -463,36 +517,43 @@
                         <Button Content="Open folder" Command="{Binding OpenDebugLogFolderCommand}" HorizontalAlignment="Left" />
                     </StackPanel>
                 </Border>
+                </Grid>
+              </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
-                <TextBlock Grid.Row="9"
-                           Text="{Binding StatusText}"
-                           Foreground="{DynamicResource InkSoftBrush}"
-                           Classes.critical="{Binding StatusIsError}"
-                           TextWrapping="Wrap"
-                           Margin="0,10,0,0"
-                           IsVisible="{Binding HasStatusText}" />
-            </Grid>
-        </ScrollViewer>
+        <TextBlock Grid.Row="2"
+                   Text="{Binding StatusText}"
+                   Foreground="{DynamicResource InkSoftBrush}"
+                   Classes.critical="{Binding StatusIsError}"
+                   TextWrapping="Wrap"
+                   Margin="24,8,24,0"
+                   IsVisible="{Binding HasStatusText}" />
 
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                  Padding="24,14"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource BorderBrush1}"
                 Background="{DynamicResource Surface2Brush}">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8">
-                    <Button Content="Import settings…" Command="{Binding ImportSettingsCommand}" />
-                    <Button Content="Export settings…" Command="{Binding ExportSettingsCommand}" />
-                    <CheckBox Content="Include credentials"
-                              IsChecked="{Binding IncludeCredentialsInExport}"
-                              VerticalAlignment="Center"
-                              ToolTip.Tip="Off by default: an export replaces your AI API key and Therefore password/bearer token with a placeholder, so a routine backup or config share doesn't leak them. Turn this on (and confirm) only when you actually want those credentials in the exported file, e.g. your own encrypted backup." />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
-                    <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
-                </StackPanel>
-            </Grid>
+            <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8">
+                        <Button Content="Import settings…" Command="{Binding ImportSettingsCommand}" />
+                        <Button Content="Export settings…" Command="{Binding ExportSettingsCommand}" />
+                        <CheckBox Content="Include credentials"
+                                  IsChecked="{Binding IncludeCredentialsInExport}"
+                                  VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                        <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="Include credentials embeds your AI API key and Therefore password/bearer token, unencrypted, in the exported file. Off by default so a routine backup or config share doesn't leak them — only turn this on for something like your own encrypted backup."
+                           TextWrapping="Wrap"
+                           Classes="hint"
+                           IsVisible="{Binding IncludeCredentialsInExport}" />
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

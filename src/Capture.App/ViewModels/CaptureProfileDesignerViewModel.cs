@@ -86,6 +86,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private readonly IAiExtractor? _ai;
     private readonly IHelpWindowService? _help;
     private bool _changingRedactionSet;
+    private string _savedSnapshot = string.Empty;
     private IReadOnlyList<RasterPage> _samplePages = [];
     private PageLattice? _sampleLattice;
     private int _sampleLoadVersion;
@@ -144,7 +145,22 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         RefreshNavigation();
         _selectedNode = Navigation[0];
         RefreshEnablementIssues();
+        _savedSnapshot = JsonSerializer.Serialize(Profile);
     }
+
+    /// <summary>True if the profile's working state (after flushing the currently edited section back
+    /// into <see cref="Profile"/>) differs from what was last saved — checked fresh each time rather than
+    /// cached, since edits happen through many different editor sub-view-models rather than one central
+    /// mutation point.</summary>
+    public bool HasUnsavedChanges()
+    {
+        Flush();
+        return JsonSerializer.Serialize(Profile) != _savedSnapshot;
+    }
+
+    [ObservableProperty] private bool _isDirty;
+
+    private void RefreshDirtyState() => IsDirty = HasUnsavedChanges();
 
     public CaptureProfile Profile { get; }
     public ObservableCollection<CaptureDesignerNode> Navigation { get; } = [];
@@ -333,6 +349,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         if (_changingRedactionSet || SelectedDocumentType is not { } type || value is null) return;
         type.Redaction.EntitySetId = value.Id;
         type.Redaction.Entities = value.Entities.ToList();
+        RefreshDirtyState();
     }
 
     [RelayCommand]
@@ -340,8 +357,13 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     {
         if (_dialogs is null || _paths is null || !CanChooseSample) return;
         var selected = await _dialogs.PickFilesAsync();
+        if (selected.Count == 0) return;
         var source = selected.FirstOrDefault(ImportFormats.IsSupported);
-        if (source is null) return;
+        if (source is null)
+        {
+            SampleStatus = $"'{Path.GetFileName(selected[0])}' isn't a supported sample format — choose a PDF or image file instead.";
+            return;
+        }
 
         var scope = CurrentSampleScope();
         if (scope is null) return;
@@ -601,6 +623,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         Profile.DocumentTypes.Add(type);
         Profile.DefaultDocumentTypeId ??= type.Id;
         RefreshNavigation(type.Id);
+        RefreshDirtyState();
     }
 
     [RelayCommand]
@@ -610,9 +633,20 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         FlushSelectedDocument();
         var copy = JsonSerializer.Deserialize<DocumentTypeDefinition>(JsonSerializer.Serialize(selected))!;
         AssignNewIds(copy);
-        copy.Name += " copy";
+        copy.Name = UniqueDocumentTypeName(selected.Name);
         Profile.DocumentTypes.Add(copy);
         RefreshNavigation(copy.Id);
+        RefreshDirtyState();
+    }
+
+    private string UniqueDocumentTypeName(string baseName)
+    {
+        var existing = new HashSet<string>(Profile.DocumentTypes.Select(type => type.Name), StringComparer.OrdinalIgnoreCase);
+        var candidate = $"{baseName} copy";
+        var suffix = 2;
+        while (existing.Contains(candidate))
+            candidate = $"{baseName} copy {suffix++}";
+        return candidate;
     }
 
     [RelayCommand]
@@ -622,6 +656,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         Profile.DocumentTypes.Remove(selected);
         if (Profile.DefaultDocumentTypeId == selected.Id) Profile.DefaultDocumentTypeId = null;
         RefreshNavigation();
+        RefreshDirtyState();
     }
 
     [RelayCommand]
@@ -638,14 +673,23 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         RefreshEnablementIssues();
         var errors = EnablementIssues;
         ValidationSummary = Profile.Enabled ? string.Join(Environment.NewLine, errors) : string.Empty;
-        if (Profile.Enabled && errors.Count > 0) return;
+
+        // Never discard the user's edits: a profile that can't be enabled yet is still saved, just as a
+        // disabled draft, rather than dropping everything typed since the last successful save.
+        var forcedDisable = Profile.Enabled && errors.Count > 0;
+        if (forcedDisable) Profile.Enabled = false;
 
         await _store.SaveAsync(Profile);
-        SaveConfirmation = Profile.Enabled
-            ? "Capture profile saved and enabled."
-            : errors.Count == 0
-                ? "Disabled profile saved. It is ready to enable when required."
-                : $"Disabled draft saved — {errors.Count} setup item{(errors.Count == 1 ? string.Empty : "s")} remain.";
+        _savedSnapshot = JsonSerializer.Serialize(Profile);
+        OnPropertyChanged(nameof(ProfileEnabled));
+        RefreshEnablementIssues();
+        SaveConfirmation = forcedDisable
+            ? $"Saved as a disabled draft — {errors.Count} setup item{(errors.Count == 1 ? string.Empty : "s")} must be fixed before it can be enabled."
+            : Profile.Enabled
+                ? "Capture profile saved and enabled."
+                : errors.Count == 0
+                    ? "Disabled profile saved. It is ready to enable when required."
+                    : $"Disabled draft saved — {errors.Count} setup item{(errors.Count == 1 ? string.Empty : "s")} remain.";
     }
 
     [RelayCommand]
@@ -713,6 +757,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         DocumentExports.Add(new ExportDefinitionRow(
             new Capture.Core.Profiles.ExportDefinition(), DocumentFields.Fields, BatchFields.Fields) { IsExpanded = true });
         OnPropertyChanged(nameof(HasNoDocumentExports));
+        RefreshEnablementIssues();
     }
 
     [RelayCommand]
@@ -721,6 +766,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         if (row is null) return;
         DocumentExports.Remove(row);
         OnPropertyChanged(nameof(HasNoDocumentExports));
+        RefreshEnablementIssues();
     }
 
     [RelayCommand]
@@ -735,6 +781,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         if (row is null || _dialogs is null) return;
         var folder = await _dialogs.PickFolderAsync();
         if (!string.IsNullOrWhiteSpace(folder)) row.OutputFolder = folder;
+        RefreshEnablementIssues();
     }
 
     [RelayCommand]
@@ -768,6 +815,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
             };
         }).ToList();
         row.RefreshThereforeMappings();
+        RefreshEnablementIssues();
     }
 
     public IReadOnlyList<string> Validate()
@@ -779,20 +827,74 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         if (Profile.DefaultDocumentTypeId is null) errors.Add("Choose a fallback document type.");
         else if (Profile.DocumentTypes.All(type => type.Id != Profile.DefaultDocumentTypeId)) errors.Add("The fallback document type no longer exists.");
 
-        var ambiguous = Profile.DocumentTypes
+        foreach (var duplicateGroup in Profile.DocumentTypes
+                     .Select(type => type.Name)
+                     .Where(name => !string.IsNullOrWhiteSpace(name))
+                     .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+                     .Where(group => group.Count() > 1))
+            errors.Add($"Document type name '{duplicateGroup.Key}' is used more than once — rename one so the fallback list and exports aren't ambiguous.");
+
+        var ambiguousStart = Profile.DocumentTypes
             .SelectMany(type => type.StartRules.Rules.Select(rule => (type.Name, rule.Type, Pattern: rule.TextPattern ?? rule.BarcodeValuePattern)))
             .Where(item => !string.IsNullOrWhiteSpace(item.Pattern))
             .GroupBy(item => (item.Type, item.Pattern), item => item.Name)
             .FirstOrDefault(group => group.Select(name => name).Distinct().Count() > 1);
-        if (ambiguous is not null) errors.Add($"Ambiguous first-page rule '{ambiguous.Key.Pattern}'.");
+        if (ambiguousStart is not null) errors.Add($"Ambiguous first-page rule '{ambiguousStart.Key.Pattern}'.");
+
+        // Recognition rules decide which document type a page belongs to — an overlap here is more
+        // consequential than a duplicate start rule, since classification becomes first-match-wins.
+        var ambiguousRecognition = Profile.DocumentTypes
+            .SelectMany(type => type.RecognitionRules.Rules.Select(rule => (type.Name, rule.Type, Pattern: rule.TextPattern ?? rule.BarcodeValuePattern)))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Pattern))
+            .GroupBy(item => (item.Type, item.Pattern), item => item.Name)
+            .FirstOrDefault(group => group.Select(name => name).Distinct().Count() > 1);
+        if (ambiguousRecognition is not null) errors.Add($"Ambiguous recognition rule '{ambiguousRecognition.Key.Pattern}' — multiple document types would match the same page.");
+
+        foreach (var duplicateGroup in Profile.Batch.Fields
+                     .Select(field => field.Name)
+                     .Where(name => !string.IsNullOrWhiteSpace(name))
+                     .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+                     .Where(group => group.Count() > 1))
+            errors.Add($"Batch field name '{duplicateGroup.Key}' is used more than once.");
+
+        foreach (var type in Profile.DocumentTypes)
+            foreach (var duplicateGroup in type.Fields
+                         .Select(field => field.Name)
+                         .Where(name => !string.IsNullOrWhiteSpace(name))
+                         .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+                         .Where(group => group.Count() > 1))
+                errors.Add($"Field name '{duplicateGroup.Key}' is used more than once in document type '{type.Name}'.");
+
+        foreach (var type in Profile.DocumentTypes)
+            foreach (var export in type.Exports.Where(export => export.Enabled))
+            {
+                var exportLabel = $"export '{export.Name}' on document type '{type.Name}'";
+                switch (export.Type)
+                {
+                    case ExportType.None:
+                        errors.Add($"Choose an export type for {exportLabel}.");
+                        break;
+                    case ExportType.Csv:
+                        if (string.IsNullOrWhiteSpace(export.OutputFolder))
+                            errors.Add($"Choose an output folder for {exportLabel}.");
+                        break;
+                    case ExportType.Therefore:
+                        if (export.ThereforeCategoryNo is null)
+                            errors.Add($"Choose a Therefore category for {exportLabel}.");
+                        break;
+                }
+            }
+
         return errors;
     }
 
     private void RefreshEnablementIssues()
     {
+        FlushSelectedDocument();
         EnablementIssues = Validate();
         OnPropertyChanged(nameof(EnablementIssues));
         OnPropertyChanged(nameof(HasEnablementIssues));
+        RefreshDirtyState();
     }
 
     private void Flush()
@@ -858,6 +960,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         Profile.DocumentTypes.RemoveAt(oldIndex);
         Profile.DocumentTypes.Insert(newIndex, selected);
         RefreshNavigation(selected.Id);
+        RefreshDirtyState();
     }
 
     private void RefreshNavigation(Guid? selectType = null)
@@ -1226,6 +1329,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
 
     private void OnFieldChanged(FieldRow field, string? propertyName)
     {
+        RefreshDirtyState();
         if (field != CurrentFields()?.SelectedField) return;
         if (propertyName == nameof(FieldRow.BarcodeScanArea))
         {
@@ -1248,6 +1352,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
 
     private void OnRuleChanged(SeparationStrategyRow rule, string? propertyName)
     {
+        RefreshDirtyState();
         if (rule != CurrentSelectedRule() || propertyName != nameof(SeparationStrategyRow.BarcodeScanArea))
             return;
         SampleStatus = rule.BarcodeScanArea == BarcodeScanArea.EntirePage

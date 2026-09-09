@@ -29,22 +29,25 @@
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" />
                         <Panel Grid.Column="1" IsVisible="{Binding CanCopyToSelection}">
-                            <Button Content="&#x2398;"
-                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ApplyFieldToSelectionCommand}"
+                            <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ApplyFieldToSelectionCommand}"
                                     CommandParameter="{Binding}"
                                     IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).HasMultipleSelectedDocuments}"
                                     Classes="ghost"
                                     Padding="4,0"
                                     Margin="0,0,4,0"
-                                    FontSize="12"
-                                    ToolTip.Tip="Copy this value into the same field on every other selected document" />
+                                    ToolTip.Tip="Copy this value into the same field on every other selected document">
+                                <Path Data="{StaticResource IconCopyToSelection}" Stretch="Uniform" Width="11" Height="11" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                            </Button>
                         </Panel>
-                        <TextBlock Grid.Column="2"
-                                   Text="🔒"
-                                   FontSize="11"
-                                   Margin="0,0,6,0"
-                                   IsVisible="{Binding IsReadOnly}"
-                                   ToolTip.Tip="Read only" />
+                        <Path Grid.Column="2"
+                              Data="{StaticResource IconLock}"
+                              Stretch="Uniform"
+                              Width="11" Height="11"
+                              Margin="0,0,6,0"
+                              Stroke="{DynamicResource InkSoftBrush}"
+                              StrokeThickness="1.3"
+                              IsVisible="{Binding IsReadOnly}"
+                              ToolTip.Tip="Read only" />
                         <TextBlock Grid.Column="3"
                                    Text="{Binding Flag}"
                                    Foreground="{DynamicResource WarnBrush}"
@@ -315,7 +318,8 @@
                                         <TextBlock Text="Mark ready" />
                                     </StackPanel>
                                 </Button>
-                                <Button Command="{Binding RedactSelectedCommand}"
+                                <Button x:Name="RedactButton"
+                                        Command="{Binding RedactSelectedCommand}"
                                         Classes="ghost"
                                         ToolTip.Tip="{Binding RedactSelectedTooltip}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -323,6 +327,56 @@
                                         <TextBlock Text="Redact" />
                                     </StackPanel>
                                 </Button>
+                                <!-- Zero-size flyout anchor, positioned at the Redact button — kept separate from the
+                                     button itself so opening it is driven entirely from code-behind (watching
+                                     IsRedactPickerOpen) rather than Avalonia's automatic open-on-click for
+                                     Button.Flyout, which would fire before RedactSelectedCommand finishes
+                                     populating RedactEntitySetOptions. -->
+                                <Border x:Name="RedactPickerAnchor" Width="0" Height="0">
+                                    <FlyoutBase.AttachedFlyout>
+                                        <Flyout Placement="BottomEdgeAlignedLeft" ShowMode="Standard">
+                                            <StackPanel Spacing="10" MinWidth="320" MaxWidth="420">
+                                                <TextBlock Text="Redact now — choose which redaction set to use"
+                                                           FontWeight="Medium"
+                                                           FontSize="12.5" />
+                                                <ListBox ItemsSource="{Binding RedactEntitySetOptions}"
+                                                         SelectedItem="{Binding SelectedRedactEntitySet}"
+                                                         SelectionMode="Single"
+                                                         Background="Transparent"
+                                                         Padding="0">
+                                                    <ListBox.Styles>
+                                                        <Style Selector="ListBoxItem">
+                                                            <Setter Property="Padding" Value="10,6" />
+                                                            <Setter Property="Margin" Value="0,0,8,6" />
+                                                            <Setter Property="CornerRadius" Value="6" />
+                                                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+                                                        </Style>
+                                                        <Style Selector="ListBoxItem:selected">
+                                                            <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                                                        </Style>
+                                                    </ListBox.Styles>
+                                                    <ListBox.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel />
+                                                        </ItemsPanelTemplate>
+                                                    </ListBox.ItemsPanel>
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="redaction:RedactionEntitySet">
+                                                            <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Entities, Converter={x:Static conv:EntityListSummaryConverter.Instance}}" />
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+                                                <TextBlock Text="Manage redaction sets from Settings."
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource FaintBrush}" />
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Button Content="Redact" Command="{Binding ConfirmRedactCommand}" />
+                                                    <Button Content="Cancel" Classes="ghost" Command="{Binding CancelRedactCommand}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Flyout>
+                                    </FlyoutBase.AttachedFlyout>
+                                </Border>
                                 <Button Command="{Binding MergeSelectedDocumentsCommand}"
                                         Classes="ghost"
                                         ToolTip.Tip="Merge the selected documents in their displayed order">
@@ -396,52 +450,6 @@
                 </DockPanel>
                 </Border>
 
-                <Border IsVisible="{Binding IsRedactPickerOpen}"
-                        Background="{DynamicResource Surface2Brush}"
-                        BorderBrush="{DynamicResource BorderBrush1}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="14,12">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Redact now — choose which redaction set to use"
-                                   FontWeight="Medium"
-                                   FontSize="12.5" />
-                        <ListBox ItemsSource="{Binding RedactEntitySetOptions}"
-                                 SelectedItem="{Binding SelectedRedactEntitySet}"
-                                 SelectionMode="Single"
-                                 Background="Transparent"
-                                 Padding="0">
-                            <ListBox.Styles>
-                                <Style Selector="ListBoxItem">
-                                    <Setter Property="Padding" Value="10,6" />
-                                    <Setter Property="Margin" Value="0,0,8,6" />
-                                    <Setter Property="CornerRadius" Value="6" />
-                                    <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
-                                </Style>
-                                <Style Selector="ListBoxItem:selected">
-                                    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
-                                </Style>
-                            </ListBox.Styles>
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="redaction:RedactionEntitySet">
-                                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Entities, Converter={x:Static conv:EntityListSummaryConverter.Instance}}" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                        <TextBlock Text="Manage redaction sets from Settings."
-                                   FontSize="11"
-                                   Foreground="{DynamicResource FaintBrush}" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Redact" Command="{Binding ConfirmRedactCommand}" />
-                            <Button Content="Cancel" Classes="ghost" Command="{Binding CancelRedactCommand}" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </Border>
 
@@ -494,7 +502,8 @@
                                     <DataTemplate x:DataType="vm:DocumentRow">
                                         <Border CornerRadius="2"
                                                 Margin="0,3"
-                                                Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}" />
+                                                Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}"
+                                                ToolTip.Tip="Rows with the same color belong to the same batch" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
@@ -766,7 +775,7 @@
                                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                         ToolTip.Tip="Fit to window"
                                         Click="OnZoomResetClick">
-                                    <TextBlock Text="⤢" FontSize="12.5" />
+                                    <Path Data="{StaticResource IconFitToWindow}" Stretch="Uniform" Width="13" Height="13" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
                                 </Button>
                             </StackPanel>
                         </Border>
@@ -1010,12 +1019,14 @@
                                                   SelectionMode="Extended"
                                                   ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                                   Loaded="OnGroupTableLoaded"
-                                                  SelectionChanged="OnGroupTableSelectionChanged">
+                                                  SelectionChanged="OnGroupTableSelectionChanged"
+                                                  KeyDown="OnGroupTableKeyDown">
                                             <DataGrid.Columns>
                                                 <DataGridTemplateColumn Width="4" CanUserResize="False">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
-                                                            <Border Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}" />
+                                                            <Border Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}"
+                                                                    ToolTip.Tip="Rows with the same color belong to the same batch" />
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
@@ -1124,6 +1135,7 @@
                            VerticalAlignment="Center"
                            FontSize="12.5"
                            Foreground="{DynamicResource InkSoftBrush}"
+                           Classes.critical="{Binding StatusIsError}"
                            TextTrimming="CharacterEllipsis" />
                 <TextBlock Grid.Column="1"
                            Classes="mono"

@@ -56,7 +56,7 @@ public sealed class FileDialogService : IFileDialogService
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
 
-    public async Task<string?> PickFolderAsync()
+    public async Task<string?> PickFolderAsync(string title = "Import folder")
     {
         var provider = GetStorageProvider();
         if (provider is null)
@@ -64,7 +64,7 @@ public sealed class FileDialogService : IFileDialogService
 
         var folders = await provider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Import folder",
+            Title = title,
             AllowMultiple = false
         });
 

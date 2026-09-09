@@ -205,6 +205,12 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _statusText = "Starting…";
 
+    /// <summary>Drives the status text's error styling (see MainWindow.axaml) — set alongside StatusText
+    /// wherever it's reporting a failure, so a failure reads visually distinct from routine status
+    /// chatter instead of relying on the reader to parse the wording.</summary>
+    [ObservableProperty]
+    private bool _statusIsError;
+
     // Selection/view-dependent commands (RemoveSelected, MergeSelectedDocuments,
     // RedactSelected, ApplyRedactions, MarkReady, MarkSelectedReady, Export, ExportAll,
     // RestoreSelectedTrash, PurgeSelectedTrash) are deliberately NOT listed here — see
@@ -255,6 +261,7 @@ public partial class MainViewModel : ViewModelBase
             StatusText = Documents.Count == 0
                 ? "Import a PDF or image to get started"
                 : $"{Documents.Count} document(s)";
+            StatusIsError = false;
 
             if (Documents.Count > 0)
                 SelectedDocument = Documents[0];
@@ -270,6 +277,7 @@ public partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
         }
     }
 

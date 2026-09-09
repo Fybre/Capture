@@ -375,7 +375,11 @@
     <Grid Grid.Row="1" Grid.ColumnSpan="5" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
       <TextBlock Text="{Binding ValidationSummary}" Foreground="Tomato" TextWrapping="Wrap"/>
       <TextBlock Grid.Row="1" Text="{Binding SaveConfirmation}" Foreground="{DynamicResource GoodBrush}" TextWrapping="Wrap"/>
-      <Button Grid.Column="1" Grid.RowSpan="2" Content="Save capture profile" Command="{Binding SaveCommand}"/>
+      <StackPanel Grid.Column="1" Grid.RowSpan="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Ellipse Width="8" Height="8" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center"
+                 IsVisible="{Binding IsDirty}" ToolTip.Tip="Unsaved changes"/>
+        <Button Content="Save capture profile" Command="{Binding SaveCommand}"/>
+      </StackPanel>
     </Grid>
   </Grid>
 </UserControl>

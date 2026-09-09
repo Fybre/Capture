@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
@@ -41,6 +42,38 @@ public partial class MainWindow : Window
         WireDragDrop(InboxGrid);
         WirePageDragDrop(PageThumbnailStrip);
         WireFileDrop();
+        DataContextChanged += OnMainDataContextChanged;
+    }
+
+    // The Redact picker used to be an always-present Border whose IsVisible reflowed the whole toolbar
+    // when toggled. It's now a real Flyout, attached to a zero-size anchor next to the Redact button
+    // (not to the button itself — Button.Flyout auto-opens on click, before RedactSelectedCommand has
+    // finished populating RedactEntitySetOptions) and driven here from IsRedactPickerOpen instead.
+    private void OnMainDataContextChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel)
+            return;
+
+        viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(MainViewModel.IsRedactPickerOpen))
+                return;
+
+            if (viewModel.IsRedactPickerOpen)
+                FlyoutBase.ShowAttachedFlyout(RedactPickerAnchor);
+            else
+                FlyoutBase.GetAttachedFlyout(RedactPickerAnchor)?.Hide();
+        };
+
+        var redactPickerFlyout = FlyoutBase.GetAttachedFlyout(RedactPickerAnchor)!;
+        redactPickerFlyout.Closed += (_, _) =>
+        {
+            // Closed fires both when we call Hide() above (state already false — no-op here) and when
+            // the user dismisses it by clicking outside, which never ran Cancel/ConfirmRedactCommand —
+            // without this, IsRedactPickerOpen would be left stuck true.
+            if (viewModel.IsRedactPickerOpen)
+                viewModel.CancelRedactCommand.Execute(null);
+        };
     }
 
     // Lets a user drag file(s)/folder(s) from Finder/Explorer anywhere onto the window to import them
@@ -597,12 +630,24 @@ public partial class MainWindow : Window
                 if (isBatchField)
                     return text;
 
+                var copyIcon = new Avalonia.Controls.Shapes.Path
+                {
+                    Data = Application.Current?.FindResource("IconCopyToSelection") as Geometry,
+                    Stretch = Stretch.Uniform,
+                    Width = 10,
+                    Height = 10,
+                    StrokeThickness = 1.4
+                };
+                copyIcon.Bind(Shape.StrokeProperty, new Binding
+                {
+                    Path = nameof(Button.Foreground),
+                    RelativeSource = new RelativeSource { Mode = RelativeSourceMode.FindAncestor, AncestorType = typeof(Button) }
+                });
                 var copy = new Button
                 {
-                    Content = "⎘",
+                    Content = copyIcon,
                     Padding = new Thickness(4, 0),
                     Margin = new Thickness(0, 0, 4, 0),
-                    FontSize = 12,
                     Opacity = 0,
                     IsHitTestVisible = false,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -689,6 +734,20 @@ public partial class MainWindow : Window
         // clearing the selection) must clear SelectedDocument too, not leave it pointing at whatever
         // was selected before.
         viewModel.SelectedDocument = grid.SelectedItem as DocumentRow;
+    }
+
+    // Preview mode's InboxGrid gets this for free via DataGrid.KeyBindings (a single grid bound straight
+    // to MainViewModel). Table mode's per-group grids can't use the same XAML binding — their DataContext
+    // is the DocumentGroupViewModel, not MainViewModel — so this mirrors the same Delete/Backspace
+    // shortcut in code-behind instead.
+    private void OnGroupTableKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Delete or Key.Back) || DataContext is not MainViewModel viewModel)
+            return;
+        if (!viewModel.RemoveSelectedCommand.CanExecute(null))
+            return;
+        viewModel.RemoveSelectedCommand.Execute(null);
+        e.Handled = true;
     }
 
     private void OnSelectAllGroupClick(object? sender, RoutedEventArgs e)

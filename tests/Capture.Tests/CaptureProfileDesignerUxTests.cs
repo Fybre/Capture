@@ -27,12 +27,113 @@ public sealed class CaptureProfileDesignerUxTests
         Assert.Contains("Disabled draft saved", designer.SaveConfirmation);
         Assert.Empty(designer.ValidationSummary);
 
+        // Flipping Enabled on and saving while setup is incomplete must never discard the user's edits —
+        // it still persists, forced back to a disabled draft, rather than silently doing nothing.
         profile.Enabled = true;
         await designer.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(2, store.SaveCount);
+        Assert.False(profile.Enabled);
+        Assert.False(designer.ProfileEnabled);
         Assert.Contains("Add at least one document type", designer.ValidationSummary);
         Assert.Contains("Choose a fallback document type", designer.ValidationSummary);
+        Assert.Contains("Saved as a disabled draft", designer.SaveConfirmation);
+    }
+
+    [Fact]
+    public void Duplicate_field_and_document_type_names_are_flagged()
+    {
+        var typeA = new DocumentTypeDefinition
+        {
+            Name = "Invoice",
+            Fields = [new IndexField { Name = "Total" }, new IndexField { Name = "total" }]
+        };
+        var typeB = new DocumentTypeDefinition { Name = "Invoice" };
+        var profile = new CaptureProfile
+        {
+            Batch = new BatchDefinition { Fields = [new IndexField { Name = "Case" }, new IndexField { Name = "Case" }] },
+            DocumentTypes = [typeA, typeB]
+        };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Batch field name 'Case'"));
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Field name 'Total'") && issue.Contains("Invoice"));
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Document type name 'Invoice'"));
+    }
+
+    [Fact]
+    public void Ambiguous_recognition_rules_across_document_types_are_flagged()
+    {
+        var typeA = new DocumentTypeDefinition
+        {
+            Name = "Transcript",
+            RecognitionRules = new RuleSet { Rules = [new SeparationStrategy { Type = SeparationStrategyType.OcrZone, TextPattern = "TRANSCRIPT" }] }
+        };
+        var typeB = new DocumentTypeDefinition
+        {
+            Name = "Certificate",
+            RecognitionRules = new RuleSet { Rules = [new SeparationStrategy { Type = SeparationStrategyType.OcrZone, TextPattern = "TRANSCRIPT" }] }
+        };
+        var profile = new CaptureProfile { DocumentTypes = [typeA, typeB] };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Ambiguous recognition rule"));
+    }
+
+    [Fact]
+    public void Enabled_export_missing_required_settings_is_flagged()
+    {
+        var type = new DocumentTypeDefinition
+        {
+            Name = "Invoice",
+            Exports =
+            [
+                new ExportDefinition { Type = ExportType.None },
+                new ExportDefinition { Type = ExportType.Csv, OutputFolder = "" },
+                new ExportDefinition { Type = ExportType.Therefore, ThereforeCategoryNo = null }
+            ]
+        };
+        var profile = new CaptureProfile { DocumentTypes = [type] };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Choose an export type"));
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Choose an output folder"));
+        Assert.Contains(designer.EnablementIssues, issue => issue.Contains("Choose a Therefore category"));
+    }
+
+    [Fact]
+    public void Copying_a_document_type_twice_produces_unique_names()
+    {
+        var type = new DocumentTypeDefinition { Name = "Invoice" };
+        var profile = new CaptureProfile { DocumentTypes = [type] };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+        designer.SelectedNode = designer.Navigation.Single(node => node.DocumentType == type);
+
+        designer.CopyDocumentTypeCommand.Execute(null);
+        designer.SelectedNode = designer.Navigation.Single(node => node.DocumentType == type);
+        designer.CopyDocumentTypeCommand.Execute(null);
+
+        Assert.Equal(["Invoice", "Invoice copy", "Invoice copy 2"], profile.DocumentTypes.Select(t => t.Name));
+        Assert.DoesNotContain(designer.EnablementIssues, issue => issue.Contains("Document type name"));
+    }
+
+    [Fact]
+    public async Task Unsaved_changes_are_tracked_and_cleared_by_save()
+    {
+        var profile = new CaptureProfile { Enabled = false };
+        var store = new RecordingProfileStore();
+        var designer = new CaptureProfileDesignerViewModel(profile, store);
+
+        Assert.False(designer.HasUnsavedChanges());
+
+        designer.ProfileName = "Renamed";
+        Assert.True(designer.HasUnsavedChanges());
+        Assert.True(designer.IsDirty);
+
+        await designer.SaveCommand.ExecuteAsync(null);
+
+        Assert.False(designer.HasUnsavedChanges());
+        Assert.False(designer.IsDirty);
     }
 
     [Fact]

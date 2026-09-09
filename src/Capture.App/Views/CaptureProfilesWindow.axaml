@@ -21,11 +21,19 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,14,0,0">
-      <Button Content="New" Command="{Binding NewCommand}"/>
-      <Button Grid.Column="1" Content="Edit" Command="{Binding EditCommand}"/>
-      <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteCommand}" Classes="ghost"/>
-      <Button Grid.Column="3"
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+      <WrapPanel>
+        <Button Content="New" Command="{Binding NewCommand}" Margin="0,0,8,0"/>
+        <Button Content="Edit" Command="{Binding EditCommand}" Margin="0,0,8,0"/>
+        <Button Content="Delete" Command="{Binding DeleteCommand}" Classes="ghost" Margin="0,0,8,0"/>
+        <Button Content="Export…" Command="{Binding ExportCommand}" Margin="0,0,8,0"
+                ToolTip.Tip="Save the selected profile as a JSON file"/>
+        <Button Content="Export all…" Command="{Binding ExportAllCommand}" Margin="0,0,8,0"
+                ToolTip.Tip="Save every profile as JSON files in a folder"/>
+        <Button Content="Import…" Command="{Binding ImportCommand}"
+                ToolTip.Tip="Load a profile from a JSON file, as a new disabled draft"/>
+      </WrapPanel>
+      <Button Grid.Column="1"
               Content="Close"
               HorizontalAlignment="Right"
               IsCancel="True"

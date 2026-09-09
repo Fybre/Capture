@@ -15,6 +15,12 @@ public partial class MainViewModel
     public ObservableCollection<CaptureProfile> CaptureProfiles { get; } = [];
     public bool HasProfiles => CaptureProfiles.Count > 0;
 
+    /// <summary>All profiles regardless of Enabled state. Used to resolve settings for documents that
+    /// were already captured under a profile that has since been disabled — disabling a profile stops it
+    /// from being offered for new capture work, but must not break export/ready/redaction for documents
+    /// already assigned to it.</summary>
+    private readonly ObservableCollection<CaptureProfile> _allCaptureProfiles = [];
+
     [ObservableProperty]
     private CaptureProfile? _selectedCaptureProfile;
 
@@ -66,12 +72,27 @@ public partial class MainViewModel
         try
         {
             var restoreId = SelectedCaptureProfile?.Id ?? _watchSettings.LastCaptureProfileId;
+            var previouslySelectedId = SelectedCaptureProfile?.Id;
+            var all = await _captureProfileStore.GetAllAsync().ConfigureAwait(true);
+            _allCaptureProfiles.Clear();
+            foreach (var profile in all)
+                _allCaptureProfiles.Add(profile);
             CaptureProfiles.Clear();
-            foreach (var profile in (await _captureProfileStore.GetAllAsync().ConfigureAwait(true)).Where(profile => profile.Enabled))
+            foreach (var profile in all.Where(profile => profile.Enabled))
                 CaptureProfiles.Add(profile);
             SelectedCaptureProfile = restoreId is { } id
                 ? CaptureProfiles.FirstOrDefault(profile => profile.Id == id)
                 : CaptureProfiles.FirstOrDefault();
+
+            if (previouslySelectedId is { } previousId
+                && SelectedCaptureProfile?.Id != previousId
+                && _allCaptureProfiles.FirstOrDefault(profile => profile.Id == previousId) is { } previousProfile)
+            {
+                StatusText = SelectedCaptureProfile is { } newProfile
+                    ? $"\"{previousProfile.Name}\" was disabled; switched the active profile to \"{newProfile.Name}\""
+                    : $"\"{previousProfile.Name}\" was disabled; no other enabled profile is available";
+                _toasts.ShowInfo(StatusText);
+            }
         }
         finally { _restoringProfileSelection = false; }
     }
@@ -96,6 +117,7 @@ public partial class MainViewModel
         {
             await batches.SetBatchStateAsync(open.Id, BatchState.Closed).ConfigureAwait(true);
             StatusText = "Closed the current batch; the next manual import will start a new batch";
+            StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
         }
         else
@@ -137,11 +159,13 @@ public partial class MainViewModel
         await _watchStore.SaveAsync(_watchSettings).ConfigureAwait(true);
     }
 
+    // Searches every stored profile, not just the enabled ones offered for new capture work — a document
+    // already captured under a profile must still resolve its type/settings after that profile is disabled.
     private DocumentTypeDefinition? FindDocumentType(Guid? id) => id is null
         ? null
-        : CaptureProfiles.SelectMany(profile => profile.DocumentTypes).FirstOrDefault(type => type.Id == id);
+        : _allCaptureProfiles.SelectMany(profile => profile.DocumentTypes).FirstOrDefault(type => type.Id == id);
 
     private CaptureProfile? FindCaptureProfileForDocumentType(Guid? id) => id is null
         ? null
-        : CaptureProfiles.FirstOrDefault(profile => profile.DocumentTypes.Any(type => type.Id == id));
+        : _allCaptureProfiles.FirstOrDefault(profile => profile.DocumentTypes.Any(type => type.Id == id));
 }

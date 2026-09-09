@@ -113,8 +113,9 @@ public partial class MainViewModel
     {
         _watchSettings = await _watchStore.LoadAsync().ConfigureAwait(true);
         var enabledProfileIds = CaptureProfiles.Select(profile => profile.Id).ToHashSet();
-        _watch.Apply(_watchSettings.WatchFolders.Where(entry =>
-            entry.CaptureProfileId is { } profileId && enabledProfileIds.Contains(profileId)).ToList());
+        var eligible = _watchSettings.WatchFolders.Where(entry => entry.CaptureProfileId is { } profileId && enabledProfileIds.Contains(profileId)).ToList();
+        _watch.Apply(eligible);
+        var droppedCount = _watchSettings.WatchFolders.Count(entry => entry.CaptureProfileId is not null) - eligible.Count;
         var active = _watch.ActiveFolders;
         WatchStatus = active.Count switch
         {
@@ -122,6 +123,8 @@ public partial class MainViewModel
             1 => $"Watching {active[0].Folder}",
             _ => $"Watching {active.Count} folders"
         };
+        if (droppedCount > 0)
+            WatchStatus += $" — {droppedCount} watch folder{(droppedCount == 1 ? string.Empty : "s")} paused (assigned profile is disabled or missing)";
         ApplyTheme(_watchSettings.Theme);
         _debugLog.SetEnabled(_watchSettings.DebugMode);
         await RunAutoCleanupIfEnabledAsync().ConfigureAwait(true);
@@ -193,6 +196,7 @@ public partial class MainViewModel
         {
             Trace.TraceError($"Failed to file away watch file '{path}': {ex}");
             var fileName = Path.GetFileName(path);
+            StatusIsError = true;
             if (watchFolderEntry is null)
             {
                 StatusText = $"Couldn't file away {fileName}: {ex.Message}";

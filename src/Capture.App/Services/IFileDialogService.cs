@@ -8,7 +8,7 @@ public interface IFileDialogService
 
     Task<string?> PickFileAsync(string title);
 
-    Task<string?> PickFolderAsync();
+    Task<string?> PickFolderAsync(string title = "Import folder");
 
     /// <summary>Opens a single JSON file picker (profile/settings import) — unlike <see cref="PickFileAsync"/>,
     /// which filters to importable document formats.</summary>

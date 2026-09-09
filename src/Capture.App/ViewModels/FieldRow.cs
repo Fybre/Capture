@@ -12,9 +12,10 @@ public enum BarcodeScanArea { EntirePage, SelectedArea }
 
 public sealed partial class FieldRow : ObservableObject
 {
-    public FieldRow(IndexField field)
+    public FieldRow(IndexField field, bool isBatchScope = false)
     {
         Field = field;
+        IsBatchScope = isBatchScope;
         _boundaryRuleId = field.BoundaryRuleId;
         _name = field.Name;
         _format = field.Format;
@@ -49,6 +50,12 @@ public sealed partial class FieldRow : ObservableObject
     }
 
     public IndexField Field { get; }
+
+    /// <summary>True when this row belongs to the profile's shared batch fields rather than a document
+    /// type's own fields — batch fields never create page redactions, even when marked Sensitive, since
+    /// they aren't tied to a page zone on any one document. Drives the inline warning shown next to the
+    /// Sensitive checkbox for a batch field.</summary>
+    public bool IsBatchScope { get; }
 
     public Guid Id => Field.Id;
 
@@ -145,7 +152,13 @@ public sealed partial class FieldRow : ObservableObject
     private bool _mandatory;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBatchSensitiveHint))]
     private bool _sensitive;
+
+    /// <summary>Gates the inline "this won't create a page redaction" note shown next to a batch field's
+    /// Sensitive checkbox — surfaced at the point of the mistake rather than only in the section-level
+    /// hint text above the whole field list.</summary>
+    public bool ShowBatchSensitiveHint => IsBatchScope && Sensitive;
 
     [ObservableProperty]
     private bool _hidden;
