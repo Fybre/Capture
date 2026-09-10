@@ -138,6 +138,16 @@ public partial class MainWindow : Window
         FocusNextField(row);
     }
 
+    // The row's own highlight/select command lives on the outer Button, but a pointer press
+    // inside an editor (TextBox/CalendarDatePicker/ComboBox) is consumed by that editor before
+    // it bubbles up, so the Button's Click never fires and the preview never highlights. GotFocus
+    // does reach us regardless, so use it to drive the same selection the row click would.
+    private void OnFieldGotFocus(object? sender, GotFocusEventArgs e)
+    {
+        if (sender is Control { DataContext: IndexValueRow row } && row.SelectCommand.CanExecute(null))
+            row.SelectCommand.Execute(null);
+    }
+
     private void FocusNextField(IndexValueRow current)
     {
         if (DataContext is not MainViewModel viewModel)

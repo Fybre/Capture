@@ -61,7 +61,8 @@
                              PasswordChar="{Binding PasswordChar}"
                              RevealPassword="{Binding RevealSensitiveValue}"
                              Classes.invalid="{Binding HasFormatError}"
-                             KeyDown="OnFieldKeyDown" />
+                             KeyDown="OnFieldKeyDown"
+                             GotFocus="OnFieldGotFocus" />
                     <ToggleButton Content="{Binding SensitiveValueToggleLabel}"
                                   IsChecked="{Binding RevealSensitiveValue}"
                                   IsVisible="{Binding IsSensitiveBatch}"
@@ -73,14 +74,16 @@
                                         IsVisible="{Binding IsDateEditorVisible}"
                                         IsEnabled="{Binding !IsReadOnly}"
                                         HorizontalAlignment="Stretch"
-                                        KeyDown="OnFieldKeyDown" />
+                                        KeyDown="OnFieldKeyDown"
+                                        GotFocus="OnFieldGotFocus" />
                     <ComboBox ItemsSource="{Binding LookupChoices}"
                               SelectedItem="{Binding SelectedLookup}"
                               IsVisible="{Binding IsLookupEditorVisible}"
                               IsEnabled="{Binding !IsReadOnly}"
                               PlaceholderText="Choose a value"
                               HorizontalAlignment="Stretch"
-                              KeyDown="OnFieldKeyDown">
+                              KeyDown="OnFieldKeyDown"
+                              GotFocus="OnFieldGotFocus">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:LookupChoice">
                                 <TextBlock Text="{Binding Display}" />
