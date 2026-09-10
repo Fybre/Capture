@@ -181,7 +181,7 @@
                 <StackPanel IsVisible="{Binding IsAi}" Spacing="5">
                   <TextBlock Text="Classification" Classes="field-label"/><ComboBox ItemsSource="{Binding Classifications}" SelectedItem="{Binding SelectedClassification}"/>
                   <TextBlock Text="AI field type" Classes="field-label"/><ComboBox ItemsSource="{Binding AiTypes}" SelectedItem="{Binding SelectedAiType}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-                  <TextBlock Text="{Binding AiPromptLabel}" Classes="field-label"/><TextBox Text="{Binding AiPrompt}" Watermark="{Binding AiPromptWatermark}" AcceptsReturn="True" MinHeight="55"/>
+                  <TextBlock Text="{Binding AiPromptLabel}" Classes="field-label"/><TextBox Classes="multiline" Text="{Binding AiPrompt}" Watermark="{Binding AiPromptWatermark}" AcceptsReturn="True" MinHeight="55"/>
                   <Button Content="Extract all AI fields from sample" HorizontalAlignment="Left"
                           Command="{Binding $parent[UserControl].DataContext.ExtractAiSampleCommand}"/>
                 </StackPanel>
@@ -198,7 +198,7 @@
                       <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutFieldScriptCommand}" CommandParameter="{Binding}"/>
                     </StackPanel>
                   </Grid>
-                  <TextBox Text="{Binding ScriptExpression}" AcceptsReturn="True" MinHeight="80" FontFamily="{DynamicResource MonoFontFamily}"/>
+                  <TextBox Classes="multiline" Text="{Binding ScriptExpression}" AcceptsReturn="True" MinHeight="80" FontFamily="{DynamicResource MonoFontFamily}"/>
                   <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestFieldScriptCommand}" CommandParameter="{Binding}"/>
                   <TextBlock Text="Real processing requires Allow profile scripts in Settings. Run test is an explicit designer action and runs this source against the current sample values." Classes="hint" TextWrapping="Wrap"/>
                 </StackPanel>
@@ -212,7 +212,7 @@
                       <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutButtonScriptCommand}" CommandParameter="{Binding}"/>
                     </StackPanel>
                   </Grid>
-                  <TextBox Text="{Binding ButtonScriptSource}" AcceptsReturn="True" MinHeight="90" FontFamily="{DynamicResource MonoFontFamily}"/>
+                  <TextBox Classes="multiline" Text="{Binding ButtonScriptSource}" AcceptsReturn="True" MinHeight="90" FontFamily="{DynamicResource MonoFontFamily}"/>
                   <TextBlock Text="Timeout seconds" Classes="field-label"/><NumericUpDown Value="{Binding ButtonTimeoutSeconds}" Minimum="1" Maximum="300"/>
                   <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestButtonScriptCommand}" CommandParameter="{Binding}"/>
                 </StackPanel>
@@ -225,7 +225,7 @@
                       <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutPostProcessScriptCommand}" CommandParameter="{Binding}"/>
                     </StackPanel>
                   </Grid>
-                  <TextBox Text="{Binding PostProcessScript}" AcceptsReturn="True" MinHeight="60" FontFamily="{DynamicResource MonoFontFamily}"/>
+                  <TextBox Classes="multiline" Text="{Binding PostProcessScript}" AcceptsReturn="True" MinHeight="60" FontFamily="{DynamicResource MonoFontFamily}"/>
                   <TextBlock Text="The returned text replaces the extracted value. Use SetConfidence(0–100) when the script should replace its confidence. Example: SetConfidence(100); Value.Trim()" Classes="hint" TextWrapping="Wrap"/>
                   <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestPostProcessScriptCommand}" CommandParameter="{Binding}"/>
                   <TextBlock Text="Real processing requires Allow profile scripts in Settings; the explicit test is always available." Classes="hint" TextWrapping="Wrap"/>

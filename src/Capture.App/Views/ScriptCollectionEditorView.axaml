@@ -19,7 +19,7 @@
           <Button Grid.Column="1" Content="Pop out" Classes="ghost" Padding="8,3"
                   Command="{Binding PopOutSharedSourceCommand}"/>
         </Grid>
-        <TextBox AcceptsReturn="True" MinHeight="76" MaxHeight="150"
+        <TextBox Classes="multiline" AcceptsReturn="True" MinHeight="76" MaxHeight="150"
                  FontFamily="{DynamicResource PlexMonoFontFamily}"
                  Watermark="Reusable C# helper methods available to every script in this section"
                  Text="{Binding SharedSource}"/>
@@ -57,7 +57,7 @@
                         Command="{Binding $parent[UserControl].DataContext.PopOutCommand}"
                         CommandParameter="{Binding}"/>
               </Grid>
-              <TextBox Text="{Binding Source}" AcceptsReturn="True" MinHeight="120" MaxHeight="240"
+              <TextBox Classes="multiline" Text="{Binding Source}" AcceptsReturn="True" MinHeight="120" MaxHeight="240"
                        FontFamily="{DynamicResource PlexMonoFontFamily}"
                        Watermark="e.g. Fields[&quot;Total&quot;].Value = &quot;0&quot;;"/>
               <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">

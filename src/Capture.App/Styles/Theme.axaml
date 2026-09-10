@@ -327,6 +327,11 @@
 
   <!-- ===================== Inputs ===================== -->
 
+  <!-- Height (not just MinHeight) is set here so single-line TextBox/ComboBox/NumericUpDown controls
+       always render pixel-identical when paired on the same row (e.g. Name next to Format) — MinHeight
+       alone left them mismatched, since Fluent's ComboBox chrome (the dropdown toggle) has its own
+       natural minimum that MinHeight can raise but not reduce. The handful of multiline TextBoxes
+       (Classes="multiline" — scripts, prompts) opt back out to natural Min/MaxHeight-driven sizing. -->
   <Style Selector="TextBox">
     <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
     <Setter Property="FontSize" Value="13" />
@@ -335,7 +340,11 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Padding" Value="9,7" />
-    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Height" Value="34" />
+  </Style>
+
+  <Style Selector="TextBox.multiline">
+    <Setter Property="Height" Value="NaN" />
   </Style>
 
   <Style Selector="TextBox.invalid">
@@ -343,9 +352,6 @@
     <Setter Property="BorderThickness" Value="1.5" />
   </Style>
 
-  <!-- Matches TextBox's Padding/MinHeight explicitly — ComboBox's Fluent-theme defaults for both
-       differ from TextBox's, so a Name/Format-style pairing (a TextBox next to a ComboBox on the same
-       row) rendered visibly mismatched heights without this. -->
   <Style Selector="ComboBox">
     <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
     <Setter Property="FontSize" Value="13" />
@@ -354,15 +360,15 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Padding" Value="9,7" />
-    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Height" Value="34" />
   </Style>
 
   <!-- NumericUpDown often sits beside a TextBox/ComboBox in the same row (e.g. redaction thresholds,
-       field page numbers) — same MinHeight keeps that row's controls visually aligned. -->
+       field page numbers) — same Height keeps that row's controls visually aligned. -->
   <Style Selector="NumericUpDown">
     <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Height" Value="34" />
   </Style>
 
   <!-- ===================== Status chips ===================== -->
