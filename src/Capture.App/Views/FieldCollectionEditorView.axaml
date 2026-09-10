@@ -1,13 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Capture.App.Views.FieldCollectionEditorView" x:CompileBindings="False">
-  <Grid RowDefinitions="Auto,148,Auto">
+  <Grid RowDefinitions="Auto,260,6,Auto">
     <WrapPanel Margin="0,0,-6,-6">
       <ComboBox Width="132" Margin="0,0,6,6" ItemsSource="{Binding FieldKinds}" SelectedItem="{Binding NewFieldKind}"/>
       <Button Content="Add field" Margin="0,0,6,6" Command="{Binding AddSelectedKindCommand}" />
       <Button Content="Up" Margin="0,0,6,6" Command="{Binding MoveUpCommand}" />
       <Button Content="Down" Margin="0,0,6,6" Command="{Binding MoveDownCommand}" />
     </WrapPanel>
-    <ListBox Grid.Row="1"
+    <ListBox x:Name="FieldsList"
+             Grid.Row="1"
              Margin="0,8,0,0"
              ItemsSource="{Binding Fields}"
              SelectedItem="{Binding SelectedField}"
@@ -33,7 +34,16 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
-    <StackPanel Grid.Row="2"
+    <!-- A plain drag handle rather than a GridSplitter: GridSplitter's static constructor builds a
+         Cursor from StandardCursorType unconditionally, which throws when this view is instantiated
+         off a real windowing platform (e.g. FieldCollectionEditorViewTests constructs it directly in a
+         headless xunit run). The resize cursor here is set/cleared at runtime instead, in code-behind,
+         where a live platform is always present. -->
+    <Border x:Name="FieldListSplitter"
+            Grid.Row="2"
+            Background="Transparent"
+            ToolTip.Tip="Drag to resize the field list"/>
+    <StackPanel Grid.Row="3"
                 IsVisible="{Binding SelectedField, Converter={x:Static ObjectConverters.IsNotNull}}">
       <!-- The accent stem and matching border make the editor read as the detail view
            for the selected row above, rather than as another unrelated card. -->
