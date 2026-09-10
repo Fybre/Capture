@@ -1033,7 +1033,7 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="File" Width="Auto" MinWidth="180" MaxWidth="420">
+                                                <DataGridTemplateColumn Header="File" Width="Auto" MinWidth="150" MaxWidth="300">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
                                                             <Grid ColumnDefinitions="Auto,*" Margin="4,0">
@@ -1059,8 +1059,8 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="Pages" Binding="{Binding PageCount}" Width="70" />
-                                                <DataGridTemplateColumn Header="Status" Width="136">
+                                                <DataGridTextColumn Header="Pages" Binding="{Binding PageCount}" Width="78" />
+                                                <DataGridTemplateColumn Header="Status" Width="118">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
                                                             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
@@ -1097,13 +1097,15 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Issues" Width="150">
+                                                <DataGridTemplateColumn Header="Issues" Width="130">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
                                                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding IssueDisplay, Converter={x:Static conv:StringOrDashConverter.Instance}}"
                                                                            Classes="issue-cell"
                                                                            Classes.critical="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           ToolTip.Tip="{Binding IssueDisplay}"
                                                                            VerticalAlignment="Center" />
                                                                 <TextBlock Text="Duplicate"
                                                                            Classes="mono"
