@@ -1033,7 +1033,7 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="File" Width="Auto" MinWidth="150" MaxWidth="300">
+                                                <DataGridTemplateColumn Header="File" Width="170" MinWidth="120" MaxWidth="300">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
                                                             <Grid ColumnDefinitions="Auto,*" Margin="4,0">
@@ -1097,7 +1097,7 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Issues" Width="130">
+                                                <DataGridTemplateColumn Header="Issues" Width="90">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate x:DataType="vm:DocumentRow">
                                                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
