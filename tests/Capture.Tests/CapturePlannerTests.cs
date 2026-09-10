@@ -1,11 +1,70 @@
 using Capture.Core.CaptureProfiles;
 using Capture.Core.Import;
+using Capture.Core.Lattice;
 using Capture.Core.Profiles;
 
 namespace Capture.Tests;
 
 public class CapturePlannerTests
 {
+    [Fact]
+    public void MatchDocumentType_uses_the_recognition_rule_that_matches_the_page_text()
+    {
+        var invoice = Type("Invoice", Rule(SeparationStrategyType.Regex, "INVOICE"));
+        var receipt = Type("Receipt", Rule(SeparationStrategyType.Regex, "RECEIPT"));
+        var profile = Profile(batchRule: null, invoice, receipt);
+        var pages = new[] { Lattice(1, "RECEIPT for your records") };
+
+        var matched = CapturePlanner.MatchDocumentType(profile, pages);
+
+        Assert.Equal("Receipt", matched?.Name);
+    }
+
+    [Fact]
+    public void MatchDocumentType_falls_back_to_the_default_document_type_when_nothing_matches()
+    {
+        var invoice = Type("Invoice", Rule(SeparationStrategyType.Regex, "INVOICE"));
+        var receipt = Type("Receipt", Rule(SeparationStrategyType.Regex, "RECEIPT"));
+        var profile = Profile(batchRule: null, invoice, receipt);
+        profile.DefaultDocumentTypeId = receipt.Id;
+        var pages = new[] { Lattice(1, "an unrelated cover page") };
+
+        var matched = CapturePlanner.MatchDocumentType(profile, pages);
+
+        Assert.Equal("Receipt", matched?.Name);
+    }
+
+    [Fact]
+    public void MatchDocumentType_falls_back_to_the_only_document_type_with_no_default_set()
+    {
+        var invoice = Type("Invoice", Rule(SeparationStrategyType.Regex, "INVOICE"));
+        var profile = Profile(batchRule: null, invoice);
+        var pages = new[] { Lattice(1, "an unrelated cover page") };
+
+        var matched = CapturePlanner.MatchDocumentType(profile, pages);
+
+        Assert.Equal("Invoice", matched?.Name);
+    }
+
+    [Fact]
+    public void MatchDocumentType_returns_null_when_multiple_types_and_no_default_or_match()
+    {
+        var invoice = Type("Invoice", Rule(SeparationStrategyType.Regex, "INVOICE"));
+        var receipt = Type("Receipt", Rule(SeparationStrategyType.Regex, "RECEIPT"));
+        var profile = Profile(batchRule: null, invoice, receipt);
+        var pages = new[] { Lattice(1, "an unrelated cover page") };
+
+        var matched = CapturePlanner.MatchDocumentType(profile, pages);
+
+        Assert.Null(matched);
+    }
+
+    private static PageLattice Lattice(int pageNumber, string text) => new()
+    {
+        PageNumber = pageNumber,
+        Words = text.Split(' ').Select((word, index) => new LatticeWord { Text = word, Confidence = 95, X = index * 0.1f, Y = 0.1f, Width = 0.09f, Height = 0.04f }).ToList()
+    };
+
     [Fact]
     public void Student_records_plan_preserves_consumed_header_values_and_types()
     {

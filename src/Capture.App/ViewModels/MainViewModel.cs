@@ -182,6 +182,7 @@ public partial class MainViewModel : ViewModelBase
         RemoveSelectedCommand.NotifyCanExecuteChanged();
         MergeSelectedDocumentsCommand.NotifyCanExecuteChanged();
         RedactSelectedCommand.NotifyCanExecuteChanged();
+        ApplyProfileToSelectedCommand.NotifyCanExecuteChanged();
         ApplyRedactionsCommand.NotifyCanExecuteChanged();
         MarkReadyCommand.NotifyCanExecuteChanged();
         MarkSelectedReadyCommand.NotifyCanExecuteChanged();
@@ -220,8 +221,8 @@ public partial class MainViewModel : ViewModelBase
     private bool _statusIsError;
 
     // Selection/view-dependent commands (RemoveSelected, MergeSelectedDocuments,
-    // RedactSelected, ApplyRedactions, MarkReady, MarkSelectedReady, Export, ExportAll,
-    // ExportSelectedToPdf, RestoreSelectedTrash, PurgeSelectedTrash) are deliberately NOT listed here — see
+    // RedactSelected, ApplyProfileToSelected, ApplyRedactions, MarkReady, MarkSelectedReady, Export,
+    // ExportAll, ExportSelectedToPdf, RestoreSelectedTrash, PurgeSelectedTrash) are deliberately NOT listed here — see
     // RefreshSelectionDependentCommands, called from OnIsBusyChanged below, for the single place they're
     // all wired instead of duplicating this list. Only genuinely IsBusy-specific commands stay here.
     [ObservableProperty]

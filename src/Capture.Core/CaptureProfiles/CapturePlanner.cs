@@ -1,12 +1,34 @@
 using System.Text.RegularExpressions;
 using Capture.Core.Import;
+using Capture.Core.Lattice;
 using Capture.Core.Models;
+using Capture.Core.Profiles;
 
 namespace Capture.Core.CaptureProfiles;
 
 /// <summary>Pure, deterministic state machine over reusable page analysis. It performs no persistence or OCR.</summary>
 public sealed class CapturePlanner
 {
+    /// <summary>Best-effort document-type match for an already-captured document being reclassified
+    /// under a different profile (see "Apply profile to selected"). Unlike <see cref="Plan"/>, there's
+    /// no barcode data left to match against after initial capture — only each page's OCR/PDF text
+    /// survives, via its stored <see cref="PageLattice"/> — so this only exercises regex/OCR-zone
+    /// recognition rules. Falls back to the profile's default document type, then its only type if it
+    /// has just one; returns null (document stays untyped, same as an Unsorted document) otherwise.</summary>
+    public static DocumentTypeDefinition? MatchDocumentType(CaptureProfile profile, IReadOnlyList<PageLattice> pages)
+    {
+        foreach (var page in pages.OrderBy(page => page.PageNumber))
+        {
+            var text = LatticeText.Build(page.Words).Text;
+            var candidates = MatchDocumentTypes(profile.DocumentTypes, new AnalyzedPage("reclassify", page.PageNumber, text, []));
+            if (candidates.Count > 0)
+                return candidates[0].Type;
+        }
+
+        return profile.DocumentTypes.FirstOrDefault(type => type.Id == profile.DefaultDocumentTypeId)
+            ?? (profile.DocumentTypes.Count == 1 ? profile.DocumentTypes[0] : null);
+    }
+
     public CapturePlan Plan(CaptureProfile profile, IEnumerable<AnalyzedInput> inputs)
     {
         var batches = new List<BatchBuilder>();

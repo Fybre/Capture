@@ -384,6 +384,11 @@
                                         ToolTip.Tip="Merge the selected documents in their displayed order">
                                     <TextBlock Text="Merge" />
                                 </Button>
+                                <Button Command="{Binding ApplyProfileToSelectedCommand}"
+                                        Classes="ghost"
+                                        ToolTip.Tip="Reclassify the selected document(s) under the Capture Profile chosen above, re-extracting fields and moving them into a batch for that profile">
+                                    <TextBlock Text="Apply profile" />
+                                </Button>
                                 <Button Command="{Binding RemoveSelectedCommand}"
                                         Classes="ghost"
                                         Foreground="{DynamicResource CriticalBrush}"
