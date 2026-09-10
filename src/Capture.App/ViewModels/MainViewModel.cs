@@ -308,9 +308,12 @@ public partial class MainViewModel : ViewModelBase
             // and hidden views agree without requiring an application restart or another import.
             var selectedId = SelectedDocument?.Id;
             await ReloadDocumentsAsync();
+            // Re-finding a genuinely prior selection is fine in any view; manufacturing a new one
+            // when nothing was selected is the same phantom-selection bug as InitializeAsync/
+            // ImportPathsAsync, so that fallback only applies in Preview mode.
             SelectedDocument = selectedId is { } id
                 ? Documents.FirstOrDefault(row => row.Id == id)
-                : Documents.FirstOrDefault();
+                : IsPreviewMode ? Documents.FirstOrDefault() : null;
             OnPropertyChanged(nameof(TableOrderSummary));
         }
         _dialogs.Host = host;
@@ -318,7 +321,8 @@ public partial class MainViewModel : ViewModelBase
         if (result.DocumentsChanged && !result.Saved)
         {
             await ReloadDocumentsAsync();
-            SelectedDocument = Documents.FirstOrDefault();
+            if (IsPreviewMode)
+                SelectedDocument = Documents.FirstOrDefault();
         }
     }
 

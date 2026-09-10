@@ -213,9 +213,16 @@ public partial class MainViewModel
                 autoExportStatus = profile.AutoExportReadyDocuments
                     ? await AutoExportImportedDocumentsAsync(result.Materialized.Documents).ConfigureAwait(true)
                     : string.Empty;
-                SelectedDocument = result.Materialized.Documents.Count == 0
-                    ? null
-                    : Documents.FirstOrDefault(row => row.Id == result.Materialized.Documents[^1].Id);
+                // Only Preview mode needs the newly imported document pre-selected (so its pane isn't
+                // blank) — Table mode's DataGrids never reflect this as a highlighted row, so setting
+                // it there would silently enable Mark ready/Redact/Remove/Apply profile against a
+                // document the user never actually clicked (see the identical fix in InitializeAsync).
+                if (IsPreviewMode)
+                {
+                    SelectedDocument = result.Materialized.Documents.Count == 0
+                        ? null
+                        : Documents.FirstOrDefault(row => row.Id == result.Materialized.Documents[^1].Id);
+                }
             }
 
             var suffix = skippedDuplicates > 0 ? $" — {skippedDuplicates} skipped as duplicate" : string.Empty;
