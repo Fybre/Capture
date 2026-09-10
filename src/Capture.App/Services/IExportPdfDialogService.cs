@@ -6,6 +6,8 @@ public sealed record ExportPdfOptions(bool Combine, bool Compress, string Destin
 
 public interface IExportPdfDialogService
 {
-    /// <summary>Shows the export dialog; returns null if the user cancelled.</summary>
-    Task<ExportPdfOptions?> ShowAsync(object owner, int documentCount);
+    /// <summary>Shows the export dialog; returns null if the user cancelled. <paramref name="suggestedFileName"/>
+    /// seeds the save-file picker's editable name — the only rename path, since a single exported PDF is
+    /// always named via that picker rather than a separate text box in this dialog.</summary>
+    Task<ExportPdfOptions?> ShowAsync(object owner, int documentCount, string suggestedFileName);
 }

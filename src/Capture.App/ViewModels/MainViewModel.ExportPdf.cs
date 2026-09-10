@@ -18,7 +18,10 @@ public partial class MainViewModel
         if (rows.Count == 0 || _dialogs.Host is not { } host)
             return;
 
-        var options = await _exportPdfDialog.ShowAsync(host, rows.Count).ConfigureAwait(true);
+        var suggestedFileName = rows.Count == 1
+            ? UniqueFileName([], rows[0].Document.OriginalFileName)
+            : "Export.pdf";
+        var options = await _exportPdfDialog.ShowAsync(host, rows.Count, suggestedFileName).ConfigureAwait(true);
         if (options is null)
             return;
 

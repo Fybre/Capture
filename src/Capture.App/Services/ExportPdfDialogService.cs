@@ -5,12 +5,12 @@ namespace Capture.App.Services;
 
 public sealed class ExportPdfDialogService(IFileDialogService dialogs) : IExportPdfDialogService
 {
-    public async Task<ExportPdfOptions?> ShowAsync(object owner, int documentCount)
+    public async Task<ExportPdfOptions?> ShowAsync(object owner, int documentCount, string suggestedFileName)
     {
         if (owner is not Window window)
             return null;
 
-        var dialog = new ExportPdfWindow(dialogs, documentCount);
+        var dialog = new ExportPdfWindow(dialogs, documentCount, suggestedFileName);
         await dialog.ShowDialog(window);
         return dialog.Result;
     }
