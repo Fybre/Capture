@@ -43,6 +43,14 @@ public partial class MainWindow : Window
         WirePageDragDrop(PageThumbnailStrip);
         WireFileDrop();
         DataContextChanged += OnMainDataContextChanged;
+
+        // Selecting a row in one of the per-group DataGrids raises RequestBringIntoView, which bubbles
+        // up to this ScrollViewer and auto-scrolls it horizontally to reveal the selected cell — even
+        // though the cell was already fully visible. That silently discards the page's left margin the
+        // instant a row is selected, making the whole table jump. Suppressing it during the tunnel phase
+        // (before the ScrollViewer's own bubble-phase handler acts on it) leaves manual scrolling via the
+        // scrollbar/trackpad untouched.
+        TableScrollViewer.AddHandler(RequestBringIntoViewEvent, (_, e) => e.Handled = true, RoutingStrategies.Tunnel);
     }
 
     // The Redact picker used to be an always-present Border whose IsVisible reflowed the whole toolbar
