@@ -1,16 +1,16 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Capture.App.Views.ScriptCollectionEditorView" x:CompileBindings="False">
   <StackPanel Spacing="10">
-    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-      <StackPanel>
-        <TextBlock Text="Scripts" Classes="section-title"/>
-        <TextBlock Text="C# actions that run after indexing or around export. Scripts can read and update fields without being fields themselves."
-                   Classes="hint" TextWrapping="Wrap"/>
-      </StackPanel>
-      <Button Grid.Column="1" Content="Scripting help" Classes="ghost"
-              Command="{Binding OpenScriptingHelpCommand}" VerticalAlignment="Top"/>
-      <Button Grid.Column="2" Content="+ Add script" Command="{Binding AddCommand}" VerticalAlignment="Top"/>
-    </Grid>
+    <StackPanel Spacing="4">
+      <DockPanel LastChildFill="False">
+        <TextBlock Text="Scripts" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+        <Button Content="+ Add script" Command="{Binding AddCommand}" DockPanel.Dock="Right"/>
+        <Button Content="Scripting help" Classes="ghost" Margin="0,0,6,0"
+                Command="{Binding OpenScriptingHelpCommand}" DockPanel.Dock="Right"/>
+      </DockPanel>
+      <TextBlock Text="C# actions that run after indexing or around export. Scripts can read and update fields without being fields themselves."
+                 Classes="hint" TextWrapping="Wrap"/>
+    </StackPanel>
 
     <Border Background="{DynamicResource Surface3Brush}" CornerRadius="6" Padding="10">
       <StackPanel Spacing="6">
