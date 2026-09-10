@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Capture.Therefore;
 
@@ -10,6 +11,17 @@ namespace Capture.Therefore;
 /// <c>TenantName</c> header set to exactly what the user typed (never inferred from the URL).</summary>
 public sealed class ThereforeClient : IThereforeClient
 {
+    // Therefore's WCF-based endpoint deserializes with DataContractJsonSerializer, which requires the
+    // legacy "/Date(ms)/" wire format for DateTime — a plain ISO-8601 string (System.Text.Json's
+    // default) fails server-side with "does not start with '\/Date(' ... as required for JSON."
+    // (confirmed against a live PreprocessIndexData 500). This is request-body-only: every response is
+    // read via JsonDocument + manual property lookups (see PostAsync below), never
+    // JsonSerializer.Deserialize, so this converter is never asked to read a value back.
+    private static readonly JsonSerializerOptions RequestJsonOptions = new()
+    {
+        Converters = { new WcfDateTimeJsonConverter() }
+    };
+
     private readonly HttpClient _http;
 
     public ThereforeClient(HttpClient httpClient)
@@ -155,7 +167,7 @@ public sealed class ThereforeClient : IThereforeClient
         var baseUrl = BuildBaseUrl(settings.TenantName, settings.BaseUrl);
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/{operation}")
         {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8)
+            Content = new StringContent(JsonSerializer.Serialize(body, RequestJsonOptions), Encoding.UTF8)
         };
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         // Sent exactly as typed, including empty for on-premise — see BuildBaseUrl's doc comment.
@@ -181,4 +193,28 @@ public sealed class ThereforeClient : IThereforeClient
 
     private static bool GetBool(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.False) && value.GetBoolean();
+}
+
+/// <summary>Writes DateTime as the legacy WCF/ASP.NET AJAX "/Date(ms)/" format Therefore's
+/// DataContractJsonSerializer-based endpoint requires, instead of System.Text.Json's ISO-8601 default.
+/// A Kind of Unspecified (the common case — a plain calendar date/time with no real timezone
+/// significance) is treated as already representing the intended wall-clock instant, so the emitted
+/// value is never shifted by the local machine's timezone. Write-only: this client never deserializes
+/// a Therefore response through JsonSerializer (see ThereforeClient.PostAsync), so Read is unused.</summary>
+internal sealed class WcfDateTimeJsonConverter : JsonConverter<DateTime>
+{
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        throw new NotSupportedException($"{nameof(WcfDateTimeJsonConverter)} is request-serialization-only and does not read \"/Date(ms)/\" values back.");
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+    {
+        var utcValue = value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+        var milliseconds = new DateTimeOffset(utcValue).ToUnixTimeMilliseconds();
+        writer.WriteStringValue($"/Date({milliseconds})/");
+    }
 }

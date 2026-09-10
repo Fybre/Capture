@@ -60,6 +60,33 @@ public class ThereforeClientTests
         Assert.True(category.IsCategory);
     }
 
+    [Theory]
+    [InlineData("2025-01-03T00:00:00")] // Unspecified — the common case, a plain calendar date/time
+    public void WcfDateTimeJsonConverter_writes_the_legacy_Date_format_therefore_requires(string isoValue)
+    {
+        var value = DateTime.Parse(isoValue, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(DateTimeKind.Unspecified, value.Kind);
+        var expectedMs = new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+
+        var options = new JsonSerializerOptions { Converters = { new WcfDateTimeJsonConverter() } };
+        var json = JsonSerializer.Serialize(ThereforeIndexData.Date(8629, "Invoice_Date", value), options);
+
+        Assert.Contains($"\"DataValue\":\"/Date({expectedMs})/\"", json);
+        Assert.DoesNotContain("T00:00:00", json);
+    }
+
+    [Fact]
+    public void WcfDateTimeJsonConverter_does_not_shift_a_utc_value_by_the_local_timezone()
+    {
+        var utc = new DateTime(2025, 6, 15, 9, 30, 0, DateTimeKind.Utc);
+        var expectedMs = new DateTimeOffset(utc).ToUnixTimeMilliseconds();
+
+        var options = new JsonSerializerOptions { Converters = { new WcfDateTimeJsonConverter() } };
+        var json = JsonSerializer.Serialize(ThereforeIndexData.Date(1, "Field", utc), options);
+
+        Assert.Contains($"\"DataValue\":\"/Date({expectedMs})/\"", json);
+    }
+
     [Fact]
     public void ParseTreeItems_sorts_folders_before_categories_then_alphabetically()
     {
