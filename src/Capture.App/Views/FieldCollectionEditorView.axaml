@@ -1,5 +1,22 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Capture.App.Views.FieldCollectionEditorView" x:CompileBindings="False">
+  <UserControl.Styles>
+    <Style Selector="TabControl.field-tabs">
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="TabControl.field-tabs WrapPanel">
+      <Setter Property="Margin" Value="0"/>
+    </Style>
+    <Style Selector="TabControl.field-tabs TabItem">
+      <Setter Property="Padding" Value="2,6"/>
+      <Setter Property="Margin" Value="0,0,16,0"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="MinHeight" Value="0"/>
+    </Style>
+    <Style Selector="TabControl.field-tabs ScrollViewer#PART_ScrollViewer">
+      <Setter Property="Margin" Value="0,8,0,0"/>
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="Auto,260,6,Auto">
     <WrapPanel Margin="0,0,-6,-6">
       <ComboBox Width="132" Margin="0,0,6,6" ItemsSource="{Binding FieldKinds}" SelectedItem="{Binding NewFieldKind}"/>
@@ -62,145 +79,160 @@
             <Button Grid.Column="1" Content="Remove field" Classes="ghost"
                     Command="{Binding $parent[UserControl].DataContext.RemoveCommand}"/>
           </Grid>
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-            <StackPanel Spacing="4"><TextBlock Text="Name" Classes="field-label"/><TextBox Text="{Binding Name}"/></StackPanel>
-            <StackPanel Grid.Column="1" Width="92" Spacing="4"><TextBlock Text="Format" Classes="field-label"/><ComboBox ItemsSource="{Binding Formats}" SelectedItem="{Binding Format}"/></StackPanel>
-          </Grid>
-          <WrapPanel>
-            <CheckBox Content="Required" IsChecked="{Binding Mandatory}" Margin="0,0,12,0"/>
-            <CheckBox Content="Read only" IsChecked="{Binding IsReadOnly}" Margin="0,0,12,0"/>
-            <CheckBox Content="Hide from review" IsChecked="{Binding Hidden}" Margin="0,0,12,0"/>
-            <CheckBox Content="Sensitive" IsChecked="{Binding Sensitive}"/>
-          </WrapPanel>
-          <TextBlock Text="Batch fields are shared metadata — marking this Sensitive masks it in review and Table view, but it will not create a page redaction."
-                     Classes="hint" TextWrapping="Wrap"
-                     IsVisible="{Binding ShowBatchSensitiveHint}"/>
 
-          <StackPanel IsVisible="{Binding CanPopulateValue}" Spacing="5" Margin="0,0,18,0">
-            <TextBlock Text="Populate value from (optional)" Classes="field-label" IsVisible="{Binding !IsBatchSeparatorValue}"/>
-            <TextBlock Text="Batch-start rule" Classes="field-label" IsVisible="{Binding IsBatchSeparatorValue}"/>
-            <ComboBox ItemsSource="{Binding $parent[UserControl].DataContext.ValueSourceOptions}"
-                      SelectedItem="{Binding $parent[UserControl].DataContext.SelectedValueSource}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/></DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Text="Value template" Classes="field-label" IsVisible="{Binding !IsBatchSeparatorValue}"/>
-            <TextBox Text="{Binding DefaultValueTemplate}"
-                     Watermark="Choose a source above, or combine tokens such as INV-{Doc#|0000}-{Customer}"
-                     IsVisible="{Binding !IsBatchSeparatorValue}"/>
-            <TextBlock Text="Used as the value for manual fields, or as a fallback when extraction returns no value. Choosing a first-page or batch-start rule uses that rule's captured value."
-                       Classes="hint" TextWrapping="Wrap" IsVisible="{Binding !IsBatchSeparatorValue}"/>
-            <TextBlock Text="Choose the batch-start rule whose captured value should be stored. For example, a barcode rule matching STUDENT:(.+) stores the captured part, such as X00007."
-                       Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsBatchSeparatorValue}"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsZoneField}" Spacing="5">
-            <TextBlock Text="Use Field zone in the sample toolbar, then draw around the value." Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsZonal}"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding HasPageScope}" Spacing="5">
-            <TextBlock Text="Page scope" Classes="field-label"/>
-            <ComboBox ItemsSource="{Binding PageScopes}"
-                      SelectedValueBinding="{Binding Value}"
-                      SelectedValue="{Binding PageScope}">
-              <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
-            </ComboBox>
-            <StackPanel IsVisible="{Binding IsPageNumberScope}" Spacing="4">
-              <TextBlock Text="Page number" Classes="field-label"/><NumericUpDown Value="{Binding PageNumber}" Minimum="1" Maximum="10000"/>
-            </StackPanel>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsBarcode}" Spacing="5">
-            <TextBlock Text="Scan area" Classes="field-label"/>
-            <ComboBox ItemsSource="{Binding BarcodeScanAreaOptions}"
-                      SelectedValueBinding="{Binding Value}"
-                      SelectedValue="{Binding BarcodeScanArea}">
-              <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Text="{Binding BarcodeAreaStatus}" Classes="hint" TextWrapping="Wrap"/>
-            <TextBlock Text="Barcode format (optional)" Classes="field-label"/>
-            <ComboBox ItemsSource="{Binding BarcodeFormats}" SelectedItem="{Binding BarcodeFormat}" PlaceholderText="Any format"/>
-            <TextBlock Text="Value regular expression (optional)" Classes="field-label"/>
-            <TextBox Text="{Binding ValuePattern}" Watermark="e.g. ^INV-(.+)$"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsKeyValue}" Spacing="5">
-            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Key regular expression" Classes="field-label"/><Button Grid.Column="1" Content="Pick from sample" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.SuggestKeyFromSampleCommand}"/></Grid>
-            <TextBox Text="{Binding KeyPattern}" Watermark="e.g. Invoice\s+No"/>
-            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Value regular expression" Classes="field-label"/><Button Grid.Column="1" Content="Pick from sample" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.SuggestValueFromSampleCommand}"/></Grid>
-            <TextBox Text="{Binding ValuePattern}" Watermark="e.g. [A-Z0-9-]+"/>
-            <TextBlock Text="Occurrence" Classes="field-label"/><ComboBox ItemsSource="{Binding Occurrences}" SelectedItem="{Binding Occurrence}"/>
-            <TextBlock Text="Optionally choose Field search area above and draw a region to limit the search." Classes="hint" TextWrapping="Wrap"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsRegex}" Spacing="5">
-            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Value regular expression" Classes="field-label"/><Button Grid.Column="1" Content="Pick from sample" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.SuggestValueFromSampleCommand}"/></Grid>
-            <TextBox Text="{Binding ValuePattern}" Watermark="Capture group 1 supplies the value"/>
-            <TextBlock Text="Occurrence" Classes="field-label"/><ComboBox ItemsSource="{Binding Occurrences}" SelectedItem="{Binding Occurrence}"/>
-            <TextBlock Text="Optionally choose Field search area above and draw a region to limit the search." Classes="hint" TextWrapping="Wrap"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsLookup}" Spacing="5">
-            <TextBlock Text="Lookup options" Classes="field-label"/>
-            <ItemsControl ItemsSource="{Binding LookupOptions}">
-              <ItemsControl.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="6" Margin="0,0,0,4"><TextBox Text="{Binding Key}" Watermark="Display label"/><TextBox Grid.Column="1" Text="{Binding Value}" Watermark="Stored value"/><Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}"/></Grid></DataTemplate></ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Button Content="Add option" Command="{Binding AddLookupOptionCommand}" HorizontalAlignment="Left"/>
-            <TextBlock Text="Default option" Classes="field-label"/>
-            <ComboBox ItemsSource="{Binding LookupOptions}" SelectedItem="{Binding SelectedDefaultLookupOption}" PlaceholderText="None"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Key}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-            <TextBlock Text="Default key template (optional)" Classes="field-label"/><TextBox Text="{Binding LookupKeyTemplate}" Watermark="e.g. {DocumentType}"/>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsScript}" Spacing="5">
-            <Grid RowDefinitions="Auto,Auto">
-              <TextBlock Text="C# field expression" Classes="field-label"/>
-              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
-                <Button Content="Scripting help" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.OpenScriptingHelpCommand}"/>
-                <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutFieldScriptCommand}" CommandParameter="{Binding}"/>
+          <TabControl Classes="field-tabs">
+            <TabItem Header="General">
+              <StackPanel Spacing="8" Margin="0,8,0,0">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <StackPanel Spacing="4"><TextBlock Text="Name" Classes="field-label"/><TextBox Text="{Binding Name}"/></StackPanel>
+                  <StackPanel Grid.Column="1" Width="92" Spacing="4"><TextBlock Text="Format" Classes="field-label"/><ComboBox ItemsSource="{Binding Formats}" SelectedItem="{Binding Format}"/></StackPanel>
+                </Grid>
+                <WrapPanel>
+                  <CheckBox Content="Required" IsChecked="{Binding Mandatory}" Margin="0,0,12,0"/>
+                  <CheckBox Content="Read only" IsChecked="{Binding IsReadOnly}" Margin="0,0,12,0"/>
+                  <CheckBox Content="Hide from review" IsChecked="{Binding Hidden}" Margin="0,0,12,0"/>
+                  <CheckBox Content="Sensitive" IsChecked="{Binding Sensitive}"/>
+                </WrapPanel>
+                <TextBlock Text="Batch fields are shared metadata — marking this Sensitive masks it in review and Table view, but it will not create a page redaction."
+                           Classes="hint" TextWrapping="Wrap"
+                           IsVisible="{Binding ShowBatchSensitiveHint}"/>
               </StackPanel>
-            </Grid>
-            <TextBox Text="{Binding ScriptExpression}" AcceptsReturn="True" MinHeight="80" FontFamily="{DynamicResource MonoFontFamily}"/>
-            <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestFieldScriptCommand}" CommandParameter="{Binding}"/>
-            <TextBlock Text="Real processing requires Allow profile scripts in Settings. Run test is an explicit designer action and runs this source against the current sample values." Classes="hint" TextWrapping="Wrap"/>
-          </StackPanel>
+            </TabItem>
 
-          <StackPanel IsVisible="{Binding IsButton}" Spacing="5">
-            <TextBlock Text="Button label" Classes="field-label"/><TextBox Text="{Binding ButtonLabel}"/>
-            <Grid RowDefinitions="Auto,Auto">
-              <TextBlock Text="C# button script" Classes="field-label"/>
-              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
-                <Button Content="Scripting help" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.OpenScriptingHelpCommand}"/>
-                <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutButtonScriptCommand}" CommandParameter="{Binding}"/>
+            <TabItem Header="Extraction">
+              <StackPanel Spacing="8" Margin="0,8,0,0">
+                <StackPanel IsVisible="{Binding CanPopulateValue}" Spacing="5" Margin="0,0,18,0">
+                  <TextBlock Text="Populate value from (optional)" Classes="field-label" IsVisible="{Binding !IsBatchSeparatorValue}"/>
+                  <TextBlock Text="Batch-start rule" Classes="field-label" IsVisible="{Binding IsBatchSeparatorValue}"/>
+                  <ComboBox ItemsSource="{Binding $parent[UserControl].DataContext.ValueSourceOptions}"
+                            SelectedItem="{Binding $parent[UserControl].DataContext.SelectedValueSource}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Text="Value template" Classes="field-label" IsVisible="{Binding !IsBatchSeparatorValue}"/>
+                  <TextBox Text="{Binding DefaultValueTemplate}"
+                           Watermark="Choose a source above, or combine tokens such as INV-{Doc#|0000}-{Customer}"
+                           IsVisible="{Binding !IsBatchSeparatorValue}"/>
+                  <TextBlock Text="Used as the value for manual fields, or as a fallback when extraction returns no value. Choosing a first-page or batch-start rule uses that rule's captured value."
+                             Classes="hint" TextWrapping="Wrap" IsVisible="{Binding !IsBatchSeparatorValue}"/>
+                  <TextBlock Text="Choose the batch-start rule whose captured value should be stored. For example, a barcode rule matching STUDENT:(.+) stores the captured part, such as X00007."
+                             Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsBatchSeparatorValue}"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsZoneField}" Spacing="5">
+                  <TextBlock Text="Use Field zone in the sample toolbar, then draw around the value." Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsZonal}"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding HasPageScope}" Spacing="5">
+                  <TextBlock Text="Page scope" Classes="field-label"/>
+                  <ComboBox ItemsSource="{Binding PageScopes}"
+                            SelectedValueBinding="{Binding Value}"
+                            SelectedValue="{Binding PageScope}">
+                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <StackPanel IsVisible="{Binding IsPageNumberScope}" Spacing="4">
+                    <TextBlock Text="Page number" Classes="field-label"/><NumericUpDown Value="{Binding PageNumber}" Minimum="1" Maximum="10000"/>
+                  </StackPanel>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsBarcode}" Spacing="5">
+                  <TextBlock Text="Scan area" Classes="field-label"/>
+                  <ComboBox ItemsSource="{Binding BarcodeScanAreaOptions}"
+                            SelectedValueBinding="{Binding Value}"
+                            SelectedValue="{Binding BarcodeScanArea}">
+                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Text="{Binding BarcodeAreaStatus}" Classes="hint" TextWrapping="Wrap"/>
+                  <TextBlock Text="Barcode format (optional)" Classes="field-label"/>
+                  <ComboBox ItemsSource="{Binding BarcodeFormats}" SelectedItem="{Binding BarcodeFormat}" PlaceholderText="Any format"/>
+                  <TextBlock Text="Value regular expression (optional)" Classes="field-label"/>
+                  <TextBox Text="{Binding ValuePattern}" Watermark="e.g. ^INV-(.+)$"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsKeyValue}" Spacing="5">
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Key regular expression" Classes="field-label"/><Button Grid.Column="1" Content="Pick from sample" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.SuggestKeyFromSampleCommand}"/></Grid>
+                  <TextBox Text="{Binding KeyPattern}" Watermark="e.g. Invoice\s+No"/>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Value regular expression" Classes="field-label"/><Button Grid.Column="1" Content="Pick from sample" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.SuggestValueFromSampleCommand}"/></Grid>
+                  <TextBox Text="{Binding ValuePattern}" Watermark="e.g. [A-Z0-9-]+"/>
+                  <TextBlock Text="Occurrence" Classes="field-label"/><ComboBox ItemsSource="{Binding Occurrences}" SelectedItem="{Binding Occurrence}"/>
+                  <TextBlock Text="Optionally choose Field search area above and draw a region to limit the search." Classes="hint" TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsRegex}" Spacing="5">
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Value regular expression" Classes="field-label"/><Button Grid.Column="1" Content="Pick from sample" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.SuggestValueFromSampleCommand}"/></Grid>
+                  <TextBox Text="{Binding ValuePattern}" Watermark="Capture group 1 supplies the value"/>
+                  <TextBlock Text="Occurrence" Classes="field-label"/><ComboBox ItemsSource="{Binding Occurrences}" SelectedItem="{Binding Occurrence}"/>
+                  <TextBlock Text="Optionally choose Field search area above and draw a region to limit the search." Classes="hint" TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsLookup}" Spacing="5">
+                  <TextBlock Text="Lookup options" Classes="field-label"/>
+                  <ItemsControl ItemsSource="{Binding LookupOptions}">
+                    <ItemsControl.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="6" Margin="0,0,0,4"><TextBox Text="{Binding Key}" Watermark="Display label"/><TextBox Grid.Column="1" Text="{Binding Value}" Watermark="Stored value"/><Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}"/></Grid></DataTemplate></ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button Content="Add option" Command="{Binding AddLookupOptionCommand}" HorizontalAlignment="Left"/>
+                  <TextBlock Text="Default option" Classes="field-label"/>
+                  <ComboBox ItemsSource="{Binding LookupOptions}" SelectedItem="{Binding SelectedDefaultLookupOption}" PlaceholderText="None"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Key}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+                  <TextBlock Text="Default key template (optional)" Classes="field-label"/><TextBox Text="{Binding LookupKeyTemplate}" Watermark="e.g. {DocumentType}"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsAi}" Spacing="5">
+                  <TextBlock Text="Classification" Classes="field-label"/><ComboBox ItemsSource="{Binding Classifications}" SelectedItem="{Binding SelectedClassification}"/>
+                  <TextBlock Text="AI field type" Classes="field-label"/><ComboBox ItemsSource="{Binding AiTypes}" SelectedItem="{Binding SelectedAiType}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+                  <TextBlock Text="{Binding AiPromptLabel}" Classes="field-label"/><TextBox Text="{Binding AiPrompt}" Watermark="{Binding AiPromptWatermark}" AcceptsReturn="True" MinHeight="55"/>
+                  <Button Content="Extract all AI fields from sample" HorizontalAlignment="Left"
+                          Command="{Binding $parent[UserControl].DataContext.ExtractAiSampleCommand}"/>
+                </StackPanel>
               </StackPanel>
-            </Grid>
-            <TextBox Text="{Binding ButtonScriptSource}" AcceptsReturn="True" MinHeight="90" FontFamily="{DynamicResource MonoFontFamily}"/>
-            <TextBlock Text="Timeout seconds" Classes="field-label"/><NumericUpDown Value="{Binding ButtonTimeoutSeconds}" Minimum="1" Maximum="300"/>
-            <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestButtonScriptCommand}" CommandParameter="{Binding}"/>
-          </StackPanel>
+            </TabItem>
 
-          <StackPanel IsVisible="{Binding IsAi}" Spacing="5">
-            <TextBlock Text="Classification" Classes="field-label"/><ComboBox ItemsSource="{Binding Classifications}" SelectedItem="{Binding SelectedClassification}"/>
-            <TextBlock Text="AI field type" Classes="field-label"/><ComboBox ItemsSource="{Binding AiTypes}" SelectedItem="{Binding SelectedAiType}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-            <TextBlock Text="{Binding AiPromptLabel}" Classes="field-label"/><TextBox Text="{Binding AiPrompt}" Watermark="{Binding AiPromptWatermark}" AcceptsReturn="True" MinHeight="55"/>
-            <Button Content="Extract all AI fields from sample" HorizontalAlignment="Left"
-                    Command="{Binding $parent[UserControl].DataContext.ExtractAiSampleCommand}"/>
-          </StackPanel>
+            <TabItem Header="Scripting">
+              <StackPanel Spacing="8" Margin="0,8,0,0">
+                <StackPanel IsVisible="{Binding IsScript}" Spacing="5">
+                  <Grid RowDefinitions="Auto,Auto">
+                    <TextBlock Text="C# field expression" Classes="field-label"/>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
+                      <Button Content="Scripting help" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.OpenScriptingHelpCommand}"/>
+                      <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutFieldScriptCommand}" CommandParameter="{Binding}"/>
+                    </StackPanel>
+                  </Grid>
+                  <TextBox Text="{Binding ScriptExpression}" AcceptsReturn="True" MinHeight="80" FontFamily="{DynamicResource MonoFontFamily}"/>
+                  <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestFieldScriptCommand}" CommandParameter="{Binding}"/>
+                  <TextBlock Text="Real processing requires Allow profile scripts in Settings. Run test is an explicit designer action and runs this source against the current sample values." Classes="hint" TextWrapping="Wrap"/>
+                </StackPanel>
 
-          <StackPanel IsVisible="{Binding AllowsPostProcessScript}" Spacing="5">
-            <Grid RowDefinitions="Auto,Auto">
-              <TextBlock Text="Post-process C# expression (optional)" Classes="field-label"/>
-              <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
-                <Button Content="Scripting help" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.OpenScriptingHelpCommand}"/>
-                <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutPostProcessScriptCommand}" CommandParameter="{Binding}"/>
+                <StackPanel IsVisible="{Binding IsButton}" Spacing="5">
+                  <TextBlock Text="Button label" Classes="field-label"/><TextBox Text="{Binding ButtonLabel}"/>
+                  <Grid RowDefinitions="Auto,Auto">
+                    <TextBlock Text="C# button script" Classes="field-label"/>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
+                      <Button Content="Scripting help" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.OpenScriptingHelpCommand}"/>
+                      <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutButtonScriptCommand}" CommandParameter="{Binding}"/>
+                    </StackPanel>
+                  </Grid>
+                  <TextBox Text="{Binding ButtonScriptSource}" AcceptsReturn="True" MinHeight="90" FontFamily="{DynamicResource MonoFontFamily}"/>
+                  <TextBlock Text="Timeout seconds" Classes="field-label"/><NumericUpDown Value="{Binding ButtonTimeoutSeconds}" Minimum="1" Maximum="300"/>
+                  <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestButtonScriptCommand}" CommandParameter="{Binding}"/>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding AllowsPostProcessScript}" Spacing="5">
+                  <Grid RowDefinitions="Auto,Auto">
+                    <TextBlock Text="Post-process C# expression (optional)" Classes="field-label"/>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
+                      <Button Content="Scripting help" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.OpenScriptingHelpCommand}"/>
+                      <Button Content="Pop out" Classes="ghost" Padding="8,3" Command="{Binding $parent[UserControl].DataContext.PopOutPostProcessScriptCommand}" CommandParameter="{Binding}"/>
+                    </StackPanel>
+                  </Grid>
+                  <TextBox Text="{Binding PostProcessScript}" AcceptsReturn="True" MinHeight="60" FontFamily="{DynamicResource MonoFontFamily}"/>
+                  <TextBlock Text="The returned text replaces the extracted value. Use SetConfidence(0–100) when the script should replace its confidence. Example: SetConfidence(100); Value.Trim()" Classes="hint" TextWrapping="Wrap"/>
+                  <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestPostProcessScriptCommand}" CommandParameter="{Binding}"/>
+                  <TextBlock Text="Real processing requires Allow profile scripts in Settings; the explicit test is always available." Classes="hint" TextWrapping="Wrap"/>
+                </StackPanel>
               </StackPanel>
-            </Grid>
-            <TextBox Text="{Binding PostProcessScript}" AcceptsReturn="True" MinHeight="60" FontFamily="{DynamicResource MonoFontFamily}"/>
-            <TextBlock Text="The returned text replaces the extracted value. Use SetConfidence(0–100) when the script should replace its confidence. Example: SetConfidence(100); Value.Trim()" Classes="hint" TextWrapping="Wrap"/>
-            <Button Content="Run test" HorizontalAlignment="Left" Command="{Binding $parent[UserControl].DataContext.TestPostProcessScriptCommand}" CommandParameter="{Binding}"/>
-            <TextBlock Text="Real processing requires Allow profile scripts in Settings; the explicit test is always available." Classes="hint" TextWrapping="Wrap"/>
-          </StackPanel>
+            </TabItem>
+          </TabControl>
 
           <TextBlock Text="{Binding ScriptTestResult}" IsVisible="{Binding HasScriptTestResult}" Classes="hint" TextWrapping="Wrap"/>
 
