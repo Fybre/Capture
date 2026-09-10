@@ -1024,6 +1024,7 @@
                                                   CanUserSortColumns="False"
                                                   SelectionMode="Extended"
                                                   ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                  ScrollViewer.BringIntoViewOnFocusChange="False"
                                                   Loaded="OnGroupTableLoaded"
                                                   SelectionChanged="OnGroupTableSelectionChanged"
                                                   KeyDown="OnGroupTableKeyDown">

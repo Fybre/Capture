@@ -572,13 +572,6 @@ public partial class MainWindow : Window
             grid.Unloaded += OnGroupTableUnloaded;
             grid.DoubleTapped += OnGroupTableDoubleTapped;
             WireDragDrop(grid);
-
-            // Selecting a row raises RequestBringIntoView, which DataGrid's own internal horizontal
-            // ScrollViewer answers by auto-scrolling to reveal the (already fully visible) selected
-            // cell — discarding the page's left margin and making the table visibly jump the instant a
-            // document is clicked. Suppress it during the tunnel phase, before that internal handler
-            // acts on it; manual scrolling via the scrollbar/trackpad never raises this event.
-            grid.AddHandler(RequestBringIntoViewEvent, (_, args) => args.Handled = true, RoutingStrategies.Tunnel);
         }
 
         // Loaded can fire more than once (e.g. re-parenting during scroll virtualization) —
