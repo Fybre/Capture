@@ -271,11 +271,16 @@ public partial class MainViewModel : ViewModelBase
                 : $"{Documents.Count} document(s)";
             StatusIsError = false;
 
-            if (Documents.Count > 0)
-                SelectedDocument = Documents[0];
-
             await ApplyWatchAsync().ConfigureAwait(true);
             ViewMode = _watchSettings.StartView;
+
+            // Preview mode needs some document to show, so pick one automatically rather than
+            // starting on a blank pane — but only there. Table mode has no such need, and none of its
+            // per-group DataGrids reflect this as a highlighted row, so auto-selecting here would
+            // silently enable Mark ready/Redact/Remove/Export against a document the user never
+            // actually clicked.
+            if (Documents.Count > 0 && IsPreviewMode)
+                SelectedDocument = Documents[0];
 
             // Fire-and-forget: a slow/offline/rate-limited GitHub check must never delay startup or
             // the document list appearing. IUpdateCheckService swallows its own failures.
