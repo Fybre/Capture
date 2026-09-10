@@ -339,12 +339,16 @@
     <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
     <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="9,7" />
-    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="9,6" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
+  <!-- A fixed Height with centered content (the base TextBox style above) is wrong for a growing
+       multiline box — text must anchor to the top, not float mid-box as it wraps to more lines. -->
   <Style Selector="TextBox.multiline">
     <Setter Property="Height" Value="NaN" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
   </Style>
 
   <Style Selector="TextBox.invalid">
@@ -359,8 +363,9 @@
     <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
     <Setter Property="CornerRadius" Value="7" />
-    <Setter Property="Padding" Value="9,7" />
-    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="9,6" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
   <!-- NumericUpDown often sits beside a TextBox/ComboBox in the same row (e.g. redaction thresholds,
@@ -368,7 +373,8 @@
   <Style Selector="NumericUpDown">
     <Setter Property="FontFamily" Value="{DynamicResource PlexSansFontFamily}" />
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Height" Value="34" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
   <!-- ===================== Status chips ===================== -->
