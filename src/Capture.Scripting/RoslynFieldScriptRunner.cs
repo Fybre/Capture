@@ -113,9 +113,13 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
 
     // A compilation error's Diagnostics collection is far more useful to a script author than the
     // generic exception message ("script returned no diagnostics" territory) — surface it directly.
+    // TypeInitializationException.Message is famously uninformative ("The type initializer for 'X'
+    // threw an exception.") with the actual cause only in InnerException — surface that too, so a
+    // static-initializer failure is diagnosable from the logged message alone.
     private static string DescribeError(Exception ex) => ex switch
     {
         CompilationErrorException compilation => string.Join("; ", compilation.Diagnostics),
+        TypeInitializationException { InnerException: { } inner } => $"{ex.Message} {DescribeError(inner)}",
         _ => ex.Message
     };
 
