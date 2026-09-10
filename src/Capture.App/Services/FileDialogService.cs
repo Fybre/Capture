@@ -104,6 +104,23 @@ public sealed class FileDialogService : IFileDialogService
         return file?.TryGetLocalPath();
     }
 
+    public async Task<string?> PickSaveFilePdfAsync(string title, string suggestedFileName)
+    {
+        var provider = GetStorageProvider();
+        if (provider is null)
+            return null;
+
+        var file = await provider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "pdf",
+            FileTypeChoices = [new FilePickerFileType("PDF") { Patterns = ["*.pdf"] }]
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
     private IStorageProvider? GetStorageProvider()
     {
         return Host as TopLevel is { } topLevel

@@ -56,6 +56,8 @@ public partial class MainViewModel : ViewModelBase
     private readonly IToastService _toasts;
     private readonly IUpdateCheckService _updateCheck;
     private readonly IConfirmDialogService _confirm;
+    private readonly IExportPdfDialogService _exportPdfDialog;
+    private readonly IPdfExportWriter _pdfExportWriter;
     private readonly IFieldScriptRunner? _scripts;
     private readonly IReadOnlyList<IPostIndexStep> _postIndexSteps;
 
@@ -88,6 +90,8 @@ public partial class MainViewModel : ViewModelBase
         IToastService toasts,
         IUpdateCheckService updateCheck,
         IConfirmDialogService confirm,
+        IExportPdfDialogService exportPdfDialog,
+        IPdfExportWriter pdfExportWriter,
         IFieldScriptRunner? scripts = null,
         IEnumerable<IPostIndexStep>? postIndexSteps = null)
     {
@@ -119,6 +123,8 @@ public partial class MainViewModel : ViewModelBase
         _toasts = toasts;
         _updateCheck = updateCheck;
         _confirm = confirm;
+        _exportPdfDialog = exportPdfDialog;
+        _pdfExportWriter = pdfExportWriter;
         _scripts = scripts;
         _postIndexSteps = postIndexSteps?.ToList() ?? [];
         Documents.CollectionChanged += OnDocumentsChanged;
@@ -158,15 +164,16 @@ public partial class MainViewModel : ViewModelBase
     }
 
     // Single source of truth for "something CanActOnSelected/CanActOnTrash/CanMergeSelectedDocuments/
-    // CanMarkReady/CanApplyRedactions/CanExport/CanExportAll reads just changed" — every trigger that
-    // affects one of those predicates (IsBusy, ShowTrash, SelectedDocument, the SelectedDocuments
-    // collection, ViewMode, the Documents collection) calls this instead of each duplicating its own
-    // copy of the same NotifyCanExecuteChanged list. Three separate bugs this session (MarkSelectedReady,
-    // then RestoreSelectedTrash/PurgeSelectedTrash) were exactly this: a new bulk-action command added to
-    // some but not all of those lists, so it silently never re-evaluated on the one trigger that actually
-    // mattered. A command belongs in this method if — and only if — its own CanExecute reads
-    // GetActingRows()/SelectedDocument/ShowTrash/Documents.Count; adding one here is now the only step
-    // needed, since every trigger already calls this rather than listing commands individually.
+    // CanMarkReady/CanApplyRedactions/CanExport/CanExportAll/CanExportSelectedToPdf reads just changed" —
+    // every trigger that affects one of those predicates (IsBusy, ShowTrash, SelectedDocument, the
+    // SelectedDocuments collection, ViewMode, the Documents collection) calls this instead of each
+    // duplicating its own copy of the same NotifyCanExecuteChanged list. Three separate bugs this session
+    // (MarkSelectedReady, then RestoreSelectedTrash/PurgeSelectedTrash) were exactly this: a new bulk-action
+    // command added to some but not all of those lists, so it silently never re-evaluated on the one
+    // trigger that actually mattered. A command belongs in this method if — and only if — its own
+    // CanExecute reads GetActingRows()/SelectedDocument/SelectedDocuments/ShowTrash/Documents.Count; adding
+    // one here is now the only step needed, since every trigger already calls this rather than listing
+    // commands individually.
     private void RefreshSelectionDependentCommands()
     {
         OnPropertyChanged(nameof(HasSelectedDocuments));
@@ -180,6 +187,7 @@ public partial class MainViewModel : ViewModelBase
         MarkSelectedReadyCommand.NotifyCanExecuteChanged();
         ExportCommand.NotifyCanExecuteChanged();
         ExportAllCommand.NotifyCanExecuteChanged();
+        ExportSelectedToPdfCommand.NotifyCanExecuteChanged();
         RestoreSelectedTrashCommand.NotifyCanExecuteChanged();
         PurgeSelectedTrashCommand.NotifyCanExecuteChanged();
     }
@@ -213,7 +221,7 @@ public partial class MainViewModel : ViewModelBase
 
     // Selection/view-dependent commands (RemoveSelected, MergeSelectedDocuments,
     // RedactSelected, ApplyRedactions, MarkReady, MarkSelectedReady, Export, ExportAll,
-    // RestoreSelectedTrash, PurgeSelectedTrash) are deliberately NOT listed here — see
+    // ExportSelectedToPdf, RestoreSelectedTrash, PurgeSelectedTrash) are deliberately NOT listed here — see
     // RefreshSelectionDependentCommands, called from OnIsBusyChanged below, for the single place they're
     // all wired instead of duplicating this list. Only genuinely IsBusy-specific commands stay here.
     [ObservableProperty]

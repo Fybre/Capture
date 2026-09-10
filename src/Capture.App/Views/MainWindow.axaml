@@ -416,6 +416,10 @@
                                     <MenuItem Header="Export all"
                                               Command="{Binding ExportAllCommand}"
                                               ToolTip.Tip="Export every Ready document in the inbox" />
+                                    <Separator />
+                                    <MenuItem Header="Export selected to PDF…"
+                                              Command="{Binding ExportSelectedToPdfCommand}"
+                                              ToolTip.Tip="Export the selected documents as a PDF, with your choice of combining and compression" />
                                 </MenuFlyout>
                             </SplitButton.Flyout>
                         </SplitButton>

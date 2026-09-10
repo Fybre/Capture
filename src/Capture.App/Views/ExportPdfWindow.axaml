@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Capture.App.Views.ExportPdfWindow"
+        Icon="/Assets/capture.ico"
+        Title="Export selected to PDF"
+        Width="440"
+        MinWidth="420"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <Grid RowDefinitions="Auto,Auto" Background="{DynamicResource GroundBrush}">
+        <StackPanel Grid.Row="0" Margin="24,22,24,10" Spacing="14">
+            <TextBlock x:Name="SummaryText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <CheckBox x:Name="CombineCheckBox" Content="Combine into a single PDF" IsCheckedChanged="OnCombineChanged" />
+            <CheckBox x:Name="CompressCheckBox" Content="Smaller file size (compress)" />
+            <StackPanel Spacing="6">
+                <Button x:Name="BrowseButton" Content="Choose location…" Click="OnBrowseClick" HorizontalAlignment="Left" />
+                <TextBlock x:Name="LocationText"
+                           Text="No location chosen"
+                           FontSize="12"
+                           Foreground="{DynamicResource MutedBrush}"
+                           TextWrapping="Wrap"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </StackPanel>
+        <Border Grid.Row="1"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12"
+                Background="{DynamicResource Surface2Brush}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" Click="OnCancelClick" />
+                <Button x:Name="ExportButton" Content="Export" MinWidth="88" IsDefault="True" IsEnabled="False" Click="OnExportClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

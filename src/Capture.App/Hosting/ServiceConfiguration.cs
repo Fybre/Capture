@@ -39,6 +39,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IPdfTextExtractor, PdfPigTextExtractor>();
         services.AddSingleton<IPdfSubsetWriter, PdfPigSubsetWriter>();
         services.AddSingleton<IMergedDocumentWriter, PdfPigMergedDocumentWriter>();
+        services.AddSingleton<IPdfExportWriter, PdfPigExportWriter>();
         services.AddSingleton<IOcrEngine, TesseractCliOcrEngine>();
         services.AddSingleton<ILatticeBuilder, LatticeBuilder>();
         services.AddSingleton(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(90) });
@@ -84,6 +85,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IHelpWindowService, HelpWindowService>();
         services.AddSingleton<IAboutDialogService, AboutDialogService>();
         services.AddSingleton<IConfirmDialogService, ConfirmDialogService>();
+        services.AddSingleton<IExportPdfDialogService, ExportPdfDialogService>();
         services.AddSingleton<IScriptEditorDialogService, ScriptEditorDialogService>();
         services.AddSingleton<IThereforeCategoryPickerDialogService, ThereforeCategoryPickerDialogService>();
         services.AddSingleton<IToastService, ToastService>();
