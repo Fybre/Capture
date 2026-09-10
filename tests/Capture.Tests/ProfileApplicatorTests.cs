@@ -589,6 +589,59 @@ public class ProfileApplicatorTests
         Assert.Equal(DocumentStatus.Ready, IndexFormat.StatusFor(values, 80));
     }
 
+    [Fact]
+    public async Task Ai_field_locates_and_highlights_its_answer_when_the_text_appears_on_a_page()
+    {
+        var field = new IndexField { Name = "Supplier", Kind = FieldKind.Ai };
+        var documentType = new DocumentTypeDefinition { Fields = [field] };
+        var lattices = new[]
+        {
+            new PageLattice { PageNumber = 1, Words = [Word("Nothing", 0.1f, 0.1f)] },
+            new PageLattice { PageNumber = 2, Words = [Word("Acme", 0.2f, 0.3f), Word("Corp", 0.31f, 0.3f)] }
+        };
+        var ai = new FakeAiExtractor { [field.Id] = new AiExtractedValue("Acme Corp", 88) };
+
+        var values = await new ProfileApplicator(ai: ai).ApplyAsync(documentType, lattices);
+
+        var value = Assert.Single(values);
+        Assert.Equal("Acme Corp", value.Value);
+        Assert.Equal(88, value.Confidence);
+        Assert.Equal(2, value.PageNumber);
+        Assert.NotNull(value.Bounds);
+        Assert.Equal(2, value.Bounds!.PageNumber);
+    }
+
+    [Fact]
+    public async Task Ai_field_has_no_highlight_when_its_answer_is_not_verbatim_on_any_page()
+    {
+        var field = new IndexField { Name = "Total", Kind = FieldKind.Ai, PageNumber = 1 };
+        var documentType = new DocumentTypeDefinition { Fields = [field] };
+        var lattices = new[]
+        {
+            new PageLattice { PageNumber = 1, Words = [Word("Subtotal", 0.1f, 0.1f), Word("45.00", 0.3f, 0.1f)] }
+        };
+        // The model summed/derived this value — it never appears verbatim in the OCR text.
+        var ai = new FakeAiExtractor { [field.Id] = new AiExtractedValue("49.50", 90) };
+
+        var values = await new ProfileApplicator(ai: ai).ApplyAsync(documentType, lattices);
+
+        var value = Assert.Single(values);
+        Assert.Equal("49.50", value.Value);
+        Assert.Null(value.Bounds);
+        Assert.Equal(field.PageNumber, value.PageNumber);
+    }
+
+    private sealed class FakeAiExtractor : IAiExtractor
+    {
+        private readonly Dictionary<Guid, AiExtractedValue> _values = [];
+        public bool IsConfigured => true;
+        public AiExtractedValue this[Guid fieldId] { set => _values[fieldId] = value; }
+
+        public Task<IReadOnlyDictionary<Guid, AiExtractedValue>> ExtractAsync(
+            string documentText, IReadOnlyList<IndexField> fields, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, AiExtractedValue>>(_values);
+    }
+
     private static LatticeWord Word(string text, float x, float y) => new()
     {
         Text = text,

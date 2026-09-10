@@ -142,6 +142,18 @@ public sealed class ProfileApplicator : IProfileApplicator
             value.Value = hit.Value;
             value.Confidence = hit.Confidence;
             value.ValidationError = IndexFormat.Validate(value.Value, field.Format, locale);
+
+            // An AI field has no configured page/zone to fall back on — best-effort locate the
+            // answer's own text in the document so the review panel can jump to and highlight it like
+            // any other field. Confidence here deliberately stays the model's own (hit.Confidence),
+            // not the OCR match's — they answer different questions ("how sure is the model" vs. "how
+            // clean was the text where we found it").
+            var located = AiValueLocator.Locate(lattices, value.Value);
+            if (located is not null)
+            {
+                value.PageNumber = located.PageNumber;
+                value.Bounds = located.Bounds;
+            }
         }
     }
 
