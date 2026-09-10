@@ -174,6 +174,9 @@
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="FontStyle" Value="Italic" />
     <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+    <!-- Italic glyphs render past their measured advance width, so the trailing letter's slanted
+         edge gets clipped by the DockPanel without a little extra room on the right. -->
+    <Setter Property="Margin" Value="0,0,4,0" />
   </Style>
 
   <Style Selector="TextBlock.section-title">
