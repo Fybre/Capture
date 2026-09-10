@@ -981,7 +981,7 @@
                            VerticalAlignment="Center" />
             </Grid>
 
-            <ScrollViewer x:Name="TableScrollViewer" Grid.Row="1" PointerPressed="OnGroupsAreaPointerPressed" HorizontalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="1" PointerPressed="OnGroupsAreaPointerPressed" HorizontalScrollBarVisibility="Auto">
                 <StackPanel Margin="20,0,20,20" Spacing="16">
                     <TextBlock Text="Import a PDF or image to get started"
                                IsVisible="{Binding HasNoDocuments}"
