@@ -169,6 +169,21 @@ public class ThereforeClientTests
         Assert.Equal(ThereforeFieldType.Date, invoiceDate.FieldType);
     }
 
+    [Theory]
+    [InlineData("""{"StringIndexData":{"FieldNo":1,"DataValue":null,"FieldName":"Purchase_Order"}}""", false)]
+    [InlineData("""{"StringIndexData":{"FieldNo":1,"DataValue":"","FieldName":"Purchase_Order"}}""", false)]
+    [InlineData("""{"StringIndexData":{"FieldNo":1,"DataValue":"PO-1","FieldName":"Purchase_Order"}}""", true)]
+    [InlineData("""{"DateIndexData":{"FieldNo":1,"DataValue":null,"DataISO8601Value":null,"FieldName":"Creation_Date"}}""", false)]
+    [InlineData("""{"MultipleKeywordData":{"FieldNo":1,"DataValue":[],"FieldName":"Tags"}}""", false)]
+    [InlineData("""{"MultipleKeywordData":{"FieldNo":1,"DataValue":["A"],"FieldName":"Tags"}}""", true)]
+    [InlineData("""{"SingleKeywordData":{"FieldNo":1,"KeywordNo":null,"FieldName":"Status"}}""", false)]
+    [InlineData("""{"SingleKeywordData":{"FieldNo":1,"KeywordNo":5,"FieldName":"Status"}}""", true)]
+    public void HasValue_detects_an_empty_index_data_item(string json, bool expected)
+    {
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(expected, ThereforeClient.HasValue(doc.RootElement));
+    }
+
     [Fact]
     public void ParseCategoryInfo_maps_counter_field_type()
     {

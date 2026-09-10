@@ -145,7 +145,16 @@ public sealed class ThereforeClient : IThereforeClient
                 && indexDataEl.TryGetProperty("IndexDataItems", out var itemsEl)
                 && itemsEl.ValueKind == JsonValueKind.Array)
             {
-                itemsToCreate = itemsEl.EnumerateArray().Select(item => (object)item.Clone()).ToList();
+                // PreprocessIndexData echoes back every field, including ones it couldn't resolve a
+                // value for. Sending those through to CreateDocument as an explicit null pins the
+                // field and suppresses Therefore's own field-level defaults (confirmed live: a field
+                // with a "$DATE" default only actually gets today's date when it's omitted from
+                // CreateDocument entirely — sending it with DataValue: null leaves it empty even
+                // though the default exists). Dropping empty items here lets those defaults apply.
+                itemsToCreate = itemsEl.EnumerateArray()
+                    .Where(HasValue)
+                    .Select(item => (object)item.Clone())
+                    .ToList();
             }
         }
 
@@ -193,6 +202,38 @@ public sealed class ThereforeClient : IThereforeClient
 
     private static bool GetBool(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.False) && value.GetBoolean();
+
+    // A PreprocessIndexData item has exactly one populated key — StringIndexData, IntIndexData,
+    // DateIndexData, MoneyIndexData, LogicalIndexData, SingleKeywordData, MultipleKeywordData, or
+    // TableIndexData — holding FieldNo/FieldName plus a value under DataValue (SingleKeywordData
+    // instead uses KeywordNo). Treat an item as empty, and drop it, only when we can positively
+    // confirm that: an unrecognized shape is kept rather than risk silently dropping real data.
+    internal static bool HasValue(JsonElement item)
+    {
+        foreach (var property in item.EnumerateObject())
+        {
+            if (property.Name is "AccessMask" or "RoleAccessMask" || property.Value.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (property.Value.TryGetProperty("DataValue", out var dataValue))
+            {
+                return dataValue.ValueKind switch
+                {
+                    JsonValueKind.Null => false,
+                    JsonValueKind.Array => dataValue.GetArrayLength() > 0,
+                    JsonValueKind.String => dataValue.GetString()?.Length > 0,
+                    _ => true
+                };
+            }
+
+            if (property.Value.TryGetProperty("KeywordNo", out var keywordNo))
+                return keywordNo.ValueKind != JsonValueKind.Null;
+
+            return true;
+        }
+
+        return true;
+    }
 }
 
 /// <summary>Writes DateTime as the legacy WCF/ASP.NET AJAX "/Date(ms)/" format Therefore's
