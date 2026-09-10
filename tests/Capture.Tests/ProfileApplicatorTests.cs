@@ -612,6 +612,26 @@ public class ProfileApplicatorTests
     }
 
     [Fact]
+    public async Task Ai_field_locates_a_money_answer_despite_the_source_texts_currency_formatting()
+    {
+        var field = new IndexField { Name = "InvoiceTotal", Kind = FieldKind.Ai };
+        var documentType = new DocumentTypeDefinition { Fields = [field] };
+        var lattices = new[]
+        {
+            new PageLattice { PageNumber = 1, Words = [Word("$1,249.60", 0.3f, 0.5f)] }
+        };
+        // The model reports the bare number; the source token still has the "$" and thousands comma.
+        var ai = new FakeAiExtractor { [field.Id] = new AiExtractedValue("1249.60", 92) };
+
+        var values = await new ProfileApplicator(ai: ai).ApplyAsync(documentType, lattices);
+
+        var value = Assert.Single(values);
+        Assert.Equal("1249.60", value.Value);
+        Assert.NotNull(value.Bounds);
+        Assert.Equal(1, value.Bounds!.PageNumber);
+    }
+
+    [Fact]
     public async Task Ai_field_has_no_highlight_when_its_answer_is_not_verbatim_on_any_page()
     {
         var field = new IndexField { Name = "Total", Kind = FieldKind.Ai, PageNumber = 1 };
