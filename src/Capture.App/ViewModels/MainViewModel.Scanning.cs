@@ -108,5 +108,5 @@ public partial class MainViewModel
 
     private bool CanCancelScan() => IsScanning && _scanCancellation is not null;
 
-    private bool CanScan() => _scanSource.IsAvailable && !IsBusy && SelectedCaptureProfile is not null;
+    private bool CanScan() => _scanSource.IsAvailable && !IsBusy;
 }

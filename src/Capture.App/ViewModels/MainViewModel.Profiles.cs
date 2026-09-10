@@ -38,7 +38,8 @@ public partial class MainViewModel
     {
         get
         {
-            if (SelectedCaptureProfile is not { } profile) return string.Empty;
+            if (SelectedCaptureProfile is not { } profile)
+                return "No profile — ad hoc capture; documents get no fields and land under \"No profile applied\"";
             var batching = profile.Batch.StartNewBatchForEachFile
                 ? "New batch for each input file"
                 : profile.Batch.StartRules.MatchMode == SeparationMatchMode.None
@@ -111,8 +112,9 @@ public partial class MainViewModel
     [RelayCommand(CanExecute = nameof(CanStartNewBatch))]
     private async Task StartNewBatchAsync()
     {
-        if (SelectedCaptureProfile is null || _store is not IOpenBatchStore batches) return;
-        var open = await batches.GetOpenBatchAsync(SelectedCaptureProfile.Id, "manual").ConfigureAwait(true);
+        if (_store is not IOpenBatchStore batches) return;
+        var profile = SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted;
+        var open = await batches.GetOpenBatchAsync(profile.Id, "manual").ConfigureAwait(true);
         if (open is not null)
         {
             await batches.SetBatchStateAsync(open.Id, BatchState.Closed).ConfigureAwait(true);
@@ -127,12 +129,12 @@ public partial class MainViewModel
         await RefreshManualBatchStateAsync().ConfigureAwait(true);
     }
 
-    private bool CanStartNewBatch() => !IsBusy && SelectedCaptureProfile is not null && HasOpenManualBatch && _store is IOpenBatchStore;
+    private bool CanStartNewBatch() => !IsBusy && HasOpenManualBatch && _store is IOpenBatchStore;
 
     private async Task RefreshManualBatchStateAsync()
     {
-        var profile = SelectedCaptureProfile;
-        if (profile is null || _store is not IOpenBatchStore batches)
+        var profile = SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted;
+        if (_store is not IOpenBatchStore batches)
         {
             HasOpenManualBatch = false;
             ManualBatchStatus = string.Empty;
@@ -142,7 +144,8 @@ public partial class MainViewModel
 
         var open = await batches.GetOpenBatchAsync(profile.Id, "manual").ConfigureAwait(true);
         // Ignore a slower lookup for a profile the user has since changed away from.
-        if (SelectedCaptureProfile?.Id != profile.Id) return;
+        var currentProfileId = (SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted).Id;
+        if (currentProfileId != profile.Id) return;
         HasOpenManualBatch = open is not null;
         ManualBatchStatus = open is null
             ? "No manual batch is open — the next import starts one"

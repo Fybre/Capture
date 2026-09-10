@@ -27,6 +27,23 @@ public class CapturePlannerTests
     }
 
     [Fact]
+    public void Profile_with_no_document_types_plans_untyped_documents_into_a_generic_batch()
+    {
+        // This is the shape of the built-in "Unsorted" profile (BuiltInCaptureProfiles.Unsorted) —
+        // no document types and no batch-start rules means every page falls through to the
+        // no-type-matched fallback, and the batch is generic so it can join an already-open batch.
+        var profile = Profile(batchRule: null);
+
+        var plan = new CapturePlanner().Plan(profile, [Input("one", P("one", 1, "anything"))]);
+
+        var batch = Assert.Single(plan.Batches);
+        Assert.True(batch.IsGeneric);
+        var document = Assert.Single(batch.Documents);
+        Assert.Null(document.Type);
+        Assert.Equal([1], document.SourcePages.Select(page => page.PageNumber));
+    }
+
+    [Fact]
     public void Batch_plan_remembers_the_start_page_even_when_it_is_consumed()
     {
         var (profile, _) = StudentProfile();

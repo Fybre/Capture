@@ -346,7 +346,7 @@ public partial class MainViewModel : ViewModelBase
         Dispatcher.UIThread.Post(() => SelectedDocument = row, DispatcherPriority.Loaded);
     }
 
-    private bool CanImport() => !IsBusy && SelectedCaptureProfile is not null;
+    private bool CanImport() => !IsBusy;
 
     private bool CanConfigure() => !IsBusy;
 

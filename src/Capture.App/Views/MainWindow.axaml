@@ -304,8 +304,7 @@
                       <TextBlock Text="{Binding ManualBatchStatus}"
                                  FontSize="10.5"
                                  Foreground="{DynamicResource MutedBrush}"
-                                 ToolTip.Tip="{Binding ManualBatchTooltip}"
-                                 IsVisible="{Binding SelectedCaptureProfile, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                 ToolTip.Tip="{Binding ManualBatchTooltip}" />
                     </StackPanel>
 
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" DockPanel.Dock="Left" />

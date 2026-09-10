@@ -157,7 +157,7 @@ public partial class MainViewModel
             var profileId = watchFolderEntry?.CaptureProfileId;
             var profile = profileId is { } id
                 ? CaptureProfiles.FirstOrDefault(item => item.Id == id)
-                : SelectedCaptureProfile;
+                : SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted;
             if (profile is null)
             {
                 StatusText = "Choose a Capture Profile before importing";
