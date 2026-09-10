@@ -10,6 +10,11 @@ using Capture.Core.Profiles;
 
 namespace Capture.App.Controls;
 
+/// <summary>Result of a "pick text from the document" gesture — a drag covering one or more OCR
+/// words, or a plain click on a single word. Bounds is the union of the matched words' own
+/// rectangles (not the raw drag rectangle), so the stored highlight snaps to the actual text.</summary>
+public sealed record PickedText(string Text, NormalizedRect Bounds);
+
 public sealed class PagePreview : Control
 {
     public PagePreview()
@@ -45,6 +50,14 @@ public sealed class PagePreview : Control
 
     public static readonly StyledProperty<ICommand?> HighlightClickedCommandProperty =
         AvaloniaProperty.Register<PagePreview, ICommand?>(nameof(HighlightClickedCommand));
+
+    /// <summary>True while a text-entry, non-read-only field is selected for editing — arms the
+    /// "pick text from the document" gesture (drag or click on the image) in place of panning.</summary>
+    public static readonly StyledProperty<bool> CanPickTextProperty =
+        AvaloniaProperty.Register<PagePreview, bool>(nameof(CanPickText));
+
+    public static readonly StyledProperty<ICommand?> TextPickedCommandProperty =
+        AvaloniaProperty.Register<PagePreview, ICommand?>(nameof(TextPickedCommand));
 
     public const double MinZoom = 1.0;
     public const double MaxZoom = 6.0;
@@ -93,11 +106,17 @@ public sealed class PagePreview : Control
     };
     private static readonly IBrush OcrWordFill = new SolidColorBrush(Color.FromArgb(30, 40, 200, 90));
     private static readonly Pen OcrWordStroke = new(new SolidColorBrush(Color.FromArgb(150, 40, 200, 90)), 1);
+    private static readonly IBrush PickFill = new SolidColorBrush(Color.FromArgb(40, 40, 200, 90));
+    private static readonly Pen PickStroke = new(new SolidColorBrush(Color.FromArgb(220, 40, 200, 90)), 1)
+    {
+        DashStyle = DashStyle.Dash
+    };
 
     private enum EditMode
     {
         None,
         Draw,
+        Pick,
         Move,
         N,
         S,
@@ -118,6 +137,18 @@ public sealed class PagePreview : Control
     static PagePreview()
     {
         AffectsRender<PagePreview>(PageImageProperty, HighlightsProperty, OcrWordsProperty, ShowOcrWordsProperty, AllowDrawProperty, ZoomProperty);
+    }
+
+    public bool CanPickText
+    {
+        get => GetValue(CanPickTextProperty);
+        set => SetValue(CanPickTextProperty, value);
+    }
+
+    public ICommand? TextPickedCommand
+    {
+        get => GetValue(TextPickedCommandProperty);
+        set => SetValue(TextPickedCommandProperty, value);
     }
 
     public Bitmap? PageImage
@@ -208,7 +239,7 @@ public sealed class PagePreview : Control
         {
             foreach (var highlight in Highlights)
             {
-                if (_mode is not EditMode.None and not EditMode.Draw && highlight.IsSelected)
+                if (_mode is not EditMode.None and not EditMode.Draw and not EditMode.Pick && highlight.IsSelected)
                     continue;
 
                 var rect = ToScreen(highlight, dest);
@@ -240,6 +271,10 @@ public sealed class PagePreview : Control
         {
             context.DrawRectangle(DraftFill, DraftStroke, NormalizeScreen(_start, _current));
         }
+        else if (_mode == EditMode.Pick)
+        {
+            context.DrawRectangle(PickFill, PickStroke, NormalizeScreen(_start, _current));
+        }
         else if (_mode != EditMode.None)
         {
             context.DrawRectangle(SelectedFill, SelectedStroke, _editRect);
@@ -259,6 +294,7 @@ public sealed class PagePreview : Control
         if (change.Property == HighlightsProperty)
         {
             ObserveHighlights();
+            RevealSelectedHighlightIfNeeded();
         }
         else if (change.Property == PageImageProperty)
         {
@@ -401,10 +437,26 @@ public sealed class PagePreview : Control
                 InvalidateVisual();
                 return;
             }
+
+            // A text field is armed for editing — a left-drag (or click) on blank image space grabs
+            // text from the document for it instead of panning. Only takes over while a field is
+            // actually selected; middle-drag/wheel still pan regardless, so repositioning the view
+            // never requires leaving pick mode.
+            if (CanPickText)
+            {
+                _mode = EditMode.Pick;
+                _start = point;
+                _current = point;
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                InvalidateVisual();
+                return;
+            }
         }
 
-        // In review, a normal left-drag on blank space still pans. Editable highlights are handled
-        // first, so the same gesture moves a selected detected redaction instead.
+        // In review, a normal left-drag on blank space still pans. Editable highlights and text
+        // picking are handled first, so the same gesture moves a selected detected redaction, or
+        // grabs text for the selected field, instead.
         if (!AllowDraw)
             BeginPan(e);
     }
@@ -445,7 +497,7 @@ public sealed class PagePreview : Control
         }
 
         _current = point;
-        if (_mode == EditMode.Draw)
+        if (_mode is EditMode.Draw or EditMode.Pick)
         {
             InvalidateVisual();
             e.Handled = true;
@@ -490,6 +542,18 @@ public sealed class PagePreview : Control
             return;
         }
 
+        if (mode == EditMode.Pick)
+        {
+            var screen = NormalizeScreen(_start, _current);
+            var clickPoint = _current;
+            _start = default;
+            _current = default;
+            InvalidateVisual();
+            if (dest.Width > 0)
+                RaiseTextPicked(dest, screen, clickPoint);
+            return;
+        }
+
         RaiseZoneChanged(_editRect);
         _editRect = default;
         InvalidateVisual();
@@ -527,7 +591,7 @@ public sealed class PagePreview : Control
 
     private void UpdateHoverCursor(Point point)
     {
-        if (!AllowDraw && !AllowHighlightEdit)
+        if (!AllowDraw && !AllowHighlightEdit && !CanPickText)
         {
             Cursor = Cursor.Default;
             return;
@@ -552,12 +616,49 @@ public sealed class PagePreview : Control
         }
 
         Cursor = HitHighlight(dest, point) is null
-            ? new Cursor(AllowDraw ? StandardCursorType.Cross : StandardCursorType.Arrow)
+            ? new Cursor(AllowDraw || CanPickText ? StandardCursorType.Cross : StandardCursorType.Arrow)
             : new Cursor(StandardCursorType.Arrow);
     }
 
     private IndexHighlight? SelectedHighlight() =>
         Highlights?.FirstOrDefault(highlight => highlight.IsSelected);
+
+    // Fires whenever the selected field changes (Highlights is reassigned as a fresh list on every
+    // selection change/page switch — see RefreshIndexHighlights). Only pans, never zooms, and only
+    // when the selected highlight isn't already fully visible, so re-selecting an already-visible
+    // field never nudges the view.
+    private void RevealSelectedHighlightIfNeeded()
+    {
+        var selected = SelectedHighlight();
+        if (selected is null || PageImage is null || Bounds.Width <= 0 || Bounds.Height <= 0)
+            return;
+
+        var dest = ImageDestination();
+        if (dest.Width <= 0 || dest.Height <= 0)
+            return;
+
+        var rect = ToScreen(selected, dest);
+        var viewport = new Rect(Bounds.Size);
+        if (viewport.Contains(rect.TopLeft) && viewport.Contains(rect.BottomRight))
+            return;
+
+        var fit = FitDestination();
+        if (fit.Width <= 0 || fit.Height <= 0)
+            return;
+
+        var zoom = Math.Clamp(Zoom, MinZoom, MaxZoom);
+        var width = fit.Width * zoom;
+        var height = fit.Height * zoom;
+        var targetCenterX = selected.X + selected.Width / 2;
+        var targetCenterY = selected.Y + selected.Height / 2;
+
+        // Inverse of ImageDestination()'s dest.X = fit.X + fit.Width/2 + _panX - width/2, solved so
+        // the highlight's own center lands on the viewport's center.
+        _panX = Bounds.Width / 2 - width * (targetCenterX - 0.5) - fit.X - fit.Width / 2;
+        _panY = Bounds.Height / 2 - height * (targetCenterY - 0.5) - fit.Y - fit.Height / 2;
+        ClampPan(fit);
+        InvalidateVisual();
+    }
 
     private IndexHighlight? HitHighlight(Rect dest, Point point)
     {
@@ -740,6 +841,38 @@ public sealed class PagePreview : Control
     {
         if (command?.CanExecute(parameter) == true)
             command.Execute(parameter);
+    }
+
+    // A real drag (>= MinScreenSize in both dimensions) grabs every word whose center falls inside
+    // the dragged rectangle, in reading order — the same predicate ZonalExtractor already uses for
+    // profile-defined zones. Anything smaller is just a click, so grab the single word under it
+    // instead (reusing the same hit-test the OCR-word tooltip already does). No words under either
+    // gesture means no-op — the field is left exactly as it was rather than getting cleared.
+    private void RaiseTextPicked(Rect dest, Rect screen, Point clickPoint)
+    {
+        IReadOnlyList<LatticeWord> matched;
+        if (screen.Width >= MinScreenSize && screen.Height >= MinScreenSize)
+        {
+            var normalized = ToNormalized(screen, dest);
+            var zone = new ZoneRect { X = normalized.X, Y = normalized.Y, Width = normalized.Width, Height = normalized.Height };
+            matched = (OcrWords ?? []).Where(word => LatticeLayout.CenterInside(word, zone)).ToList();
+        }
+        else
+        {
+            var word = HitOcrWord(dest, clickPoint);
+            matched = word is null ? [] : [word];
+        }
+
+        if (matched.Count == 0)
+            return;
+
+        var ordered = LatticeLayout.InReadingOrder(matched);
+        var text = string.Join(' ', ordered.Select(word => word.Text));
+        var union = LatticeLayout.Union(ordered);
+        if (union is null)
+            return;
+
+        RaiseCommand(TextPickedCommand, new PickedText(text, new NormalizedRect(union.X, union.Y, union.Width, union.Height)));
     }
 
     private static NormalizedRect ToNormalized(Rect screen, Rect dest)

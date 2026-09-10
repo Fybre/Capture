@@ -735,6 +735,8 @@
                                               ZoneDrawnCommand="{Binding AddManualRedactionCommand}"
                                               ZoneChangedCommand="{Binding ChangeRedactionCommand}"
                                               HighlightClickedCommand="{Binding SelectIndexHighlightCommand}"
+                                              CanPickText="{Binding CanPickTextFromPreview}"
+                                              TextPickedCommand="{Binding PickTextCommand}"
                                               Margin="8"
                                               IsVisible="{Binding PageImage, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <TextBlock Text="{Binding PreviewMessage}"

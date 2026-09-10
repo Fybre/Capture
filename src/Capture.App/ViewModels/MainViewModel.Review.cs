@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Capture.App.Controls;
 using Capture.App.Services;
 using Capture.Core.Diagnostics;
 using Capture.Core.Import;
@@ -41,7 +42,31 @@ public partial class MainViewModel
     private IReadOnlyList<IndexHighlight> _indexHighlights = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPickTextFromPreview))]
     private IndexValueRow? _selectedIndex;
+
+    /// <summary>Arms PagePreview's "drag/click on the image to grab text" gesture — only while a
+    /// text-entry, editable field is actually selected, so the gesture never steals the normal
+    /// pan-drag when the user is just browsing the document.</summary>
+    public bool CanPickTextFromPreview => SelectedIndex is { IsTextEntry: true, IsReadOnly: false };
+
+    [RelayCommand]
+    private void PickText(PickedText picked)
+    {
+        if (SelectedIndex is not { IsTextEntry: true, IsReadOnly: false } row)
+            return;
+
+        row.Text = picked.Text;
+        row.Value.Bounds = new ZoneRect
+        {
+            PageNumber = CurrentPageNumber,
+            X = Math.Clamp(picked.Bounds.X, 0, 1),
+            Y = Math.Clamp(picked.Bounds.Y, 0, 1),
+            Width = Math.Clamp(picked.Bounds.Width, 0, 1),
+            Height = Math.Clamp(picked.Bounds.Height, 0, 1)
+        };
+        RefreshIndexHighlights();
+    }
 
     [RelayCommand]
     private void SelectIndexHighlight(Guid id)
