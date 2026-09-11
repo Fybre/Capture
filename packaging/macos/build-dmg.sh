@@ -52,16 +52,27 @@ rm -rf "$OUT_DIR"
 mkdir -p "$PUBLISH_DIR" "$OUT_DIR"
 
 echo "==> Publishing self-contained osx-arm64 build"
-# PublishSingleFile matters here beyond convenience: codesign refuses to seal an app bundle that has
-# loose PE-format managed .dll files sitting directly in Contents/MacOS ("code object is not signed at
-# all, in subcomponent: X.dll" — codesign requires everything there to be genuinely signable code).
-# Bundling the managed assemblies into the one Mach-O apphost removes that whole class of file.
+# Deliberately NOT PublishSingleFile: Roslyn's CSharpScript API (used for capture-profile field
+# scripts) hardcodes an internal MetadataReference.CreateFromAssemblyInternal(typeof(object).Assembly)
+# call that always fails once Assembly.Location is empty — which it always is for every managed
+# assembly bundled into a PublishSingleFile apphost. This is a long-standing, still-open upstream
+# Roslyn limitation (dotnet/roslyn#50719) with no supported workaround short of reimplementing
+# CSharpScript from scratch — confirmed live: field scripts fail on every single-file-packaged build,
+# every time, the moment a profile actually uses one.
+#
+# PublishSingleFile was originally adopted here to dodge a codesign failure on loose files directly
+# under Contents/MacOS, believed at the time to be specifically about managed PE .dll files. Retested
+# directly against the current Xcode/codesign toolchain: a plain `codesign --deep --sign - ` on a
+# bundle with 300+ loose managed .dll files sitting right in Contents/MacOS signs and verifies clean,
+# including an individual embedded signature on each one. The real constraint (see the "Relocating
+# large data payloads" step below) is loose *non-code data* directly in Contents/MacOS — e.g.
+# Presidio's PyInstaller tree — which that step already relocates to Contents/Resources; it was never
+# actually about the managed assemblies themselves.
 dotnet publish "$REPO_ROOT/src/Capture.App/Capture.App.csproj" \
   --runtime osx-arm64 \
   --self-contained true \
   --configuration Release \
   -p:Version="$VERSION" \
-  -p:PublishSingleFile=true \
   -p:DebugType=none \
   --output "$PUBLISH_DIR"
 
@@ -174,6 +185,30 @@ echo "==> Code-signing nested binaries"
 # individually would invalidate that signature) and skipping inside any *.framework (covered by the
 # framework-level signature just applied). Finally sign the outer .app once as a plain (non-deep)
 # bundle signature.
+# .NET's managed assemblies (.dll, no longer bundled into a single apphost — see the publish step
+# above) and small loose files like Capture.App.runtimeconfig.json aren't Mach-O, so the Mach-O-only
+# loop below never signs them — but they still need *some* signature before that loop runs, not after:
+# signing Capture.App itself (a Mach-O executable that also happens to be a bundle's main executable)
+# makes codesign validate it in bundle context, which fails immediately on the first unsigned regular
+# file it finds sitting alongside it ("code object is not signed at all" — confirmed the hard way
+# against both a satellite resource .dll and Capture.App.runtimeconfig.json in turn; it's genuinely
+# every loose file, not just .dll).
+#
+# `codesign --deep` on Contents/MacOS itself was tried and rejected: pointed at a plain directory
+# (not a real bundle) it still runs codesign's own bundle-detection heuristics against that
+# directory's contents, and CaptureScanHelperMac.app sitting inside it as a real nested .app trips
+# the exact same "bundle format unrecognized" failure `--deep` gives Presidio's *.dist-info folders
+# elsewhere in the tree ("Contents/MacOS: bundle format unrecognized, invalid, or unsuitable").
+# Sign every loose regular file individually instead — no directory-level bundle detection involved —
+# skipping CaptureScanHelperMac.app (already signed as its own bundle above; signing its contents
+# individually would invalidate that signature) and skipping inside any *.framework (the framework
+# loop just below signs those as a unit). This is a plain baseline signature only — entitlements/
+# hardened-runtime aren't needed here since nothing but Capture.App itself is launched directly by
+# Gatekeeper; the Mach-O loop below re-signs (--force) the specific files that need those on top.
+while IFS= read -r -d '' f; do
+  codesign --force -s "$IDENTITY" --timestamp "$f"
+done < <(find "$APP_DIR/Contents/MacOS" -type f ! -path "*/CaptureScanHelperMac.app/*" ! -path "*.framework/*" ! -name "Capture.App" -print0)
+
 while IFS= read -r -d '' framework; do
   codesign --force -s "$IDENTITY" --entitlements "$ENTITLEMENTS" --options runtime --timestamp "$framework"
 done < <(find "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" -type d -name "*.framework" -print0)
@@ -182,7 +217,13 @@ while IFS= read -r -d '' f; do
   if file -b "$f" | grep -q "Mach-O"; then
     codesign --force -s "$IDENTITY" --entitlements "$ENTITLEMENTS" --options runtime --timestamp "$f"
   fi
-done < <(find "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" -type f ! -path "*/CaptureScanHelperMac.app/*" ! -path "*.framework/*" -print0)
+done < <(find "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" -type f ! -path "*/CaptureScanHelperMac.app/*" ! -path "*.framework/*" ! -name "Capture.App" -print0)
+# Capture.App itself (the bundle's main executable) is deliberately NOT signed here — signing it
+# individually, at this path, makes codesign validate it in bundle context immediately, which fails
+# on the first loose file that doesn't carry its own seal yet ("code object is not signed at all").
+# Its own signature (with the same entitlements applied here) is produced correctly below, at the
+# same moment codesign seals Contents/Resources into the bundle's CodeResources — see "Code-signing
+# Capture.app".
 
 echo "==> Code-signing Capture.app ($IDENTITY)"
 # CoreCLR's JIT needs to mmap executable memory at runtime — without allow-jit/allow-unsigned-
