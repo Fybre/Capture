@@ -62,6 +62,15 @@ public sealed class CaptureDocument
     /// that source shares this id, so they are siblings rather than duplicates. Importing the same
     /// bytes again creates a new id and therefore remains detectable as a genuine duplicate import.</summary>
     public Guid? SourceImportId { get; set; }
+
+    /// <summary>When this document was last successfully exported (any export destination), regardless
+    /// of whether it currently shows <see cref="DocumentStatus.Exported"/> — a document removed after
+    /// export (<c>WatchSettings.RemoveDocumentsAfterExport</c>) is soft-deleted rather than left at that
+    /// status, but still did export at this time. Set once per successful export by
+    /// <c>MainViewModel.ExportDocumentAsync</c>; never cleared, so re-exporting just moves it forward.
+    /// Exists purely for reporting (the Statistics window's "exported per day" chart) — nothing in the
+    /// capture/export pipeline itself reads it.</summary>
+    public DateTimeOffset? ExportedUtc { get; set; }
 }
 
 public sealed class DocumentPage

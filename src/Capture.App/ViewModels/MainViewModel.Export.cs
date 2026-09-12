@@ -131,8 +131,11 @@ public partial class MainViewModel
         if (results.Any(result => !result.Success))
             return ExportOutcome.Failed;
 
+        document.ExportedUtc = DateTimeOffset.UtcNow;
+
         if (_watchSettings.RemoveDocumentsAfterExport)
         {
+            await _store.UpdateAsync(document).ConfigureAwait(true);
             await _store.SoftDeleteAsync(document.Id).ConfigureAwait(true);
             Documents.Remove(row);
             SelectedDocuments.Remove(row);

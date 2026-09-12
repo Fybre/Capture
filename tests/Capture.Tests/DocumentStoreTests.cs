@@ -45,6 +45,38 @@ public class DocumentStoreTests
     }
 
     [Fact]
+    public async Task ExportedUtc_roundtrips_through_update_and_get()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-exported-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+        var store = new SqliteDocumentStore(paths);
+        await store.InitializeAsync();
+
+        var document = new CaptureDocument
+        {
+            OriginalFileName = "invoice.pdf",
+            StoredPath = Path.Combine(root, "original.pdf"),
+            Source = DocumentSource.Import,
+            Status = DocumentStatus.Ready,
+            PageCount = 1
+        };
+        await store.SaveAsync(document, []);
+
+        var beforeExport = await store.GetAsync(document.Id);
+        Assert.Null(beforeExport!.ExportedUtc);
+
+        var exportedAt = DateTimeOffset.UtcNow;
+        document.Status = DocumentStatus.Exported;
+        document.ExportedUtc = exportedAt;
+        await store.UpdateAsync(document);
+
+        var afterExport = await store.GetAsync(document.Id);
+        Assert.Equal(DocumentStatus.Exported, afterExport!.Status);
+        Assert.Equal(exportedAt, afterExport.ExportedUtc);
+    }
+
+    [Fact]
     public async Task Purge_removes_document_and_work_files()
     {
         var root = Path.Combine(Path.GetTempPath(), "capture-del-" + Guid.NewGuid().ToString("N"));
