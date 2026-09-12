@@ -34,21 +34,24 @@
         <Border Classes="card" HorizontalAlignment="Stretch" IsVisible="{Binding RulesEnabled}">
             <StackPanel Spacing="8">
                 <TextBlock Text="Strategies" Classes="section-title" />
-                <ListBox ItemsSource="{Binding Strategies}"
+                <ListBox x:Name="StrategiesList"
+                         ItemsSource="{Binding Strategies}"
                          SelectedItem="{Binding SelectedStrategy}"
                          SelectionMode="Toggle"
                          ToolTip.Tip="Select a strategy to edit it; select it again to collapse its settings."
                          MaxHeight="220">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:SeparationStrategyRow">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Grid.Column="0" Classes="drag-handle hint" Text="⋮⋮" Cursor="Hand"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" ToolTip.Tip="Drag to reorder"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                     <TextBlock Text="{Binding DisplayLabel}" FontWeight="Medium" />
                                     <TextBlock Text="(zone set)"
                                                Classes="hint"
                                                IsVisible="{Binding Zone, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                 </StackPanel>
-                                <Button Grid.Column="1"
+                                <Button Grid.Column="2"
                                         Content="Remove"
                                         Classes="ghost"
                                         Padding="6,2"

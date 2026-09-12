@@ -457,6 +457,50 @@ public sealed class CaptureProfileDesignerUxTests
         Assert.Equal(typeA, designer.SelectedNode?.DocumentType);
     }
 
+    [Fact]
+    public void Reordering_an_export_moves_it_to_sit_at_the_target_position()
+    {
+        var type = new DocumentTypeDefinition { Name = "Invoice" };
+        var designer = new CaptureProfileDesignerViewModel(
+            new CaptureProfile { DocumentTypes = [type] }, new NoOpProfileStore());
+        designer.SelectedNode = designer.Navigation.Single(node => node.DocumentType == type);
+        designer.AddExportCommand.Execute(null);
+        designer.AddExportCommand.Execute(null);
+        designer.AddExportCommand.Execute(null);
+        var (first, second, third) = (designer.DocumentExports[0], designer.DocumentExports[1], designer.DocumentExports[2]);
+
+        designer.ReorderExport(first.Definition.Id, third.Definition.Id);
+
+        Assert.Equal([second, third, first], designer.DocumentExports);
+    }
+
+    [Fact]
+    public void Copying_an_export_to_another_document_type_remaps_field_references_by_name()
+    {
+        var sharedField = new IndexField { Name = "Invoice Number" };
+        var onlyOnSourceField = new IndexField { Name = "Only On Source" };
+        var source = new DocumentTypeDefinition { Name = "Invoice", Fields = [sharedField, onlyOnSourceField] };
+        var targetField = new IndexField { Name = "Invoice Number" };
+        var target = new DocumentTypeDefinition { Name = "Receipt", Fields = [targetField] };
+        var profile = new CaptureProfile { DocumentTypes = [source, target] };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+        designer.SelectedNode = designer.Navigation.Single(node => node.DocumentType == source);
+        designer.AddExportCommand.Execute(null);
+        var export = designer.DocumentExports[0];
+        export.Name = "CSV export";
+        export.Definition.FieldIds = [sharedField.Id, onlyOnSourceField.Id];
+        export.Definition.ThereforeFieldMappings.Add(new ThereforeFieldMapping { Caption = "Number", IndexFieldId = sharedField.Id });
+
+        designer.CopyExportToDocumentType(export, target.Id);
+
+        var copied = Assert.Single(target.Exports);
+        Assert.NotEqual(export.Definition.Id, copied.Id);
+        Assert.Equal("CSV export", copied.Name);
+        // Only the shared-by-name field carries over; the source-only field has no match on the target.
+        Assert.Equal([targetField.Id], copied.FieldIds);
+        Assert.Equal(targetField.Id, Assert.Single(copied.ThereforeFieldMappings).IndexFieldId);
+    }
+
     private sealed class NoOpProfileStore : ICaptureProfileStore
     {
         public Task<IReadOnlyList<CaptureProfile>> GetAllAsync(CancellationToken cancellationToken = default) =>

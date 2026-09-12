@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -11,16 +12,160 @@ namespace Capture.App.Views;
 public partial class CaptureProfileDesignerView : UserControl
 {
     private const string DocumentTypeDragFormat = "capture.designer.document-type";
+    private const string ExportDragFormat = "capture.designer.export";
 
     private ListBox? _pressDocTypeList;
     private CaptureDesignerNode? _pressDocTypeNode;
     private Point _pressDocTypePoint;
     private bool _docTypeDragging;
 
+    private ItemsControl? _pressExportList;
+    private ExportDefinitionRow? _pressExportRow;
+    private Point _pressExportPoint;
+    private bool _exportDragging;
+
     public CaptureProfileDesignerView()
     {
         InitializeComponent();
         WireDocumentTypeDragDrop(DocumentTypeList);
+        WireExportDragDrop(ExportsList);
+    }
+
+    // The "Copy to..." flyout needs both the clicked target document type AND the export row the button
+    // was opened from — a combination that doesn't bind cleanly through ExportsList's shared item
+    // template (MenuItem.CommandParameter can't reach back to an ancestor outside the Flyout's own visual
+    // tree), so it's built directly in code instead of through a bound MenuFlyout.
+    private void OnCopyExportClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not ExportDefinitionRow row)
+            return;
+        if (DataContext is not CaptureProfileDesignerViewModel viewModel)
+            return;
+
+        var choices = viewModel.OtherDocumentTypeChoices;
+        if (choices.Count == 0)
+            return;
+
+        var flyout = new MenuFlyout();
+        foreach (var choice in choices)
+        {
+            var item = new MenuItem { Header = choice.Name };
+            item.Click += (_, _) => viewModel.CopyExportToDocumentType(row, choice.Id);
+            flyout.Items.Add(item);
+        }
+        flyout.ShowAt(button);
+    }
+
+    // Drag-to-reorder for the export list, mirroring the document-type list's drag wiring above — the
+    // one difference is the container type: DocumentExports renders through a plain ItemsControl, whose
+    // default item containers are ContentPresenters, not ListBoxItems.
+    private void WireExportDragDrop(ItemsControl list)
+    {
+        DragDrop.SetAllowDrop(list, true);
+        list.AddHandler(PointerPressedEvent, OnExportPointerPressed, RoutingStrategies.Tunnel, true);
+        list.AddHandler(PointerMovedEvent, OnExportPointerMoved, RoutingStrategies.Tunnel, true);
+        list.AddHandler(PointerReleasedEvent, OnExportPointerReleased, RoutingStrategies.Tunnel, true);
+        list.AddHandler(DragDrop.DragOverEvent, OnExportDragOver, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
+        list.AddHandler(DragDrop.DropEvent, OnExportDrop, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
+    }
+
+    private void OnExportPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not ItemsControl list || !e.GetCurrentPoint(list).Properties.IsLeftButtonPressed)
+            return;
+        if (!IsOnDragHandle(e.Source))
+            return;
+
+        _pressExportList = list;
+        _pressExportRow = ExportAt(list, e.Source, e.GetPosition(list));
+        _pressExportPoint = e.GetPosition(list);
+        _exportDragging = false;
+    }
+
+    private async void OnExportPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_exportDragging || _pressExportRow is null || _pressExportList is null || !ReferenceEquals(sender, _pressExportList))
+            return;
+        if (!e.GetCurrentPoint(_pressExportList).Properties.IsLeftButtonPressed)
+            return;
+
+        var delta = e.GetPosition(_pressExportList) - _pressExportPoint;
+        if (Math.Abs(delta.X) < 6 && Math.Abs(delta.Y) < 6)
+            return;
+
+        _exportDragging = true;
+        var data = new DataObject();
+        data.Set(ExportDragFormat, _pressExportRow.Definition.Id.ToString());
+        try
+        {
+            await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+        }
+        finally
+        {
+            _pressExportRow = null;
+            _pressExportList = null;
+            _exportDragging = false;
+        }
+    }
+
+    private void OnExportPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_exportDragging)
+        {
+            _pressExportRow = null;
+            _pressExportList = null;
+        }
+    }
+
+    private void OnExportDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = sender is ItemsControl list && CanDropExport(list, e) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnExportDrop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not ItemsControl list || DataContext is not CaptureProfileDesignerViewModel viewModel || !TryGetDragExportId(e.Data, out var fromId))
+            return;
+
+        var target = ExportAt(list, e.Source, e.GetPosition(list));
+        if (target is null || target.Definition.Id == fromId)
+            return;
+
+        viewModel.ReorderExport(fromId, target.Definition.Id);
+    }
+
+    private bool CanDropExport(ItemsControl list, DragEventArgs e)
+    {
+        if (!TryGetDragExportId(e.Data, out var fromId))
+            return false;
+
+        var target = ExportAt(list, e.Source, e.GetPosition(list));
+        return target is not null && target.Definition.Id != fromId;
+    }
+
+    private static bool TryGetDragExportId(IDataObject data, out Guid id)
+    {
+        id = Guid.Empty;
+        return data.Contains(ExportDragFormat)
+            && data.Get(ExportDragFormat) is string text
+            && Guid.TryParse(text, out id);
+    }
+
+    private static ExportDefinitionRow? ExportAt(ItemsControl list, object? source, Point position)
+    {
+        if ((source as Control)?.FindAncestorOfType<ContentPresenter>(includeSelf: true)?.DataContext is ExportDefinitionRow fromSource)
+            return fromSource;
+
+        foreach (var visual in list.GetVisualsAt(position))
+        {
+            var item = (visual as Visual)?.FindAncestorOfType<ContentPresenter>(includeSelf: true);
+            if (item?.DataContext is ExportDefinitionRow row)
+                return row;
+        }
+
+        return null;
     }
 
     // The nav column is three ListBoxes (Capture Profile, Document Types, Test Capture) all displaying
@@ -161,7 +306,7 @@ public partial class CaptureProfileDesignerView : UserControl
         {
             if (visual is Control control && control.Classes.Contains("drag-handle"))
                 return true;
-            if (visual is ListBoxItem)
+            if (visual is ListBoxItem or ContentPresenter)
                 return false;
             visual = visual.GetVisualParent();
         }

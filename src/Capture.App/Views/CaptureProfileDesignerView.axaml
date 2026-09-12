@@ -290,21 +290,23 @@
               </StackPanel>
               <Button Grid.Column="1" Content="+ Add export" Command="{Binding AddExportCommand}" VerticalAlignment="Top"/>
             </Grid>
-            <ItemsControl ItemsSource="{Binding DocumentExports}">
+            <ItemsControl x:Name="ExportsList" ItemsSource="{Binding DocumentExports}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <Border Background="{DynamicResource Surface3Brush}" CornerRadius="6" Margin="0,0,0,8">
                     <StackPanel>
-                      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="8,6" ColumnSpacing="6">
-                        <Button Classes="ghost" Width="26" Height="26" Padding="0"
+                      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="8,6" ColumnSpacing="6">
+                        <TextBlock Grid.Column="0" Classes="drag-handle hint" Text="⋮⋮" Cursor="Hand"
+                                   VerticalAlignment="Center" ToolTip.Tip="Drag to reorder"/>
+                        <Button Grid.Column="1" Classes="ghost" Width="26" Height="26" Padding="0"
                                 ToolTip.Tip="Show or hide this export's settings"
                                 Command="{Binding $parent[UserControl].DataContext.ToggleExportExpandedCommand}"
                                 CommandParameter="{Binding}">
                           <Panel><TextBlock Text="▾" IsVisible="{Binding IsExpanded}"/><TextBlock Text="▸" IsVisible="{Binding !IsExpanded}"/></Panel>
                         </Button>
-                        <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}" ToolTip.Tip="Enable this export"/>
-                        <TextBlock Grid.Column="2" Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Column="3" Text="{Binding Type}" Classes="hint" VerticalAlignment="Center"/>
+                        <CheckBox Grid.Column="2" IsChecked="{Binding Enabled}" ToolTip.Tip="Enable this export"/>
+                        <TextBlock Grid.Column="3" Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Column="4" Text="{Binding Type}" Classes="hint" VerticalAlignment="Center"/>
                       </Grid>
                       <StackPanel Spacing="7" Margin="12,2,12,12" IsVisible="{Binding IsExpanded}">
                         <TextBlock Text="Name" Classes="field-label"/><TextBox Text="{Binding Name}" Watermark="Export name"/>
@@ -389,8 +391,14 @@
                         </ComboBox>
                         <TextBlock Text="Redacted — required stops safely if no applied redacted copy exists. Redacted, otherwise original uses the original only when a redacted copy is unavailable."
                                    Classes="hint" TextWrapping="Wrap" IsVisible="{Binding HasFileMode}"/>
-                        <Button Content="Remove this export" HorizontalAlignment="Stretch"
-                                Command="{Binding $parent[UserControl].DataContext.RemoveExportCommand}" CommandParameter="{Binding}"/>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                          <Button Grid.Column="0" Content="Copy to…" HorizontalAlignment="Stretch"
+                                  Click="OnCopyExportClick"
+                                  IsEnabled="{Binding $parent[UserControl].DataContext.HasOtherDocumentTypes}"
+                                  ToolTip.Tip="Copy this export to another document type on this profile"/>
+                          <Button Grid.Column="1" Content="Remove this export" HorizontalAlignment="Stretch"
+                                  Command="{Binding $parent[UserControl].DataContext.RemoveExportCommand}" CommandParameter="{Binding}"/>
+                        </Grid>
                       </StackPanel>
                     </StackPanel>
                   </Border>

@@ -49,6 +49,7 @@ public sealed record TestCaptureBatchRow(
 {
     public bool HasIndexes => Indexes.Count > 0;
 }
+public sealed record DocumentTypeChoice(Guid Id, string Name);
 
 public sealed partial class CaptureDesignerNode : ObservableObject
 {
@@ -71,6 +72,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private readonly CaptureWorkflowService? _workflow;
     private readonly IFileDialogService? _dialogs;
     private readonly IConfirmDialogService? _confirm;
+    private readonly IToastService? _toasts;
     private readonly IAppPaths? _paths;
     private readonly IPdfRasterizer? _pdfs;
     private readonly IImagePageImporter? _images;
@@ -106,13 +108,15 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         IThereforeCategoryPickerDialogService? thereforeCategoryPicker = null,
         IAiExtractor? ai = null,
         IHelpWindowService? help = null,
-        IConfirmDialogService? confirm = null)
+        IConfirmDialogService? confirm = null,
+        IToastService? toasts = null)
     {
         Profile = profile;
         _store = store;
         _workflow = workflow;
         _dialogs = dialogs;
         _confirm = confirm;
+        _toasts = toasts;
         _paths = paths;
         _pdfs = pdfs;
         _images = images;
@@ -241,6 +245,15 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         }
     }
     public IReadOnlyList<DocumentTypeDefinition> FallbackDocumentTypes => Profile.DocumentTypes.ToList();
+
+    /// <summary>Every other document type on this profile, offered as "Copy to..." targets for an
+    /// export definition — excludes the currently selected type since copying an export onto its own
+    /// type would just duplicate it in place.</summary>
+    public IReadOnlyList<DocumentTypeChoice> OtherDocumentTypeChoices => SelectedDocumentType is not { } current
+        ? []
+        : Profile.DocumentTypes.Where(type => type.Id != current.Id)
+            .Select(type => new DocumentTypeChoice(type.Id, type.Name)).ToList();
+    public bool HasOtherDocumentTypes => OtherDocumentTypeChoices.Count > 0;
     public Guid? FallbackDocumentTypeId
     {
         get => Profile.DefaultDocumentTypeId;
@@ -262,6 +275,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
             if (SelectedNode is not null) SelectedNode.Label = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(FallbackDocumentTypes));
+            OnPropertyChanged(nameof(OtherDocumentTypeChoices));
+            OnPropertyChanged(nameof(HasOtherDocumentTypes));
             RefreshEnablementIssues();
         }
     }
@@ -815,6 +830,56 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         if (row is not null) row.IsExpanded = !row.IsExpanded;
     }
 
+    /// <summary>Moves the export identified by <paramref name="fromId"/> (an <see cref="ExportDefinition"/>
+    /// Id) to sit at the position currently held by <paramref name="toId"/> — driven by the export list's
+    /// drag-handle wiring. Export order only affects display today, but keeping it under the same
+    /// reorder mechanism as document types/fields/rules is more consistent than a one-off exception.</summary>
+    public void ReorderExport(Guid fromId, Guid toId)
+    {
+        var from = DocumentExports.FirstOrDefault(row => row.Definition.Id == fromId);
+        var to = DocumentExports.FirstOrDefault(row => row.Definition.Id == toId);
+        if (from is null || to is null || ReferenceEquals(from, to))
+            return;
+        DocumentExports.Move(DocumentExports.IndexOf(from), DocumentExports.IndexOf(to));
+        RefreshDirtyState();
+    }
+
+    // Copying an export across document types is deliberately a duplicate-and-remap, not a shared
+    // reference: each document type's Exports list is independently persisted, and a genuinely shared
+    // export definition would mean one type's edits silently changing another's exports. FieldIds and
+    // Therefore mappings reference field Guids scoped to the source type's own fields, so a straight
+    // clone would carry over IDs that don't exist on the target type — remapped by field name instead,
+    // the same "resolve by name" convention ScriptFieldCollection and default-value templates already use.
+    // Called directly from CaptureProfileDesignerView's code-behind (which builds the "Copy to..." flyout
+    // itself, since a per-item MenuItem needs both the clicked document type and the export row it was
+    // opened from — a combination that doesn't bind cleanly through a shared ItemsSource template).
+    public void CopyExportToDocumentType(ExportDefinitionRow row, Guid targetTypeId)
+    {
+        if (Profile.DocumentTypes.FirstOrDefault(type => type.Id == targetTypeId) is not { } target)
+            return;
+
+        var clone = System.Text.Json.JsonSerializer.Deserialize<Capture.Core.Profiles.ExportDefinition>(
+            System.Text.Json.JsonSerializer.Serialize(row.Definition))!;
+        clone.Id = Guid.NewGuid();
+
+        var sourceFields = (SelectedDocumentType?.Fields ?? []).Concat(Profile.Batch.Fields)
+            .ToDictionary(field => field.Id);
+        var targetFieldIdByName = target.Fields.Concat(Profile.Batch.Fields)
+            .GroupBy(field => field.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        Guid? Remap(Guid id) => sourceFields.TryGetValue(id, out var field) && targetFieldIdByName.TryGetValue(field.Name, out var newId)
+            ? newId
+            : null;
+
+        clone.FieldIds = clone.FieldIds.Select(Remap).Where(id => id is not null).Select(id => id!.Value).ToList();
+        foreach (var mapping in clone.ThereforeFieldMappings)
+            mapping.IndexFieldId = mapping.IndexFieldId is { } id ? Remap(id) : null;
+
+        target.Exports.Add(clone);
+        _toasts?.ShowSuccess($"Copied '{clone.Name}' to '{target.Name}'");
+    }
+
     [RelayCommand]
     private async Task BrowseExportFolderAsync(ExportDefinitionRow? row)
     {
@@ -1013,6 +1078,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         OnPropertyChanged(nameof(FallbackDocumentTypes));
         OnPropertyChanged(nameof(FallbackDocumentTypeId));
         OnPropertyChanged(nameof(ShowNoDocumentTypesHint));
+        OnPropertyChanged(nameof(OtherDocumentTypeChoices));
+        OnPropertyChanged(nameof(HasOtherDocumentTypes));
         RefreshEnablementIssues();
         SelectedNode = selectType is { } id
             ? Navigation.First(item => item.DocumentType?.Id == id)

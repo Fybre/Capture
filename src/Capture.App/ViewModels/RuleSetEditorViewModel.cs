@@ -125,6 +125,19 @@ public partial class RuleSetEditorViewModel : ViewModelBase
             SelectedStrategy = null;
     }
 
+    /// <summary>Moves the strategy identified by <paramref name="fromId"/> to sit at the position
+    /// currently held by <paramref name="toId"/> — driven by the drag-handle wiring in RuleSetEditorView.
+    /// Rule order matters (earlier rules are evaluated first), so unlike a plain checklist this is a real
+    /// behavioral change, not just a display preference.</summary>
+    public void ReorderStrategy(Guid fromId, Guid toId)
+    {
+        var from = Strategies.FirstOrDefault(row => row.Id == fromId);
+        var to = Strategies.FirstOrDefault(row => row.Id == toId);
+        if (from is null || to is null || ReferenceEquals(from, to))
+            return;
+        Strategies.Move(Strategies.IndexOf(from), Strategies.IndexOf(to));
+    }
+
     public List<SeparationStrategy> ToModels() =>
         Strategies.Select(row => row.ToModel()).ToList();
 

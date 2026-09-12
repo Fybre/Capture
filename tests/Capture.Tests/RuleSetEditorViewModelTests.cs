@@ -113,6 +113,20 @@ public class RuleSetEditorViewModelTests
     }
 
     [Fact]
+    public void Reorder_strategy_moves_it_to_sit_at_the_target_position()
+    {
+        var a = new SeparationStrategy { Type = SeparationStrategyType.Barcode, Name = "A" };
+        var b = new SeparationStrategy { Type = SeparationStrategyType.Barcode, Name = "B" };
+        var c = new SeparationStrategy { Type = SeparationStrategyType.Barcode, Name = "C" };
+        var editor = new RuleSetEditorViewModel(
+            [a, b, c], SeparationMatchMode.Any, 1, Enum.GetValues<SeparationStrategyType>(), "Recognise when");
+
+        editor.ReorderStrategy(a.Id, c.Id);
+
+        Assert.Equal(["B", "C", "A"], editor.Strategies.Select(row => row.Name));
+    }
+
+    [Fact]
     public void Barcode_rule_explicitly_switches_between_entire_page_and_a_drawn_area()
     {
         var originalZone = new ZoneRect { PageNumber = 2, X = .1f, Y = .2f, Width = .3f, Height = .4f };
