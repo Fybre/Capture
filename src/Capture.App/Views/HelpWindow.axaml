@@ -186,6 +186,8 @@
                         </Border>
 
                         <TextBlock Text="Designer navigation" Classes="help-h2" />
+                        <TextBlock Text="The left-hand list is grouped into three sections: Capture Profile (Overview and Batch), Document Types (its own add/copy/remove toolbar sits directly under the list), and Test Capture."
+                                   Classes="help-body" />
                         <Border Classes="help-card">
                             <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto">
                                 <TextBlock Grid.Row="0" Text="Overview" Classes="help-h3" />
@@ -193,7 +195,7 @@
                                 <TextBlock Grid.Row="1" Text="Batch" Classes="help-h3" Margin="0,10,0,0" />
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="Choose None to keep adding manual inputs to one batch, or select a matching mode to configure batch start rules and trigger-page handling. Optional per-file batches, shared batch fields, and scripts are configured here too." Classes="help-body" Margin="0,10,0,0" />
                                 <TextBlock Grid.Row="2" Text="Document types" Classes="help-h3" Margin="0,10,0,0" />
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Add, copy, remove, or reorder types. Each type has separate Identify document type and Detect first page rules, plus fields, scripts, redaction, and exports." Classes="help-body" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Add, copy, or remove types — removing asks for confirmation first, since it discards that type's fields, rules, scripts, and exports. Drag a type's handle to reorder it; the same drag-handle reordering works for a document type's index fields. Each type has separate Identify document type and Detect first page rules, plus fields, scripts, redaction, and exports." Classes="help-body" Margin="0,10,0,0" />
                                 <TextBlock Grid.Row="3" Text="Test Capture" Classes="help-h3" Margin="0,10,0,0" />
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="Choose representative files to run the same analysis, planning, and index extraction used by capture. Results show each batch and document, its assigned type, extracted batch and document indexes, confidence, validation issues, and Ready status. It is preview-only: nothing is imported, redacted, or exported." Classes="help-body" Margin="0,10,0,0" />
                             </Grid>
@@ -218,7 +220,7 @@
                         <Border Classes="help-tip"><TextBlock Text="Rule order is deterministic: batch boundaries are evaluated before document classification and document starts on the same page. A batch match closes the current document and batch before opening the next batch." Classes="help-note" /></Border>
 
                         <TextBlock Text="Manual and automated batches" Classes="help-h2" />
-                        <TextBlock Text="Hover over the selected Capture Profile to see its batching, document-type, batch-index, and auto-export summary. The line below it shows whether a manual batch is currently open and whether new imports will join it. Choose Start new batch when the next manual import should use a new one, or enable Start a new batch for each file in the profile. Removing the last active document closes its batch so a later import cannot inherit indexes visible only in Trash; restoring that document preserves its original, now-closed batch. Watch-folder processing always closes its batch when the received input set finishes. Manual and watch-folder channels cannot accidentally share a batch."
+                        <TextBlock Text="Hover over the selected Capture Profile to see its batching, document-type, batch-index, and auto-export summary. None is always listed first — choose it to clear the selection and capture ad hoc, with no fields or document types applied. The line below it shows whether a manual batch is currently open and whether new imports will join it. Choose Start new batch when the next manual import should use a new one, or enable Start a new batch for each file in the profile. Removing the last active document closes its batch so a later import cannot inherit indexes visible only in Trash; restoring that document preserves its original, now-closed batch. Watch-folder processing always closes its batch when the received input set finishes. Manual and watch-folder channels cannot accidentally share a batch."
                                    Classes="help-body" />
                         <TextBlock Text="When Export Ready documents automatically after import is enabled, Capture waits until the complete import operation has been processed, then exports only documents whose field validation and confidence checks produced Ready status and whose document type has an enabled export destination. Anything needing review or without a destination remains in the Inbox."
                                    Classes="help-body" />
@@ -266,16 +268,28 @@
                         <TextBlock Text="Toggle OCR text (next to the zoom controls) to see a box around every word Capture recognized on this page, with the text and confidence on hover — useful when a highlight or redaction candidate looks misplaced."
                                    Classes="help-body" />
 
+                        <TextBlock Text="Batch dividers" Classes="help-h2" />
+                        <TextBlock Text="When the Inbox holds documents from more than one open batch, a divider row separates each batch, in both Preview and Table mode. Click a divider to select every document in that batch at once — useful before a bulk action such as export, redaction, or moving the whole batch elsewhere, without hand-picking each row."
+                                   Classes="help-body" />
+
                         <TextBlock Text="Page management" Classes="help-h2" />
-                        <TextBlock Text="Right-click a thumbnail in the page strip for Delete page(s) (works on a multi-selection) or Split here, which moves that page and everything after it into a new document inheriting the same document type, batch, and populated document values. Both resulting documents are indexed again, so first-page, last-page, barcode, zonal, AI, and scripted fields reflect their new page sets. A newly extracted value replaces the inherited value; if extraction is blank because the original separator/header page was removed, the inherited value is retained without invalid highlight coordinates. Drag a thumbnail to a new position to reorder pages within the document. Deleting, splitting, and reordering also update any redaction candidates to match the new page numbers."
+                        <TextBlock Text="Right-click a thumbnail in the page strip for Delete page(s) (works on a multi-selection) or Split here, which moves that page and everything after it into a new document inheriting the same document type, batch, and populated document values. Both resulting documents are indexed again, so first-page, last-page, barcode, zonal, AI, and scripted fields reflect their new page sets. A newly extracted value replaces the inherited value; if extraction is blank because the original separator/header page was removed, the inherited value is retained without invalid highlight coordinates. Drag a thumbnail to a new position to reorder pages within the document — a line shows exactly where it will land as you drag, including dropping below the last thumbnail to move a page to the very end. Deleting, splitting, and reordering also update any redaction candidates to match the new page numbers."
                                    Classes="help-body" />
 
                         <TextBlock Text="Importing by drag-and-drop" Classes="help-h2" />
                         <TextBlock Text="Drag file(s) or a folder from Finder or Explorer onto the window, the Inbox, or the page strip to import them — it behaves exactly like Import files, including the same supported-format filtering. Dropping a folder imports its top-level supported files, the same as Import folder."
                                    Classes="help-body" />
 
+                        <TextBlock Text="Scan and import options" Classes="help-h2" />
+                        <TextBlock Text="Scan and Import files/Import folder are split buttons. The default action (click the button itself) applies the selected Capture Profile's own batching and document-separation rules exactly as configured. Open the dropdown arrow for two alternatives: Scan/Import to current batch moves the new document(s) straight into the currently open batch, ignoring the profile's batch-start rules; Scan/Import to current document appends the new pages onto the currently selected document instead, ignoring document-separation rules. After a scan finishes, Capture asks whether to keep scanning — appending more pages the same way — or finish; the same prompt appears for all three scan actions."
+                                   Classes="help-body" />
+
                         <TextBlock Text="Table mode" Classes="help-h2" />
                         <TextBlock Text="Documents are grouped by document type and their index values become columns. The compact T marker beside each filename repeats that assignment without adding another column; hover it for the full type name. Select one or several rows for redaction, removal, or export. A shield beside the document status indicates pending, applied, or failed redaction; hover for details, or click an applied shield to open the redacted copy. Double-click a row to return to Preview mode. Drag selected documents onto a row in another batch to move them together."
+                                   Classes="help-body" />
+
+                        <TextBlock Text="Trash" Classes="help-h2" />
+                        <TextBlock Text="In Table mode, choose Trash to see documents that have been removed — either by hand, or by Storage's on-demand cleanup moving already-exported documents out of the way (Settings). Restore returns the selected document(s) to the Inbox; Delete permanently removes the selected document(s) for good; Empty Trash clears everything in Trash in one action, no selection needed. Trashed documents are also purged automatically once they pass the retention period set in Settings (30 days by default), so Trash is a safety net, not permanent storage."
                                    Classes="help-body" />
 
                         <TextBlock Text="Statuses" Classes="help-h2" />
@@ -319,7 +333,7 @@
                         </Grid>
 
                         <TextBlock Text="Field options" Classes="help-h2" />
-                        <TextBlock Text="Format controls validation and editing. Mandatory fields block Mark ready until populated. Batch-level values are shared across documents in a batch. Hide from indexing removes a field from review and default CSV output; read-only keeps it visible but not editable. Sensitive document fields offer their extracted bounds for redaction. Sensitive batch fields are masked in review and Table view instead; they never create document-page rectangles."
+                        <TextBlock Text="Format controls validation and editing. Mandatory fields block Mark ready until populated. Batch-level values are shared across documents in a batch. Hide from indexing removes a field from review and default CSV output; read-only keeps it visible but not editable. Sensitive document fields offer their extracted bounds for redaction. Sensitive batch fields are masked in review and Table view instead; they never create document-page rectangles. Drag a field's handle in the list to reorder it; hidden fields stay grouped below visible ones regardless of where you drop it."
                                    Classes="help-body" />
                         <Border Classes="help-tip"><TextBlock Text="Use Populate value from inside the selected field's properties to choose a first-page or batch-start rule, another document or batch field, or a known macro. The chosen source is shown again whenever the field is reopened. You can also edit the resulting value template to combine tokens—for example INV-{Doc#|000}-{Customer}. Extracted fields use templates only when extraction returns no value." Classes="help-note" /></Border>
                     </StackPanel>
@@ -802,6 +816,42 @@
                         <TextBlock Text="A script is compiled as an ordinary C# class body, so it can declare its own local functions (or full methods) anywhere in the script text and call them from later statements in that same script — no special syntax needed. A function declared this way in one script isn't visible to another; each script/expression compiles on its own. To share a helper across several scripts on the same profile, put it in Shared functions instead (Scripts section, above the script list) — it compiles ahead of every profile-level script, Script field expression, and Button field script on that profile, so it only needs to be written once."
                                    TextWrapping="Wrap"
                                    Classes="help-note" />
+
+                        <TextBlock Text="Good to know" Classes="help-h2" />
+                        <Border Classes="help-card">
+                            <StackPanel Spacing="10">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="An unknown field name throws, on purpose" Classes="help-h3" />
+                                    <TextBlock Text="Fields[&quot;Typo&quot;] fails loudly with &quot;No field named ... on this document&quot; rather than resolving to blank — unlike a Text field's default-value template, which resolves an unknown token blank because a template typo must never break indexing. A script is expected to be tested (Run test / Test Capture) before being enabled for real import, so failing loudly here surfaces the mistake immediately instead of shipping a silently-wrong value. Use Fields.TryGet(&quot;Name&quot;, out var field) when a field is genuinely optional."
+                                               TextWrapping="Wrap"
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Fields[...] prints as its own value" Classes="help-h3" />
+                                    <TextBlock Text="Fields[&quot;Total&quot;].ToString() (and so $&quot;{Fields[&quot;Total&quot;]}&quot; in an interpolated string) returns the same text as Fields[&quot;Total&quot;].Value — the .Value is optional in that position, though .Value/.Confidence/.IsManual still need it to access those specific members."
+                                               TextWrapping="Wrap"
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="A Script field or post-process result doesn't need to be a string" Classes="help-h3" />
+                                    <TextBlock Text="Whatever the expression returns is converted with .ToString() automatically — returning an int, a bool, or any other object works fine, not just a string literal. A trailing semicolon (Fields[&quot;X&quot;].Value.Trim();, typed out of habit) is also stripped automatically before compiling, so it behaves the same as leaving it off, rather than turning your expression into a no-value statement."
+                                               TextWrapping="Wrap"
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Timeouts aren't all configurable" Classes="help-h3" />
+                                    <TextBlock Text="A profile-level script uses its own Timeout seconds setting (default 10s). A Script field's expression and a post-process expression always use a fixed 10-second timeout that isn't adjustable — keep those short and, where real work is needed (a REST call, heavier text processing), prefer a profile-level script instead."
+                                               TextWrapping="Wrap"
+                                               Classes="help-note" />
+                                </StackPanel>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Compile errors show the real diagnostic" Classes="help-h3" />
+                                    <TextBlock Text="A syntax or type error is reported as the Roslyn compiler's own diagnostic text (what's wrong and roughly where), not a generic failure message — read it for the actual mistake (a missing semicolon, a wrong field type, an unresolved name) rather than guessing and retrying."
+                                               TextWrapping="Wrap"
+                                               Classes="help-note" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <TextBlock Text="Editing" Classes="help-h2" />
                         <TextBlock Text="Every script/expression box has a &quot;Pop out&quot; button that opens it in a larger, resizable window with C# syntax highlighting and line numbers — useful once a script grows past a few lines. Save there to write the edited text back; Cancel discards it."
