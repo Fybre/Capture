@@ -29,8 +29,16 @@ public sealed class PdfPigExportWriter : IPdfExportWriter
                 using var bitmap = SKBitmap.Decode(page.ImagePath)
                     ?? throw new InvalidOperationException($"Unable to decode page image '{page.ImagePath}'.");
 
-                var pdfPage = builder.AddPage(bitmap.Width, bitmap.Height);
-                var rectangle = new PdfRectangle(0, 0, bitmap.Width, bitmap.Height);
+                // AddPage's MediaBox is in PDF points (1/72"), not pixels — see the identical comment in
+                // PdfPigMergedDocumentWriter. Computed from the original bitmap's pixel size regardless
+                // of whether the embedded image itself gets downscaled below (compress=true) — the page's
+                // physical size should always match the original scan, not whichever image variant fills it.
+                var dpi = page.Dpi > 0 ? page.Dpi : 96;
+                var widthPoints = bitmap.Width * 72.0 / dpi;
+                var heightPoints = bitmap.Height * 72.0 / dpi;
+
+                var pdfPage = builder.AddPage(widthPoints, heightPoints);
+                var rectangle = new PdfRectangle(0, 0, widthPoints, heightPoints);
                 if (compress)
                 {
                     using var scaled = Downscale(bitmap, CompressedScale);

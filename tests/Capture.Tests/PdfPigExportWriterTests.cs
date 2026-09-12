@@ -33,6 +33,29 @@ public class PdfPigExportWriterTests
     }
 
     [Fact]
+    public async Task Page_size_is_derived_from_pixel_dimensions_and_dpi_not_raw_pixels()
+    {
+        // AddPage's MediaBox is in PDF points (1/72"), not pixels — passing bitmap.Width/Height straight
+        // through (the shipped bug) would produce a 200x260-point page instead of the correct
+        // 96x124.8-point page for a 200x260px image scanned at 150 DPI.
+        var directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var outputPath = Path.Combine(directory, "export.pdf");
+            await new PdfPigExportWriter().WriteAsync([Page(directory, 1, SKColors.Red)], outputPath, compress: false);
+
+            using var document = PdfDocument.Open(outputPath);
+            var page = document.GetPage(1);
+            Assert.Equal(96.0, page.Width, precision: 1);
+            Assert.Equal(124.8, page.Height, precision: 1);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Compressing_produces_a_smaller_file_than_full_quality()
     {
         var directory = Directory.CreateTempSubdirectory().FullName;

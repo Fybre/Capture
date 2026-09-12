@@ -26,8 +26,17 @@ public sealed class PdfPigMergedDocumentWriter : IMergedDocumentWriter
                 using var image = SKImage.FromBitmap(bitmap);
                 using var encoded = image.Encode(SKEncodedImageFormat.Png, 90);
 
-                var pdfPage = builder.AddPage(bitmap.Width, bitmap.Height);
-                pdfPage.AddPng(encoded.ToArray(), new PdfRectangle(0, 0, bitmap.Width, bitmap.Height));
+                // AddPage's MediaBox is in PDF points (1/72"), not pixels — a 300 DPI scan passed
+                // straight through as bitmap.Width/Height came out ~4x too large per dimension (~17x
+                // too large in area) before this conversion, since points assume 72 DPI. Falls back to
+                // 96 (matching LatticeBuilder's own OCR-DPI fallback) for the rare case a scanner/import
+                // path reports no DPI at all, rather than dividing by zero.
+                var dpi = page.Dpi > 0 ? page.Dpi : 96;
+                var widthPoints = bitmap.Width * 72.0 / dpi;
+                var heightPoints = bitmap.Height * 72.0 / dpi;
+
+                var pdfPage = builder.AddPage(widthPoints, heightPoints);
+                pdfPage.AddPng(encoded.ToArray(), new PdfRectangle(0, 0, widthPoints, heightPoints));
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
