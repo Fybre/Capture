@@ -120,6 +120,30 @@ public partial class MainViewModel
             return;
 
         var pageNumbers = SelectedPageThumbnails.Select(item => item.PageNumber).ToList();
+        var deletedSet = pageNumbers.ToHashSet();
+        var originalOrder = _pages.Select(page => page.PageNumber).OrderBy(number => number).ToList();
+
+        // DeletePagesAsync physically deletes these pages' own image files and drops their page-bound
+        // index values/redaction candidates from disk — none of that survives the call, so anything an
+        // "undo" would need to restore has to be captured here, before it runs.
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"capture-undo-delete-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDirectory);
+        var snapshot = new List<(int OldPageNumber, string TempImagePath, int Width, int Height, int Dpi)>();
+        foreach (var page in _pages.Where(page => deletedSet.Contains(page.PageNumber)))
+        {
+            var tempPath = Path.Combine(tempDirectory, $"{page.PageNumber:D4}{Path.GetExtension(page.ImagePath)}");
+            if (File.Exists(page.ImagePath))
+                File.Copy(page.ImagePath, tempPath, overwrite: true);
+            snapshot.Add((page.PageNumber, tempPath, page.Width, page.Height, page.Dpi));
+        }
+        var existingValues = await _indexes.GetAsync(row.Id).ConfigureAwait(true);
+        // Only a zone-bound value is actually dropped by the delete (see PageManagementService.
+        // RemapIndexValuesAsync) — a non-zonal value on a "deleted" page number gets reattached to page 1
+        // instead of removed, so it isn't lost and doesn't need restoring here.
+        var deletedIndexValues = existingValues.Where(value => value.Bounds is not null && deletedSet.Contains(value.PageNumber)).ToList();
+        var existingCandidates = await _redactionCandidates.GetAsync(row.Id).ConfigureAwait(true);
+        var deletedCandidates = existingCandidates.Where(candidate => deletedSet.Contains(candidate.PageNumber)).ToList();
+
         IsBusy = true;
         try
         {
@@ -128,17 +152,101 @@ public partial class MainViewModel
             RefreshDocumentGroups();
             StatusText = pageNumbers.Count == 1 ? "Deleted 1 page" : $"Deleted {pageNumbers.Count} pages";
             StatusIsError = false;
-            _toasts.ShowSuccess(StatusText);
+            _toasts.ShowInfo($"{StatusText} — click to undo", onClick: () => _ = UndoDeletePagesAsync(
+                row, originalOrder, pageNumbers, tempDirectory, snapshot, deletedIndexValues, deletedCandidates));
+            _ = CleanupUndoSnapshotAfterDelayAsync(tempDirectory, TimeSpan.FromSeconds(30));
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
             StatusIsError = true;
             _toasts.ShowError(StatusText);
+            TryDeleteDirectory(tempDirectory);
         }
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    /// <summary>Reverses DeleteSelectedPagesAsync: appends the deleted pages back (from the snapshot
+    /// copies made before deletion) and reorders the result to reconstruct the exact original page
+    /// arrangement, then re-attaches the zone-bound index values and redaction candidates that were on
+    /// those pages. If anything else changed the document's pages between the delete and this undo (the
+    /// permutation length no longer matches), the underlying reorder call fails safely with an error
+    /// rather than silently producing a wrong page order.</summary>
+    private async Task UndoDeletePagesAsync(
+        DocumentRow row,
+        IReadOnlyList<int> originalOrder,
+        IReadOnlyList<int> deletedOldNumbers,
+        string tempDirectory,
+        IReadOnlyList<(int OldPageNumber, string TempImagePath, int Width, int Height, int Dpi)> snapshot,
+        IReadOnlyList<IndexValue> deletedIndexValues,
+        IReadOnlyList<RedactionCandidate> deletedCandidates)
+    {
+        if (IsBusy)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var restoredRaster = snapshot
+                .OrderBy(page => page.OldPageNumber)
+                .Select(page => new RasterPage(page.OldPageNumber, page.TempImagePath, page.Width, page.Height, page.Dpi))
+                .ToList();
+            await _pageManagement.AppendPagesAsync(row.Id, restoredRaster).ConfigureAwait(true);
+
+            var deletedSet = deletedOldNumbers.ToHashSet();
+            var survivorOldNumbers = originalOrder.Where(number => !deletedSet.Contains(number)).ToList();
+            var orderedDeleted = deletedOldNumbers.OrderBy(number => number).ToList();
+            var finalOrder = originalOrder.Select(oldNumber => survivorOldNumbers.Contains(oldNumber)
+                    ? survivorOldNumbers.IndexOf(oldNumber) + 1
+                    : survivorOldNumbers.Count + orderedDeleted.IndexOf(oldNumber) + 1)
+                .ToList();
+            var restored = await _pageManagement.ReorderPagesAsync(row.Id, finalOrder).ConfigureAwait(true);
+
+            var currentValues = await _indexes.GetAsync(row.Id).ConfigureAwait(true);
+            await _indexes.SaveAsync(row.Id, currentValues.Concat(deletedIndexValues).ToList()).ConfigureAwait(true);
+            var currentCandidates = await _redactionCandidates.GetAsync(row.Id).ConfigureAwait(true);
+            await _redactionCandidates.SaveAsync(row.Id, currentCandidates.Concat(deletedCandidates).ToList()).ConfigureAwait(true);
+
+            await RefreshDocumentRowInPlaceAsync(row, restored).ConfigureAwait(true);
+            if (SelectedDocument == row)
+                await LoadSelectedDocumentAsync(row).ConfigureAwait(true);
+            RefreshDocumentGroups();
+            StatusText = "Restored deleted page(s)";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't undo: {ex.Message}";
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+            TryDeleteDirectory(tempDirectory);
+        }
+    }
+
+    private static async Task CleanupUndoSnapshotAfterDelayAsync(string directory, TimeSpan delay)
+    {
+        await Task.Delay(delay).ConfigureAwait(false);
+        TryDeleteDirectory(directory);
+    }
+
+    private static void TryDeleteDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch
+        {
+            // Best-effort cleanup only, matching PageManagementService's own staging-directory cleanup.
         }
     }
 
@@ -171,11 +279,60 @@ public partial class MainViewModel
                 ? "Split into two documents and refreshed their indexes"
                 : $"Split into two documents, but indexing needs attention: {string.Join("; ", indexErrors)}";
             StatusIsError = indexErrors.Count != 0;
-            if (indexErrors.Count == 0) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
+            if (indexErrors.Count == 0)
+            {
+                _toasts.ShowInfo($"{StatusText} — click to undo", onClick: () => _ = UndoSplitAsync(row, secondRow));
+            }
+            else
+            {
+                _toasts.ShowError(StatusText);
+            }
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Reverses a split by merging the two resulting documents back together, reusing
+    /// MergeDocumentsAsync exactly as the Table-mode "Merge" action does. This recombines the pages
+    /// correctly, but — like any merge — it isn't a byte-perfect restore of the pre-split document: the
+    /// merged result keeps the first document's own (re-extracted) index values rather than the original
+    /// pre-split ones, since MergeDocumentsAsync's documented contract is "target keeps its own
+    /// document-level values." Good enough to fix a wrong split point immediately; any index drift is the
+    /// same kind of correction normal review already handles.</summary>
+    private async Task UndoSplitAsync(DocumentRow first, DocumentRow second)
+    {
+        if (IsBusy)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var merged = await _pageManagement.MergeDocumentsAsync([first.Id, second.Id]).ConfigureAwait(true);
+            Documents.Remove(second);
+            await RefreshDocumentRowInPlaceAsync(first, merged).ConfigureAwait(true);
+            if (SelectedDocument == first || SelectedDocument == second)
+            {
+                SelectedDocuments.Clear();
+                SelectedDocuments.Add(first);
+                SelectedDocument = first;
+            }
+            RefreshBatchAccents();
+            RefreshDocumentGroups();
+            StatusText = "Undid split — merged back into one document";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't undo: {ex.Message}";
             StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
@@ -287,16 +444,52 @@ public partial class MainViewModel
         var insertAt = toPageNumber is { } insertBefore ? newOrder.IndexOf(insertBefore) : newOrder.Count;
         newOrder.Insert(insertAt < 0 ? newOrder.Count : insertAt, fromPageNumber);
 
+        // The inverse permutation of newOrder: undoOrder[i] is the page that should sit at position i+1
+        // to put every page back exactly where it was before this move — reordering is lossless (no page
+        // content is ever deleted), so undo is just applying this permutation, no snapshot needed.
+        var undoOrder = new int[newOrder.Count];
+        for (var i = 0; i < newOrder.Count; i++)
+            undoOrder[newOrder[i] - 1] = i + 1;
+
         IsBusy = true;
         try
         {
             var updated = await _pageManagement.ReorderPagesAsync(row.Id, newOrder).ConfigureAwait(true);
             await RefreshDocumentRowInPlaceAsync(row, updated).ConfigureAwait(true);
             StatusText = "Reordered pages";
+            _toasts.ShowInfo($"{StatusText} — click to undo", onClick: () => _ = UndoReorderPagesAsync(row, undoOrder));
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task UndoReorderPagesAsync(DocumentRow row, IReadOnlyList<int> undoOrder)
+    {
+        if (IsBusy)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var restored = await _pageManagement.ReorderPagesAsync(row.Id, undoOrder).ConfigureAwait(true);
+            await RefreshDocumentRowInPlaceAsync(row, restored).ConfigureAwait(true);
+            if (SelectedDocument == row)
+                await LoadSelectedDocumentAsync(row).ConfigureAwait(true);
+            StatusText = "Undid page reorder";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Couldn't undo: {ex.Message}";
             StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
