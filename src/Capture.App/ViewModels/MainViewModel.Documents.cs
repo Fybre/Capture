@@ -29,6 +29,18 @@ public partial class MainViewModel
 {
     public ObservableCollection<DocumentGroupViewModel> DocumentGroups { get; } = [];
 
+    private IReadOnlyList<object> _inboxDisplayRows = [];
+
+    /// <summary>What the Inbox rail actually binds to — <see cref="Documents"/> with a
+    /// <see cref="BatchDividerRow"/> spliced in before the first document of each batch. Rebuilt
+    /// wholesale (not incrementally patched) every time <see cref="RefreshBatchAccents"/> runs, since
+    /// that's already called on every change that could shift a batch boundary.</summary>
+    public IReadOnlyList<object> InboxDisplayRows
+    {
+        get => _inboxDisplayRows;
+        private set => SetProperty(ref _inboxDisplayRows, value);
+    }
+
     public string TableOrderSummary => _watchSettings.InboxOrder == InboxOrder.NewestFirst
         ? "Grouped by profile · newest first"
         : "Grouped by profile · oldest first";
@@ -104,6 +116,53 @@ public partial class MainViewModel
     /// <summary>The real, permanent removal from Trash — unlike every other place a document gets
     /// removed in this app (see SoftDeleteAsync call sites elsewhere), this one has no undo, so it's
     /// the one deletion path that still confirms first.</summary>
+    private bool CanEmptyTrash() => !IsBusy && ShowTrash && Documents.Count > 0;
+
+    /// <summary>Purges every document currently in Trash, with no selection required first — the
+    /// counterpart to <see cref="PurgeSelectedTrashAsync"/> for "just get rid of all of it" rather than
+    /// picking specific documents.</summary>
+    [RelayCommand(CanExecute = nameof(CanEmptyTrash))]
+    private async Task EmptyTrashAsync()
+    {
+        var rows = Documents.ToList();
+        if (rows.Count == 0)
+            return;
+
+        if (_dialogs.Host is not { } host)
+            return;
+
+        var confirmed = await _confirm.ConfirmAsync(
+            host,
+            "Empty Trash?",
+            $"This permanently deletes all {rows.Count} document(s) in Trash, including their original files. This can't be undone.",
+            confirmText: "Empty Trash",
+            cancelText: "Cancel");
+        if (!confirmed)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            foreach (var row in rows)
+                await _store.PurgeAsync(row.Id).ConfigureAwait(true);
+
+            await ReloadDocumentsAsync().ConfigureAwait(true);
+            StatusText = $"Permanently deleted {rows.Count} document(s)";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanActOnTrash))]
     private async Task PurgeSelectedTrashAsync()
     {
@@ -499,7 +558,57 @@ public partial class MainViewModel
             row.BatchAccent = accent;
         }
 
+        ApplyBatchDividers(Documents, _batchesById);
+        InboxDisplayRows = BuildDisplayRows(Documents);
         RefreshDuplicateFlags();
+    }
+
+    // Splices a BatchDividerRow in before the first document of each batch — call ApplyBatchDividers on
+    // this same ordering first so IsFirstInBatch/BatchDividerLabel are up to date.
+    internal static List<object> BuildDisplayRows(IReadOnlyList<DocumentRow> rows)
+    {
+        var result = new List<object>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (row.IsFirstInBatch && row.Document.BatchId is { } batchId)
+                result.Add(new BatchDividerRow(batchId, row.BatchDividerLabel, row.BatchAccent));
+            result.Add(row);
+        }
+
+        return result;
+    }
+
+    // Marks the first row of each new batch in the given ordering with IsFirstInBatch plus the label
+    // text a divider row shows above it — called once for the flat Inbox order (RefreshBatchAccents)
+    // and again per profile group (RefreshDocumentGroups), since a Table-mode card only ever sees one
+    // profile's slice of a batch. The two computations agree for the common case (a batch maps to one
+    // profile); the group-scoped pass runs second in every existing call site, so in the rare case a
+    // single batch spans two profiles, both profiles' cards each show their own row as "first" — a
+    // cosmetic quirk in an edge case the app doesn't otherwise treat as normal, not a data problem.
+    // Static (and given its own batch lookup rather than reading _batchesById directly) so it's testable
+    // without constructing a MainViewModel.
+    internal static void ApplyBatchDividers(IReadOnlyList<DocumentRow> rows, IReadOnlyDictionary<Guid, CaptureBatch> batchesById)
+    {
+        var countsByBatch = rows
+            .Where(row => row.Document.BatchId is not null)
+            .GroupBy(row => row.Document.BatchId!.Value)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Guid? previous = null;
+        foreach (var row in rows)
+        {
+            var batchId = row.Document.BatchId;
+            row.IsFirstInBatch = batchId is not null && batchId != previous;
+            if (row.IsFirstInBatch && batchId is { } id)
+            {
+                batchesById.TryGetValue(id, out var batch);
+                row.BatchNumber = batch?.Number;
+                row.BatchInputChannel = batch?.InputChannel;
+                row.BatchDocumentCount = countsByBatch.GetValueOrDefault(id);
+            }
+
+            previous = batchId;
+        }
     }
 
     // Bundled into RefreshBatchAccents (called from it) rather than given its own separate call sites —
@@ -559,6 +668,7 @@ public partial class MainViewModel
             // follows the same global chronological preference as Preview instead of silently
             // replacing it with a filename sort.
             var documents = byProfile.ToList();
+            ApplyBatchDividers(documents, _batchesById);
 
             // A group can span several batches, so derive batch fields from persisted values.
             var batchFieldNames = documents
@@ -586,7 +696,8 @@ public partial class MainViewModel
                 IsUnassigned = false,
                 BatchFieldNames = batchFieldNames,
                 DocumentFieldNames = documentFieldNames,
-                Documents = documents
+                Documents = documents,
+                DisplayRows = BuildDisplayRows(documents)
             });
         }
 
@@ -595,13 +706,15 @@ public partial class MainViewModel
         var unassigned = Documents.Where(row => row.Document.ProfileId is null).ToList();
         if (unassigned.Count > 0)
         {
+            ApplyBatchDividers(unassigned, _batchesById);
             groups.Add(new DocumentGroupViewModel
             {
                 Title = "No profile applied",
                 IsUnassigned = true,
                 BatchFieldNames = [],
                 DocumentFieldNames = [],
-                Documents = unassigned
+                Documents = unassigned,
+                DisplayRows = BuildDisplayRows(unassigned)
             });
         }
 

@@ -30,4 +30,13 @@ public interface IPageManagementService
     /// profile, batch, filename, and document-level index values.</summary>
     Task<CaptureDocument> MergeDocumentsAsync(
         IReadOnlyList<Guid> documentIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Appends freshly-rasterized pages (not yet belonging to any document — e.g. a follow-up
+    /// scan pass) onto the end of an existing document, bypassing capture-time batch/document boundary
+    /// detection entirely. The document's existing pages are untouched; only the new pages are OCR'd.
+    /// Resets Status to NeedsReview and drops ContentHash/SourceImportId, matching
+    /// <see cref="MergeDocumentsAsync"/>'s reasoning: the stored bytes no longer represent a single
+    /// original source occurrence once more pages are appended.</summary>
+    Task<CaptureDocument> AppendPagesAsync(
+        Guid documentId, IReadOnlyList<RasterPage> newPages, CancellationToken cancellationToken = default);
 }

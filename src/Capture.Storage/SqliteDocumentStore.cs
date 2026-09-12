@@ -497,6 +497,43 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         return Math.Max(1, count);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, CaptureBatch>> GetBatchesAsync(IReadOnlyCollection<Guid> batchIds, CancellationToken cancellationToken = default)
+    {
+        var distinctIds = batchIds.Distinct().ToList();
+        if (distinctIds.Count == 0)
+            return new Dictionary<Guid, CaptureBatch>();
+
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        var parameterNames = distinctIds.Select((_, index) => $"$id{index}").ToList();
+        command.CommandText = $"""
+            SELECT id, created_utc, number, watch_folder_entry_id, capture_profile_id, input_channel, state
+            FROM batches
+            WHERE id IN ({string.Join(", ", parameterNames)});
+            """;
+        for (var index = 0; index < distinctIds.Count; index++)
+            command.Parameters.AddWithValue(parameterNames[index], distinctIds[index].ToString("D"));
+
+        var results = new Dictionary<Guid, CaptureBatch>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var id = Guid.Parse(reader.GetString(0));
+            results[id] = new CaptureBatch
+            {
+                Id = id,
+                CreatedUtc = DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                Number = reader.GetInt32(2),
+                WatchFolderEntryId = reader.IsDBNull(3) ? null : Guid.Parse(reader.GetString(3)),
+                CaptureProfileId = reader.IsDBNull(4) ? null : Guid.Parse(reader.GetString(4)),
+                InputChannel = reader.IsDBNull(5) ? null : reader.GetString(5),
+                State = (BatchState)reader.GetInt32(6)
+            };
+        }
+
+        return results;
+    }
+
     // The real, permanent removal — deletes the DB rows, the on-disk document directory, and cascades
     // an empty-batch cleanup. Formerly named DeleteAsync; renamed once SoftDeleteAsync/RestoreAsync
     // existed, so every call site had to make an explicit choice between "reversible" and "gone for

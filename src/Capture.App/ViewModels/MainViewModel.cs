@@ -54,6 +54,14 @@ public partial class MainViewModel : ViewModelBase
     private readonly PresidioSidecarLauncher _presidioLauncher;
     private readonly IDebugLogService _debugLog;
     private readonly IToastService _toasts;
+
+    /// <summary>Batch metadata (number, input channel) for whatever's currently in <see cref="Documents"/>
+    /// — refreshed in bulk once per <c>ReloadDocumentsAsync</c> rather than per-row, and consulted
+    /// synchronously by RefreshBatchAccents/RefreshDocumentGroups when building each batch's divider
+    /// label. A batch created since the last reload (e.g. mid-session by ApplyProfile) simply won't be
+    /// in here yet — its divider row still shows via IsFirstInBatch, just without the label text, until
+    /// the next reload fills it in.</summary>
+    private IReadOnlyDictionary<Guid, CaptureBatch> _batchesById = new Dictionary<Guid, CaptureBatch>();
     private readonly IUpdateCheckService _updateCheck;
     private readonly IConfirmDialogService _confirm;
     private readonly IExportPdfDialogService _exportPdfDialog;
@@ -163,6 +171,34 @@ public partial class MainViewModel : ViewModelBase
             : SelectedDocument is { } row ? [row] : [];
     }
 
+    /// <summary>The one document a "scan/import to current document" action would append to — null
+    /// unless the acting selection (see <see cref="GetActingRows"/>) is exactly one document. Clicking a
+    /// batch-divider row selects every document in that batch, which is never exactly one document
+    /// (every batch this feature matters for has at least 2), so this is naturally false right after
+    /// that click — as intended, since a whole batch isn't "one document" to append to.</summary>
+    private DocumentRow? CurrentSingleDocument
+    {
+        get
+        {
+            var rows = GetActingRows();
+            return rows.Count == 1 ? rows[0] : null;
+        }
+    }
+
+    /// <summary>The one batch a "scan/import to current batch" action would target — null unless every
+    /// acting row (see <see cref="GetActingRows"/>) shares the same non-null BatchId. True after clicking
+    /// a batch-divider row (see MainWindow.axaml.cs's SelectBatchDocuments); also true, harmlessly, for
+    /// an ordinary multi-select that happens not to cross a batch boundary — either way it's a real
+    /// shared batch, so targeting it is correct regardless of which gesture produced the selection.</summary>
+    private Guid? CurrentSharedBatchId
+    {
+        get
+        {
+            var batchIds = GetActingRows().Select(row => row.Document.BatchId).Distinct().ToList();
+            return batchIds is [{ } single] ? single : null;
+        }
+    }
+
     // Single source of truth for "something CanActOnSelected/CanActOnTrash/CanMergeSelectedDocuments/
     // CanMarkReady/CanApplyRedactions/CanExport/CanExportAll/CanExportSelectedToPdf reads just changed" —
     // every trigger that affects one of those predicates (IsBusy, ShowTrash, SelectedDocument, the
@@ -191,6 +227,11 @@ public partial class MainViewModel : ViewModelBase
         ExportSelectedToPdfCommand.NotifyCanExecuteChanged();
         RestoreSelectedTrashCommand.NotifyCanExecuteChanged();
         PurgeSelectedTrashCommand.NotifyCanExecuteChanged();
+        EmptyTrashCommand.NotifyCanExecuteChanged();
+        ScanToCurrentBatchCommand.NotifyCanExecuteChanged();
+        ScanToCurrentDocumentCommand.NotifyCanExecuteChanged();
+        ImportFilesToCurrentBatchCommand.NotifyCanExecuteChanged();
+        ImportFilesToCurrentDocumentCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -365,6 +406,10 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private bool CanImport() => !IsBusy;
+
+    private bool CanImportToCurrentBatch() => CanImport() && CurrentSharedBatchId is not null;
+
+    private bool CanImportToCurrentDocument() => CanImport() && CurrentSingleDocument is not null;
 
     private bool CanConfigure() => !IsBusy;
 

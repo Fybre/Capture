@@ -237,6 +237,97 @@ public sealed class PageManagementService : IPageManagementService
         }
     }
 
+    public async Task<CaptureDocument> AppendPagesAsync(
+        Guid documentId, IReadOnlyList<RasterPage> newPages, CancellationToken cancellationToken = default)
+    {
+        if (newPages.Count == 0)
+            throw new ArgumentException("At least one page must be provided.", nameof(newPages));
+
+        var document = await GetDocumentOrThrowAsync(documentId, cancellationToken).ConfigureAwait(false);
+        var existingPages = (await _store.GetPagesAsync(documentId, cancellationToken).ConfigureAwait(false))
+            .OrderBy(page => page.PageNumber).ToList();
+
+        var targetPagesDirectory = _paths.DocumentPagesDirectory(document.Id);
+        Directory.CreateDirectory(targetPagesDirectory);
+
+        // Existing pages' image files stay exactly where they are — appending never renumbers or moves
+        // them — but their DocumentPage records are still rebuilt with SourcePageNumber reset to equal
+        // PageNumber, matching MergeDocumentsAsync's convention: the whole document is about to be
+        // rewritten into one brand-new merged PDF below, so every page's position in that new file is
+        // just its (unchanged) PageNumber, regardless of whatever SourcePageNumber pointed to before.
+        var allPages = existingPages.Select(page => new DocumentPage
+        {
+            DocumentId = document.Id,
+            PageNumber = page.PageNumber,
+            SourcePageNumber = page.PageNumber,
+            ImagePath = page.ImagePath,
+            Width = page.Width,
+            Height = page.Height,
+            Dpi = page.Dpi
+        }).ToList();
+
+        var addedPages = new List<DocumentPage>(newPages.Count);
+        var pageNumber = existingPages.Count + 1;
+        foreach (var page in newPages)
+        {
+            var extension = Path.GetExtension(page.ImagePath);
+            var imagePath = Path.Combine(targetPagesDirectory, $"{pageNumber:D4}{extension}");
+            File.Copy(page.ImagePath, imagePath, overwrite: true);
+            var documentPage = new DocumentPage
+            {
+                DocumentId = document.Id,
+                PageNumber = pageNumber,
+                SourcePageNumber = pageNumber,
+                ImagePath = imagePath,
+                Width = page.Width,
+                Height = page.Height,
+                Dpi = page.Dpi
+            };
+            allPages.Add(documentPage);
+            addedPages.Add(documentPage);
+            pageNumber++;
+        }
+
+        var appendedPdfPath = _paths.DocumentOriginalPath(document.Id, "appended.pdf");
+        var tempPdfPath = appendedPdfPath + $".tmp-{Guid.NewGuid():N}";
+        try
+        {
+            await _mergedDocumentWriter.WriteAsync(allPages, tempPdfPath, cancellationToken).ConfigureAwait(false);
+
+            if (File.Exists(appendedPdfPath))
+                File.Delete(appendedPdfPath);
+            File.Move(tempPdfPath, appendedPdfPath);
+            if (!string.Equals(document.StoredPath, appendedPdfPath, StringComparison.Ordinal)
+                && File.Exists(document.StoredPath))
+                File.Delete(document.StoredPath);
+
+            if (!string.IsNullOrEmpty(document.RedactedPath) && File.Exists(document.RedactedPath))
+                File.Delete(document.RedactedPath);
+
+            document.StoredPath = appendedPdfPath;
+            document.PageCount = allPages.Count;
+            document.Status = DocumentStatus.NeedsReview;
+            document.ErrorMessage = null;
+            document.RedactedPath = null;
+            document.RedactionError = null;
+            // The appended bytes no longer represent the original single scan/import occurrence.
+            document.ContentHash = null;
+            document.SourceImportId = null;
+            await _store.SaveAsync(document, allPages, cancellationToken).ConfigureAwait(false);
+
+            // Existing pages' lattices are untouched (their page numbers didn't move) — only the newly
+            // appended pages need OCR/text extraction.
+            await _latticeBuilder.BuildDocumentAsync(document, addedPages, cancellationToken).ConfigureAwait(false);
+
+            return document;
+        }
+        finally
+        {
+            if (File.Exists(tempPdfPath))
+                File.Delete(tempPdfPath);
+        }
+    }
+
     private static RedactionCandidate CopyCandidate(RedactionCandidate candidate, int pageNumber) => new()
     {
         Id = candidate.Id,

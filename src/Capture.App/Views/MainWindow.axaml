@@ -174,23 +174,43 @@
                     <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="0,6,16,6" />
 
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,2,16,2" IsVisible="{Binding !ShowTrash}">
-                        <Button Command="{Binding ScanCommand}"
-                                ToolTip.Tip="Scan a document from the first available scanner">
+                        <SplitButton Command="{Binding ScanCommand}"
+                                     ToolTip.Tip="Scan a document from the first available scanner">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Path Data="{StaticResource IconScan}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                                <Path Data="{StaticResource IconScan}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" />
                                 <TextBlock Text="Scan" />
                             </StackPanel>
-                        </Button>
+                            <SplitButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem Header="Scan to current batch"
+                                              Command="{Binding ScanToCurrentBatchCommand}"
+                                              ToolTip.Tip="Select a batch (click its header), then scan straight into it — regardless of the incoming pages' own batch rules" />
+                                    <MenuItem Header="Scan to current document"
+                                              Command="{Binding ScanToCurrentDocumentCommand}"
+                                              ToolTip.Tip="Select a single document, then scan and append the pages directly onto it — no batch or document detection at all" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                         <Button Command="{Binding CancelScanCommand}"
                                 IsVisible="{Binding IsScanning}"
                                 Classes="ghost"
                                 Content="Cancel scan" />
-                        <Button Command="{Binding ImportFilesCommand}">
+                        <SplitButton Command="{Binding ImportFilesCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Path Data="{StaticResource IconImportFile}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                                <Path Data="{StaticResource IconImportFile}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[SplitButton].Foreground}" StrokeThickness="1.4" />
                                 <TextBlock Text="Import files" />
                             </StackPanel>
-                        </Button>
+                            <SplitButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem Header="Import to current batch"
+                                              Command="{Binding ImportFilesToCurrentBatchCommand}"
+                                              ToolTip.Tip="Select a batch (click its header), then import straight into it — regardless of the incoming files' own batch rules" />
+                                    <MenuItem Header="Import to current document"
+                                              Command="{Binding ImportFilesToCurrentDocumentCommand}"
+                                              ToolTip.Tip="Select a single document, then import and append the pages directly onto it — no batch or document detection at all" />
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
                         <Button Command="{Binding ImportFolderCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Path Data="{StaticResource IconImportFolder}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
@@ -450,6 +470,16 @@
                                         <TextBlock Text="Delete permanently" />
                                     </StackPanel>
                                 </Button>
+                                <Border Width="1" Background="{DynamicResource BorderBrush1}" Margin="2,4" />
+                                <Button Command="{Binding EmptyTrashCommand}"
+                                        Classes="ghost"
+                                        Foreground="{DynamicResource CriticalBrush}"
+                                        ToolTip.Tip="Permanently delete every document in Trash — no selection needed, cannot be undone">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Path Data="{StaticResource IconDelete}" Stretch="Uniform" Width="14" Height="14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4" />
+                                        <TextBlock Text="Empty Trash" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="{Binding SelectedDocumentsSummary}"
@@ -485,7 +515,7 @@
                 </Grid>
                 <Grid Grid.Row="1" Margin="8,0">
                     <DataGrid x:Name="InboxGrid"
-                              ItemsSource="{Binding Documents}"
+                              ItemsSource="{Binding InboxDisplayRows}"
                               SelectedItem="{Binding SelectedDocument}"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
@@ -496,82 +526,116 @@
                               CanUserResizeColumns="False"
                               CanUserSortColumns="True"
                               BorderThickness="0"
-                              RowHeight="46"
                               DragDrop.AllowDrop="True">
                         <DataGrid.KeyBindings>
                             <KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedCommand}" />
                             <KeyBinding Gesture="Back" Command="{Binding RemoveSelectedCommand}" />
                         </DataGrid.KeyBindings>
                         <DataGrid.Styles>
-                            <Style Selector="DataGridRow" x:DataType="vm:DocumentRow">
+                            <Style Selector="DataGridRow">
                                 <Setter Property="(DragDrop.AllowDrop)" Value="True" />
+                                <Setter Property="Background" Value="{Binding Converter={x:Static conv:DividerRowBackgroundConverter.Instance}}" />
+                                <Setter Property="Height" Value="{Binding Converter={x:Static conv:DividerRowHeightConverter.Instance}}" />
                             </Style>
                         </DataGrid.Styles>
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Width="4" CanUserResize="False" CanUserSort="False">
                                 <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate x:DataType="vm:DocumentRow">
-                                        <Border CornerRadius="2"
-                                                Margin="0,3"
-                                                Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}"
-                                                ToolTip.Tip="Rows with the same color belong to the same batch" />
+                                    <DataTemplate>
+                                        <ContentControl Content="{Binding}"
+                                                         HorizontalContentAlignment="Stretch"
+                                                         VerticalContentAlignment="Stretch">
+                                            <ContentControl.DataTemplates>
+                                                <DataTemplate DataType="vm:DocumentRow">
+                                                    <Border CornerRadius="2"
+                                                            Margin="0,3"
+                                                            Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}"
+                                                            ToolTip.Tip="Rows with the same color belong to the same batch" />
+                                                </DataTemplate>
+                                                <DataTemplate DataType="vm:BatchDividerRow">
+                                                    <Border CornerRadius="2"
+                                                            Margin="0,3"
+                                                            Background="{Binding Accent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}" />
+                                                </DataTemplate>
+                                            </ContentControl.DataTemplates>
+                                        </ContentControl>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Width="*" CanUserSort="True" SortMemberPath="FileName">
+                            <DataGridTemplateColumn Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate x:DataType="vm:DocumentRow">
-                                        <StackPanel Spacing="4" Margin="6,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding FileName}"
-                                                       FontSize="13"
-                                                       FontWeight="Medium"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <Border Classes="chip"
-                                                        Classes.chip-ready="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReady}}"
-                                                        Classes.chip-review="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReview}}"
-                                                        Classes.chip-error="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsError}}"
-                                                        Classes.chip-neutral="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsNeutral}}">
-                                                    <TextBlock Text="{Binding StatusDisplay}" />
-                                                </Border>
-                                                <TextBlock Text="{Binding IssueDisplay}"
-                                                           Classes="mono"
-                                                           FontSize="10.5"
-                                                           Foreground="{DynamicResource CriticalBrush}"
-                                                           IsVisible="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
-                                                           VerticalAlignment="Center" />
-                                                <Path Data="{StaticResource IconRedactionPending}"
-                                                      Stretch="Uniform" Width="16" Height="16"
-                                                      Stroke="{DynamicResource WarnBrush}" StrokeThickness="1.35"
-                                                      IsVisible="{Binding IsRedactionPending}"
-                                                      ToolTip.Tip="{Binding RedactionStatusTooltip}"
-                                                      VerticalAlignment="Center" />
-                                                <Button Classes="ghost"
-                                                        Width="22" Height="22" Padding="3"
-                                                        IsVisible="{Binding IsRedactionApplied}"
-                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenRedactedFileCommand}"
-                                                        CommandParameter="{Binding}"
-                                                        ToolTip.Tip="Redacted copy available — click to open"
-                                                        VerticalAlignment="Center">
-                                                    <Path Data="{StaticResource IconRedactionApplied}"
-                                                          Stretch="Uniform" Width="16" Height="16"
-                                                          Stroke="{DynamicResource AccentBrush1}" StrokeThickness="1.35" />
-                                                </Button>
-                                                <Path Data="{StaticResource IconRedactionFailed}"
-                                                      Stretch="Uniform" Width="16" Height="16"
-                                                      Stroke="{DynamicResource CriticalBrush}" StrokeThickness="1.35"
-                                                      IsVisible="{Binding IsRedactionFailed}"
-                                                      ToolTip.Tip="{Binding RedactionStatusTooltip}"
-                                                      VerticalAlignment="Center" />
-                                                <TextBlock Text="Duplicate"
-                                                           Classes="mono"
-                                                           FontSize="10.5"
-                                                           Foreground="{DynamicResource MutedBrush}"
-                                                           IsVisible="{Binding IsDuplicate}"
-                                                           ToolTip.Tip="{Binding DuplicateTooltip}"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </StackPanel>
+                                    <DataTemplate>
+                                        <ContentControl Content="{Binding}" HorizontalContentAlignment="Stretch">
+                                            <ContentControl.DataTemplates>
+                                                <DataTemplate DataType="vm:BatchDividerRow">
+                                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="6,0"
+                                                                VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                                                                Background="Transparent" Cursor="Hand"
+                                                                ToolTip.Tip="Select all documents in this batch">
+                                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                 Fill="{Binding Accent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}" />
+                                                        <TextBlock Text="{Binding Label}"
+                                                                   Classes="hint"
+                                                                   FontSize="12"
+                                                                   VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                                <DataTemplate DataType="vm:DocumentRow">
+                                                    <StackPanel Spacing="4" Margin="6,0" MinHeight="46" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding FileName}"
+                                                                   FontSize="13"
+                                                                   FontWeight="Medium"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <Border Classes="chip"
+                                                                    Classes.chip-ready="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReady}}"
+                                                                    Classes.chip-review="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReview}}"
+                                                                    Classes.chip-error="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsError}}"
+                                                                    Classes.chip-neutral="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsNeutral}}">
+                                                                <TextBlock Text="{Binding StatusDisplay}" />
+                                                            </Border>
+                                                            <TextBlock Text="{Binding IssueDisplay}"
+                                                                       Classes="mono"
+                                                                       FontSize="10.5"
+                                                                       Foreground="{DynamicResource CriticalBrush}"
+                                                                       IsVisible="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                                                       VerticalAlignment="Center" />
+                                                            <Path Data="{StaticResource IconRedactionPending}"
+                                                                  Stretch="Uniform" Width="16" Height="16"
+                                                                  Stroke="{DynamicResource WarnBrush}" StrokeThickness="1.35"
+                                                                  IsVisible="{Binding IsRedactionPending}"
+                                                                  ToolTip.Tip="{Binding RedactionStatusTooltip}"
+                                                                  VerticalAlignment="Center" />
+                                                            <Button Classes="ghost"
+                                                                    Width="22" Height="22" Padding="3"
+                                                                    IsVisible="{Binding IsRedactionApplied}"
+                                                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenRedactedFileCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    ToolTip.Tip="Redacted copy available — click to open"
+                                                                    VerticalAlignment="Center">
+                                                                <Path Data="{StaticResource IconRedactionApplied}"
+                                                                      Stretch="Uniform" Width="16" Height="16"
+                                                                      Stroke="{DynamicResource AccentBrush1}" StrokeThickness="1.35" />
+                                                            </Button>
+                                                            <Path Data="{StaticResource IconRedactionFailed}"
+                                                                  Stretch="Uniform" Width="16" Height="16"
+                                                                  Stroke="{DynamicResource CriticalBrush}" StrokeThickness="1.35"
+                                                                  IsVisible="{Binding IsRedactionFailed}"
+                                                                  ToolTip.Tip="{Binding RedactionStatusTooltip}"
+                                                                  VerticalAlignment="Center" />
+                                                            <TextBlock Text="Duplicate"
+                                                                       Classes="mono"
+                                                                       FontSize="10.5"
+                                                                       Foreground="{DynamicResource MutedBrush}"
+                                                                       IsVisible="{Binding IsDuplicate}"
+                                                                       ToolTip.Tip="{Binding DuplicateTooltip}"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ContentControl.DataTemplates>
+                                        </ContentControl>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
@@ -1021,7 +1085,7 @@
                                                     Click="OnSelectAllGroupClick" />
                                         </DockPanel>
                                         <Border Height="1" Background="{DynamicResource BorderBrush1}" />
-                                        <DataGrid ItemsSource="{Binding Documents}"
+                                        <DataGrid ItemsSource="{Binding DisplayRows}"
                                                   AutoGenerateColumns="False"
                                                   IsReadOnly="True"
                                                   HeadersVisibility="Column"
@@ -1035,97 +1099,167 @@
                                                   Loaded="OnGroupTableLoaded"
                                                   SelectionChanged="OnGroupTableSelectionChanged"
                                                   KeyDown="OnGroupTableKeyDown">
+                                            <DataGrid.Styles>
+                                                <Style Selector="DataGridRow">
+                                                    <Setter Property="Background" Value="{Binding Converter={x:Static conv:DividerRowBackgroundConverter.Instance}}" />
+                                                    <Setter Property="Height" Value="{Binding Converter={x:Static conv:DividerRowHeightConverter.Instance}}" />
+                                                </Style>
+                                            </DataGrid.Styles>
                                             <DataGrid.Columns>
                                                 <DataGridTemplateColumn Width="4" CanUserResize="False">
                                                     <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate x:DataType="vm:DocumentRow">
-                                                            <Border Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}"
-                                                                    ToolTip.Tip="Rows with the same color belong to the same batch" />
+                                                        <DataTemplate>
+                                                            <ContentControl Content="{Binding}"
+                                                                             HorizontalContentAlignment="Stretch"
+                                                                             VerticalContentAlignment="Stretch">
+                                                                <ContentControl.DataTemplates>
+                                                                    <DataTemplate DataType="vm:DocumentRow">
+                                                                        <Border Background="{Binding BatchAccent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}"
+                                                                                ToolTip.Tip="Rows with the same color belong to the same batch" />
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="vm:BatchDividerRow">
+                                                                        <Border Background="{Binding Accent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}" />
+                                                                    </DataTemplate>
+                                                                </ContentControl.DataTemplates>
+                                                            </ContentControl>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
                                                 <DataGridTemplateColumn Header="File" Width="170" MinWidth="120" MaxWidth="300">
                                                     <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate x:DataType="vm:DocumentRow">
-                                                            <Grid ColumnDefinitions="Auto,*" Margin="4,0">
-                                                                <Border Width="18" Height="18"
-                                                                        CornerRadius="4"
-                                                                        Background="{DynamicResource Surface3Brush}"
-                                                                        ToolTip.Tip="{Binding DocumentTypeTooltip}"
-                                                                        VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding DocumentTypeMarker}"
-                                                                               Classes="mono"
-                                                                               FontSize="10"
-                                                                               FontWeight="SemiBold"
-                                                                               Foreground="{DynamicResource MutedBrush}"
-                                                                               HorizontalAlignment="Center"
-                                                                               VerticalAlignment="Center" />
-                                                                </Border>
-                                                                <TextBlock Grid.Column="1"
-                                                                           Text="{Binding FileName}"
-                                                                           Margin="7,0,0,0"
-                                                                           TextTrimming="CharacterEllipsis"
-                                                                           VerticalAlignment="Center" />
-                                                            </Grid>
+                                                        <DataTemplate>
+                                                            <ContentControl Content="{Binding}" HorizontalContentAlignment="Stretch">
+                                                                <ContentControl.DataTemplates>
+                                                                    <DataTemplate DataType="vm:BatchDividerRow">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="5" Margin="4,0"
+                                                                                    VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                                                                                    Background="Transparent" Cursor="Hand"
+                                                                                    ToolTip.Tip="Select all documents in this batch">
+                                                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                                     Fill="{Binding Accent, Converter={x:Static conv:BatchAccentBrushConverter.Instance}, ConverterParameter=bar}" />
+                                                                            <TextBlock Text="{Binding Label}"
+                                                                                       Classes="hint"
+                                                                                       FontSize="12"
+                                                                                       VerticalAlignment="Center"
+                                                                                       TextTrimming="CharacterEllipsis" />
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="vm:DocumentRow">
+                                                                        <Grid ColumnDefinitions="Auto,*" Margin="4,0">
+                                                                            <Border Width="18" Height="18"
+                                                                                    CornerRadius="4"
+                                                                                    Background="{DynamicResource Surface3Brush}"
+                                                                                    ToolTip.Tip="{Binding DocumentTypeTooltip}"
+                                                                                    VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding DocumentTypeMarker}"
+                                                                                           Classes="mono"
+                                                                                           FontSize="10"
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="{DynamicResource MutedBrush}"
+                                                                                           HorizontalAlignment="Center"
+                                                                                           VerticalAlignment="Center" />
+                                                                            </Border>
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       Text="{Binding FileName}"
+                                                                                       Margin="7,0,0,0"
+                                                                                       TextTrimming="CharacterEllipsis"
+                                                                                       VerticalAlignment="Center" />
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ContentControl.DataTemplates>
+                                                            </ContentControl>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="Pages" Binding="{Binding PageCount}" Width="78" />
+                                                <DataGridTemplateColumn Header="Pages" Width="78">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <ContentControl Content="{Binding}">
+                                                                <ContentControl.DataTemplates>
+                                                                    <DataTemplate DataType="vm:BatchDividerRow">
+                                                                        <TextBlock />
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="vm:DocumentRow">
+                                                                        <TextBlock Text="{Binding PageCount}" VerticalAlignment="Center" />
+                                                                    </DataTemplate>
+                                                                </ContentControl.DataTemplates>
+                                                            </ContentControl>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                                 <DataGridTemplateColumn Header="Status" Width="118">
                                                     <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate x:DataType="vm:DocumentRow">
-                                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                                <Border Classes="chip"
-                                                                        Classes.chip-ready="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReady}}"
-                                                                        Classes.chip-review="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReview}}"
-                                                                        Classes.chip-error="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsError}}"
-                                                                        Classes.chip-neutral="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsNeutral}}"
-                                                                        HorizontalAlignment="Left"
-                                                                        VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding StatusDisplay}" />
-                                                                </Border>
-                                                                <Path Data="{StaticResource IconRedactionPending}"
-                                                                      Stretch="Uniform" Width="16" Height="16"
-                                                                      Stroke="{DynamicResource WarnBrush}" StrokeThickness="1.35"
-                                                                      IsVisible="{Binding IsRedactionPending}"
-                                                                      ToolTip.Tip="{Binding RedactionStatusTooltip}" />
-                                                                <Button Classes="ghost"
-                                                                        Width="22" Height="22" Padding="3"
-                                                                        IsVisible="{Binding IsRedactionApplied}"
-                                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenRedactedFileCommand}"
-                                                                        CommandParameter="{Binding}"
-                                                                        ToolTip.Tip="Redacted copy available — click to open">
-                                                                    <Path Data="{StaticResource IconRedactionApplied}"
-                                                                          Stretch="Uniform" Width="16" Height="16"
-                                                                          Stroke="{DynamicResource AccentBrush1}" StrokeThickness="1.35" />
-                                                                </Button>
-                                                                <Path Data="{StaticResource IconRedactionFailed}"
-                                                                      Stretch="Uniform" Width="16" Height="16"
-                                                                      Stroke="{DynamicResource CriticalBrush}" StrokeThickness="1.35"
-                                                                      IsVisible="{Binding IsRedactionFailed}"
-                                                                      ToolTip.Tip="{Binding RedactionStatusTooltip}" />
-                                                            </StackPanel>
+                                                        <DataTemplate>
+                                                            <ContentControl Content="{Binding}">
+                                                                <ContentControl.DataTemplates>
+                                                                    <DataTemplate DataType="vm:BatchDividerRow">
+                                                                        <TextBlock />
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="vm:DocumentRow">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                            <Border Classes="chip"
+                                                                                    Classes.chip-ready="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReady}}"
+                                                                                    Classes.chip-review="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReview}}"
+                                                                                    Classes.chip-error="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsError}}"
+                                                                                    Classes.chip-neutral="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsNeutral}}"
+                                                                                    HorizontalAlignment="Left"
+                                                                                    VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding StatusDisplay}" />
+                                                                            </Border>
+                                                                            <Path Data="{StaticResource IconRedactionPending}"
+                                                                                  Stretch="Uniform" Width="16" Height="16"
+                                                                                  Stroke="{DynamicResource WarnBrush}" StrokeThickness="1.35"
+                                                                                  IsVisible="{Binding IsRedactionPending}"
+                                                                                  ToolTip.Tip="{Binding RedactionStatusTooltip}" />
+                                                                            <Button Classes="ghost"
+                                                                                    Width="22" Height="22" Padding="3"
+                                                                                    IsVisible="{Binding IsRedactionApplied}"
+                                                                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenRedactedFileCommand}"
+                                                                                    CommandParameter="{Binding}"
+                                                                                    ToolTip.Tip="Redacted copy available — click to open">
+                                                                                <Path Data="{StaticResource IconRedactionApplied}"
+                                                                                      Stretch="Uniform" Width="16" Height="16"
+                                                                                      Stroke="{DynamicResource AccentBrush1}" StrokeThickness="1.35" />
+                                                                            </Button>
+                                                                            <Path Data="{StaticResource IconRedactionFailed}"
+                                                                                  Stretch="Uniform" Width="16" Height="16"
+                                                                                  Stroke="{DynamicResource CriticalBrush}" StrokeThickness="1.35"
+                                                                                  IsVisible="{Binding IsRedactionFailed}"
+                                                                                  ToolTip.Tip="{Binding RedactionStatusTooltip}" />
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ContentControl.DataTemplates>
+                                                            </ContentControl>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
                                                 <DataGridTemplateColumn Header="Issues" Width="90">
                                                     <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate x:DataType="vm:DocumentRow">
-                                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding IssueDisplay, Converter={x:Static conv:StringOrDashConverter.Instance}}"
-                                                                           Classes="issue-cell"
-                                                                           Classes.critical="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
-                                                                           TextTrimming="CharacterEllipsis"
-                                                                           ToolTip.Tip="{Binding IssueDisplay}"
-                                                                           VerticalAlignment="Center" />
-                                                                <TextBlock Text="Duplicate"
-                                                                           Classes="mono"
-                                                                           FontSize="10.5"
-                                                                           Foreground="{DynamicResource MutedBrush}"
-                                                                           IsVisible="{Binding IsDuplicate}"
-                                                                           ToolTip.Tip="{Binding DuplicateTooltip}"
-                                                                           VerticalAlignment="Center" />
-                                                            </StackPanel>
+                                                        <DataTemplate>
+                                                            <ContentControl Content="{Binding}">
+                                                                <ContentControl.DataTemplates>
+                                                                    <DataTemplate DataType="vm:BatchDividerRow">
+                                                                        <TextBlock />
+                                                                    </DataTemplate>
+                                                                    <DataTemplate DataType="vm:DocumentRow">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding IssueDisplay, Converter={x:Static conv:StringOrDashConverter.Instance}}"
+                                                                                       Classes="issue-cell"
+                                                                                       Classes.critical="{Binding IssueDisplay, Converter={x:Static conv:StringNotEmptyConverter.Instance}}"
+                                                                                       TextTrimming="CharacterEllipsis"
+                                                                                       ToolTip.Tip="{Binding IssueDisplay}"
+                                                                                       VerticalAlignment="Center" />
+                                                                            <TextBlock Text="Duplicate"
+                                                                                       Classes="mono"
+                                                                                       FontSize="10.5"
+                                                                                       Foreground="{DynamicResource MutedBrush}"
+                                                                                       IsVisible="{Binding IsDuplicate}"
+                                                                                       ToolTip.Tip="{Binding DuplicateTooltip}"
+                                                                                       VerticalAlignment="Center" />
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ContentControl.DataTemplates>
+                                                            </ContentControl>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>

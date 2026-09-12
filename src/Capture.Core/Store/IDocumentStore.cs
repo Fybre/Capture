@@ -69,6 +69,11 @@ public interface IDocumentStore
     Task<int> GetBatchNumberAsync(Guid batchId, CancellationToken cancellationToken = default);
 
     Task<int> GetDocumentNumberInBatchAsync(Guid batchId, Guid documentId, CancellationToken cancellationToken = default);
+
+    /// <summary>Bulk batch metadata lookup — backs the batch-divider row shown above the first document
+    /// of each batch in Table and Preview mode (number/input channel), one query instead of one per
+    /// batch. Unknown ids are simply absent from the result rather than erroring.</summary>
+    Task<IReadOnlyDictionary<Guid, CaptureBatch>> GetBatchesAsync(IReadOnlyCollection<Guid> batchIds, CancellationToken cancellationToken = default);
 }
 
 /// <summary>What MainViewModel's import loop does when a file's content hash already matches an active

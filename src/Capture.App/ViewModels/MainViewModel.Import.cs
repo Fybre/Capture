@@ -63,6 +63,9 @@ public partial class MainViewModel
             async (index, ct) => rows[index] = await CreateRowAsync(documents[index], batchValuesCache).ConfigureAwait(false))
             .ConfigureAwait(true);
 
+        var batchIds = rows.Select(row => row.Document.BatchId).Where(id => id is not null).Select(id => id!.Value).ToHashSet();
+        _batchesById = await _store.GetBatchesAsync(batchIds).ConfigureAwait(true);
+
         Documents.Clear();
         SelectedDocuments.Clear();
         foreach (var row in rows)
@@ -78,6 +81,59 @@ public partial class MainViewModel
         if (files.Count == 0)
             return;
         await ImportPathsAsync(files);
+    }
+
+    // Imports normally (so document-boundary rules still apply, same as a plain import) and moves every
+    // resulting document into CurrentSharedBatchId — set by selecting a whole batch (e.g. clicking its
+    // divider row). Ignores the incoming files' own batch-boundary rules: whatever batch(es) the capture
+    // profile would normally have split this import into, every resulting document ends up moved into
+    // the one target batch regardless, via the same MoveDocumentToBatchAsync a manual drag-to-batch move
+    // already uses (which also cleans up the freshly-created batch once it's empty).
+    [RelayCommand(CanExecute = nameof(CanImportToCurrentBatch))]
+    private async Task ImportFilesToCurrentBatchAsync()
+    {
+        if (CurrentSharedBatchId is not { } targetBatchId)
+            return;
+
+        var files = await _dialogs.PickFilesAsync();
+        if (files.Count == 0)
+            return;
+
+        var documents = await ImportPathsAsync(files).ConfigureAwait(true);
+        foreach (var document in documents)
+            await MoveDocumentToBatchAsync(document.Id, targetBatchId).ConfigureAwait(true);
+        StatusText = documents.Count == 1
+            ? "Imported 1 document into the current batch"
+            : $"Imported {documents.Count} document(s) into the current batch";
+        StatusIsError = false;
+    }
+
+    // Imports normally, then folds every resulting document into CurrentSingleDocument via the existing
+    // merge operation — the end state (every imported page appended to that one document) is the same
+    // as skipping document-boundary detection outright, without needing a separate "append raw pages"
+    // path for files the way scanning has via AppendPagesAsync (a file still needs full rasterization,
+    // which the normal import pipeline already does).
+    [RelayCommand(CanExecute = nameof(CanImportToCurrentDocument))]
+    private async Task ImportFilesToCurrentDocumentAsync()
+    {
+        if (CurrentSingleDocument is not { } targetRow)
+            return;
+
+        var files = await _dialogs.PickFilesAsync();
+        if (files.Count == 0)
+            return;
+
+        var documents = await ImportPathsAsync(files).ConfigureAwait(true);
+        if (documents.Count == 0)
+            return;
+
+        foreach (var document in documents)
+            await _pageManagement.MergeDocumentsAsync([targetRow.Id, document.Id]).ConfigureAwait(true);
+        await ReloadDocumentsAsync().ConfigureAwait(true);
+        if (IsPreviewMode)
+            SelectedDocument = Documents.FirstOrDefault(row => row.Id == targetRow.Id);
+        StatusText = "Appended imported file(s) to the document";
+        StatusIsError = false;
     }
 
     /// <summary>Handles file(s)/folder(s) dropped onto the window from Finder/Explorer — the drop
@@ -143,7 +199,10 @@ public partial class MainViewModel
         }
     }
 
-    private async Task ImportPathsAsync(
+    /// <summary>Returns every <see cref="CaptureDocument"/> materialized by this call — empty if nothing
+    /// was accepted (all duplicates) or an error occurred. Used by the scan "continue scanning" flow to
+    /// learn which single document a just-finished scan produced, so a follow-up scan can append to it.</summary>
+    private async Task<IReadOnlyList<CaptureDocument>> ImportPathsAsync(
         IReadOnlyList<string> paths,
         DocumentSource source = DocumentSource.Import,
         string? watchRoot = null,
@@ -162,7 +221,7 @@ public partial class MainViewModel
             {
                 StatusText = "Choose a Capture Profile before importing";
                 StatusIsError = true;
-                return;
+                return [];
             }
 
             var contentHashes = new string[paths.Count];
@@ -197,6 +256,7 @@ public partial class MainViewModel
             }
 
             var autoExportStatus = string.Empty;
+            IReadOnlyList<CaptureDocument> materializedDocuments = [];
             if (accepted.Count > 0)
             {
                 StatusText = $"Processing {accepted.Count} file(s) with {profile.Name}…";
@@ -206,6 +266,7 @@ public partial class MainViewModel
                     profile, accepted, source, channel,
                     startNewBatch: automated,
                     closeBatchWhenFinished: automated).ConfigureAwait(true);
+                materializedDocuments = result.Materialized.Documents;
                 if (!automated)
                     await RefreshManualBatchStateAsync().ConfigureAwait(true);
                 foreach (var path in accepted) MoveWatchFile(path, watchRoot, watchFolderEntry, success: true);
@@ -233,12 +294,14 @@ public partial class MainViewModel
                 ? importedStatus
                 : $"{importedStatus} — {autoExportStatus}";
             StatusIsError = false;
+            return materializedDocuments;
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
             StatusIsError = true;
             foreach (var path in paths) MoveWatchFile(path, watchRoot, watchFolderEntry, success: false);
+            return [];
         }
         finally
         {
@@ -288,12 +351,12 @@ public partial class MainViewModel
         return Convert.ToHexString(hash);
     }
 
-    private async Task ImportScannedPagesAsync(IReadOnlyList<ScannedPageInfo> pages, DocumentSource source)
+    private async Task<IReadOnlyList<CaptureDocument>> ImportScannedPagesAsync(IReadOnlyList<ScannedPageInfo> pages, DocumentSource source)
     {
         try
         {
             StatusText = "Importing scanned pages…";
-            await ImportPathsAsync(pages.Select(page => page.ImagePath).ToList(), source, manageBusy: false).ConfigureAwait(true);
+            return await ImportPathsAsync(pages.Select(page => page.ImagePath).ToList(), source, manageBusy: false).ConfigureAwait(true);
         }
         finally
         {

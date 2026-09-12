@@ -23,6 +23,43 @@ public sealed partial class DocumentRow : ObservableObject
     [ObservableProperty]
     private bool _batchAccent;
 
+    /// <summary>True for the first row of a new batch in whichever ordered sequence last computed it —
+    /// the master flat list for the Inbox rail, or one profile group's filtered list for Table mode (see
+    /// MainViewModel.RefreshBatchAccents/RefreshDocumentGroups). Drives the batch-divider row shown
+    /// immediately above this one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchDividerLabel))]
+    private bool _isFirstInBatch;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchDividerLabel))]
+    private int? _batchNumber;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchDividerLabel))]
+    private string? _batchInputChannel;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchDividerLabel))]
+    private int _batchDocumentCount;
+
+    /// <summary>"Batch 41 · Scanner · 3 docs" — blank when batch metadata hasn't loaded yet (e.g. a
+    /// batch created moments ago, before the next full reload populates the lookup), in which case the
+    /// divider still shows via <see cref="IsFirstInBatch"/>, just without this text.</summary>
+    public string BatchDividerLabel
+    {
+        get
+        {
+            if (BatchNumber is not { } number)
+                return string.Empty;
+            var parts = new List<string> { $"Batch {number}" };
+            if (!string.IsNullOrWhiteSpace(BatchInputChannel))
+                parts.Add(BatchInputChannel);
+            parts.Add(BatchDocumentCount == 1 ? "1 doc" : $"{BatchDocumentCount} docs");
+            return string.Join(" · ", parts);
+        }
+    }
+
     /// <summary>Set by MainViewModel.RefreshDuplicateFlags — true when another active source import has
     /// the same ContentHash. Sibling documents split from one source are excluded. Derived on the fly
     /// rather than persisted, so it can't go stale when a match is removed/restored/re-imported.</summary>

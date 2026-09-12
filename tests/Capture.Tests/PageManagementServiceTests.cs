@@ -321,6 +321,70 @@ public class PageManagementServiceTests
         Assert.Equal("appended", Assert.Single(lattice.Words).Text);
     }
 
+    [Fact]
+    public async Task AppendPagesAsync_adds_new_pages_after_the_existing_ones()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 2, isPdf: true);
+        var newPages = env.CreateRasterPages(count: 2, markerOffset: 10);
+
+        var result = await env.Service.AppendPagesAsync(document.Id, newPages);
+
+        Assert.Equal(document.Id, result.Id);
+        Assert.Equal(4, result.PageCount);
+        Assert.Equal(DocumentStatus.NeedsReview, result.Status);
+
+        var pages = (await env.Store.GetPagesAsync(document.Id)).OrderBy(page => page.PageNumber).ToList();
+        Assert.Equal([1, 2, 11, 12], pages.Select(page => File.ReadAllBytes(page.ImagePath)[0]));
+        Assert.Equal([1, 2, 3, 4], pages.Select(page => page.PageNumber));
+        Assert.Equal([1, 2, 3, 4], pages.Select(page => page.SourcePageNumber));
+
+        using var pdf = PdfDocument.Open(result.StoredPath);
+        Assert.Equal(4, pdf.NumberOfPages);
+    }
+
+    [Fact]
+    public async Task AppendPagesAsync_leaves_existing_page_files_untouched()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 2, isPdf: true);
+        var existingPages = (await env.Store.GetPagesAsync(document.Id)).OrderBy(page => page.PageNumber).ToList();
+        var originalImagePaths = existingPages.Select(page => page.ImagePath).ToList();
+
+        await env.Service.AppendPagesAsync(document.Id, env.CreateRasterPages(count: 1, markerOffset: 20));
+
+        foreach (var path in originalImagePaths)
+            Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task AppendPagesAsync_clears_source_provenance_because_the_content_has_changed()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 1, isPdf: true);
+        document.ContentHash = "original-hash";
+        document.SourceImportId = Guid.NewGuid();
+        await env.Store.SaveAsync(document, await env.Store.GetPagesAsync(document.Id));
+
+        var result = await env.Service.AppendPagesAsync(document.Id, env.CreateRasterPages(count: 1, markerOffset: 30));
+
+        Assert.Null(result.ContentHash);
+        Assert.Null(result.SourceImportId);
+        var persisted = await env.Store.GetAsync(document.Id);
+        Assert.Null(persisted!.ContentHash);
+        Assert.Null(persisted.SourceImportId);
+    }
+
+    [Fact]
+    public async Task AppendPagesAsync_rejects_an_empty_page_list()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 1, isPdf: true);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => env.Service.AppendPagesAsync(document.Id, []));
+    }
+
     private sealed class TestEnv
     {
         public required IAppPaths Paths { get; init; }
@@ -411,6 +475,24 @@ public class PageManagementServiceTests
             };
             await Store.SaveAsync(document, pages);
             return document;
+        }
+
+        /// <summary>Loose raster page images not yet belonging to any document — the shape a follow-up
+        /// scan pass hands to <see cref="PageManagementService.AppendPagesAsync"/>. Written to a scratch
+        /// directory under the same root as everything else this TestEnv creates.</summary>
+        public IReadOnlyList<RasterPage> CreateRasterPages(int count, int markerOffset)
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "capture-page-mgmt-scan-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            var pages = new List<RasterPage>(count);
+            for (var n = 1; n <= count; n++)
+            {
+                var imagePath = Path.Combine(directory, $"{n:D4}.png");
+                File.WriteAllBytes(imagePath, MarkerFor(n + markerOffset));
+                pages.Add(new RasterPage(n, imagePath, 100, 100, 96));
+            }
+
+            return pages;
         }
 
         private sealed class TestMergedDocumentWriter : IMergedDocumentWriter

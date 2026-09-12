@@ -211,6 +211,18 @@ public partial class MainWindow : Window
         _pressPoint = e.GetPosition(grid);
         _dragging = false;
 
+        // A batch-divider row isn't a DocumentRow, so it would otherwise fall into the "empty space"
+        // branch below and just clear the selection. Handle it before that runs instead: select every
+        // document in the batch it introduces. (Wiring this as a Tapped handler on the divider's own
+        // content was tried first and didn't fire reliably — DataGrid's own pointer handling appears to
+        // intercept it — so it's handled directly in this tunnel handler instead, which always fires.)
+        if (_pressRow is null && DividerAt(grid, e.Source, e.GetPosition(grid)) is { } divider)
+        {
+            e.Handled = true;
+            SelectBatchDocuments(grid, divider.BatchId);
+            return;
+        }
+
         // Each Table-mode section is a separate DataGrid. A plain click starts a fresh selection,
         // while Ctrl/Command/Shift-click extends the selection across section boundaries just as it
         // does within one grid.
@@ -396,6 +408,52 @@ public partial class MainWindow : Window
         }
 
         return null;
+    }
+
+    private static BatchDividerRow? DividerAt(DataGrid grid, object? source, Point position)
+    {
+        if ((source as Control)?.FindAncestorOfType<DataGridRow>(includeSelf: true)?.DataContext is BatchDividerRow fromSource)
+            return fromSource;
+
+        foreach (var visual in grid.GetVisualsAt(position))
+        {
+            var row = (visual as Visual)?.FindAncestorOfType<DataGridRow>(includeSelf: true);
+            if (row?.DataContext is BatchDividerRow divider)
+                return divider;
+        }
+
+        return null;
+    }
+
+    // Selects every document belonging to one batch — used when a batch-divider row is clicked, in
+    // whichever grid it appears (see OnGridPointerPressed). Mirrors OnSelectAllGroupClick's own
+    // pattern: selection is owned by the individual DataGrids, so populate the matching grid's
+    // SelectedItems directly rather than the shared viewModel.SelectedDocuments collection.
+    private void SelectBatchDocuments(DataGrid grid, Guid batchId)
+    {
+        if (DataContext is not MainViewModel viewModel)
+            return;
+
+        if (ReferenceEquals(grid, InboxGrid))
+        {
+            InboxGrid.SelectedItems.Clear();
+            foreach (var document in viewModel.Documents.Where(row => row.Document.BatchId == batchId))
+                InboxGrid.SelectedItems.Add(document);
+            return;
+        }
+
+        foreach (var other in _groupGrids)
+        {
+            if (other != grid)
+                other.SelectedItems.Clear();
+        }
+
+        grid.SelectedItems.Clear();
+        if (grid.DataContext is DocumentGroupViewModel group)
+        {
+            foreach (var document in group.Documents.Where(row => row.Document.BatchId == batchId))
+                grid.SelectedItems.Add(document);
+        }
     }
 
     // Jumps the main preview to whatever single thumbnail the user just plain-clicked. Ctrl/shift-click
@@ -591,7 +649,12 @@ public partial class MainWindow : Window
                 Width = new DataGridLength(1),
                 CanUserResize = false,
                 CanUserSort = false,
-                CellTemplate = new FuncDataTemplate<DocumentRow>((_, _) =>
+                // FuncDataTemplate<object> (not <DocumentRow>) deliberately — with compiled bindings on
+                // by default for this project, a FuncDataTemplate<DocumentRow> casts its data parameter
+                // to DocumentRow unconditionally before invoking the build func, which throws the moment
+                // a BatchDividerRow reaches this column. The blank Border renders identically either way,
+                // so there's nothing type-specific to branch on here.
+                CellTemplate = new FuncDataTemplate<object>((_, _) =>
                     new Border { Background = IndexCellLookup.ResolveBrush("BorderBrush1") })
             });
         }
@@ -612,8 +675,13 @@ public partial class MainWindow : Window
                 Foreground = IndexCellLookup.ResolveBrush(isBatchField ? "AccentBrush1" : "MutedBrush")
             },
             Width = new DataGridLength(150),
-            CellTemplate = new FuncDataTemplate<DocumentRow>((_, _) =>
+            // FuncDataTemplate<object>, not <DocumentRow> — see the identical comment on the spacer
+            // column above for why a BatchDividerRow reaching a <DocumentRow>-typed template throws.
+            CellTemplate = new FuncDataTemplate<object>((data, _) =>
             {
+                if (data is not DocumentRow)
+                    return new TextBlock();
+
                 var text = new TextBlock
                 {
                     FontFamily = monoFont,
