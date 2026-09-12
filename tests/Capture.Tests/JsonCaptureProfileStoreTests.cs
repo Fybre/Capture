@@ -14,6 +14,7 @@ public class JsonCaptureProfileStoreTests
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-profile-" + Guid.NewGuid().ToString("N")));
         var store = new JsonCaptureProfileStore(paths);
         var ruleId = Guid.NewGuid();
+        var mappedFieldId = Guid.NewGuid();
         var profile = new CaptureProfile
         {
             Name = "Student Records",
@@ -36,8 +37,7 @@ public class JsonCaptureProfileStoreTests
                     {
                         FieldNo = 10,
                         Caption = "Source",
-                        ValueSource = ThereforeMappingValueSource.Constant,
-                        ConstantValue = "Capture"
+                        IndexFieldId = mappedFieldId
                     }]
                 }]
             }]
@@ -54,8 +54,7 @@ public class JsonCaptureProfileStoreTests
         Assert.True(loadedType.IdentificationStartsNewDocument);
         Assert.Equal("Transcript", loadedType.Name);
         var loadedMapping = Assert.Single(Assert.Single(loadedType.Exports).ThereforeFieldMappings);
-        Assert.Equal(ThereforeMappingValueSource.Constant, loadedMapping.ValueSource);
-        Assert.Equal("Capture", loadedMapping.ConstantValue);
+        Assert.Equal(mappedFieldId, loadedMapping.IndexFieldId);
     }
 
 }

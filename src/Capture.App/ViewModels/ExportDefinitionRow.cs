@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Capture.App.ViewModels;
 
 public sealed record ExportFileModeChoice(ExportFileMode Value, string Label);
-public sealed record ThereforeMappingValueSourceChoice(ThereforeMappingValueSource Value, string Label);
 
 /// <summary>One profile field offered in an <see cref="ExportDefinitionRow"/>'s field checklist. Wraps
 /// the profile designer's own <see cref="FieldRow"/> (rather than copying its name) so a field rename
@@ -40,10 +39,13 @@ public sealed partial class ThereforeFieldMappingRow : ObservableObject
     public ThereforeFieldMappingRow(ThereforeFieldMapping mapping, IReadOnlyList<FieldSelectionRow> profileFields)
     {
         Mapping = mapping;
-        ProfileFields = profileFields;
-        _valueSource = mapping.ValueSource;
-        _selectedField = profileFields.FirstOrDefault(field => field.Id == mapping.IndexFieldId);
-        _constantValue = mapping.ConstantValue;
+        // Snapshot rather than alias ExportDefinitionRow.FieldOptions: RebuildFieldOptions() (run on
+        // every field add/remove) Clear()s and re-populates that live collection, and a still-bound
+        // ComboBox reacting to that Reset resets its SelectedItem to null — which, two-way bound, wrote
+        // straight back into Mapping.IndexFieldId and wiped every existing Therefore mapping the moment
+        // any field was added.
+        ProfileFields = profileFields.ToList();
+        _selectedField = ProfileFields.FirstOrDefault(field => field.Id == mapping.IndexFieldId);
     }
 
     public ThereforeFieldMapping Mapping { get; }
@@ -54,32 +56,10 @@ public sealed partial class ThereforeFieldMappingRow : ObservableObject
 
     public bool Mandatory => Mapping.Mandatory;
 
-    public IReadOnlyList<ThereforeMappingValueSourceChoice> ValueSourceOptions { get; } =
-    [
-        new(ThereforeMappingValueSource.IndexField, "Field"),
-        new(ThereforeMappingValueSource.Constant, "Fixed")
-    ];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsIndexFieldSource))]
-    [NotifyPropertyChangedFor(nameof(IsConstantSource))]
-    private ThereforeMappingValueSource _valueSource;
-
-    public bool IsIndexFieldSource => ValueSource == ThereforeMappingValueSource.IndexField;
-
-    public bool IsConstantSource => ValueSource == ThereforeMappingValueSource.Constant;
-
-    partial void OnValueSourceChanged(ThereforeMappingValueSource value) => Mapping.ValueSource = value;
-
     [ObservableProperty]
     private FieldSelectionRow? _selectedField;
 
     partial void OnSelectedFieldChanged(FieldSelectionRow? value) => Mapping.IndexFieldId = value?.Id;
-
-    [ObservableProperty]
-    private string _constantValue;
-
-    partial void OnConstantValueChanged(string value) => Mapping.ConstantValue = value;
 }
 
 /// <summary>Editable wrapper around one <see cref="ExportDefinition"/> — same "write straight back to

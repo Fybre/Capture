@@ -93,16 +93,12 @@ public sealed class ThereforeExportWriter : IExportWriter
         };
     }
 
-    internal static bool IsConfigured(ThereforeFieldMapping mapping) =>
-        mapping.ValueSource == ThereforeMappingValueSource.Constant
-            || mapping.IndexFieldId is not null;
+    internal static bool IsConfigured(ThereforeFieldMapping mapping) => mapping.IndexFieldId is not null;
 
     internal static string ResolveValue(ThereforeFieldMapping mapping, IReadOnlyDictionary<Guid, string> valuesByField) =>
-        mapping.ValueSource == ThereforeMappingValueSource.Constant
-            ? mapping.ConstantValue
-            : mapping.IndexFieldId is { } fieldId
-                ? valuesByField.GetValueOrDefault(fieldId, string.Empty)
-                : string.Empty;
+        mapping.IndexFieldId is { } fieldId
+            ? valuesByField.GetValueOrDefault(fieldId, string.Empty)
+            : string.Empty;
 
     private static bool IsTruthy(string value) =>
         value.Equals("true", StringComparison.OrdinalIgnoreCase)

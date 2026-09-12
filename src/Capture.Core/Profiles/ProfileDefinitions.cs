@@ -295,16 +295,13 @@ public sealed class ExportDefinition
     public List<ThereforeFieldMapping> ThereforeFieldMappings { get; set; } = [];
 }
 
-public enum ThereforeMappingValueSource
-{
-    IndexField = 0,
-    Constant = 1
-}
-
 /// <summary>One Therefore category field discovered via the category picker, optionally supplied by
-/// one of this profile's own index fields or a constant value. <see cref="FieldType"/> mirrors
-/// <c>Capture.Therefore.ThereforeFieldType</c>'s int values — duplicated as a plain int here rather
-/// than referencing that project, since <c>Capture.Core</c> stays dependency-free.</summary>
+/// one of this profile's own index fields. A fixed/constant value is deliberately not a first-class
+/// option here — a hidden Script-kind index field (see <c>FieldKind.Script</c>) already covers both
+/// "always this literal" and any computed value, so mapping only ever needs an index field or nothing.
+/// <see cref="FieldType"/> mirrors <c>Capture.Therefore.ThereforeFieldType</c>'s int values — duplicated
+/// as a plain int here rather than referencing that project, since <c>Capture.Core</c> stays
+/// dependency-free.</summary>
 public sealed class ThereforeFieldMapping
 {
     public int FieldNo { get; set; }
@@ -315,9 +312,7 @@ public sealed class ThereforeFieldMapping
     public string IndexDataFieldName { get; set; } = string.Empty;
     public int FieldType { get; set; }
     public bool Mandatory { get; set; }
-    public ThereforeMappingValueSource ValueSource { get; set; } = ThereforeMappingValueSource.IndexField;
     public Guid? IndexFieldId { get; set; }
-    public string ConstantValue { get; set; } = string.Empty;
 }
 
 public sealed record NormalizedRect(float X, float Y, float Width, float Height);

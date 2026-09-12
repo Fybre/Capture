@@ -168,20 +168,6 @@ public class ThereforeExportWriterTests
     }
 
     [Fact]
-    public void Constant_mapping_is_configured_without_an_index_field_and_uses_Therefore_type_conversion()
-    {
-        var mapping = Mapping(ThereforeFieldType.Int);
-        mapping.ValueSource = ThereforeMappingValueSource.Constant;
-        mapping.ConstantValue = "123";
-
-        Assert.True(ThereforeExportWriter.IsConfigured(mapping));
-        var value = ThereforeExportWriter.ResolveValue(mapping, new Dictionary<Guid, string>());
-        var element = Serialize(ThereforeExportWriter.BuildIndexDataItem(mapping, value));
-
-        Assert.Equal(123, element.GetProperty("IntIndexData").GetProperty("DataValue").GetInt64());
-    }
-
-    [Fact]
     public void Index_mapping_still_resolves_the_current_document_value()
     {
         var fieldId = Guid.NewGuid();

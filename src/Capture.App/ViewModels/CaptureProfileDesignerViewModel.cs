@@ -809,9 +809,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
                 IndexDataFieldName = field.IndexDataFieldName,
                 FieldType = (int)field.FieldType,
                 Mandatory = field.Mandatory,
-                ValueSource = existing?.ValueSource ?? ThereforeMappingValueSource.IndexField,
-                IndexFieldId = existing?.IndexFieldId,
-                ConstantValue = existing?.ConstantValue ?? string.Empty
+                IndexFieldId = existing?.IndexFieldId
             };
         }).ToList();
         row.RefreshThereforeMappings();

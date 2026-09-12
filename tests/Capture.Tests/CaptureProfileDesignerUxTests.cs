@@ -258,25 +258,14 @@ public sealed class CaptureProfileDesignerUxTests
     }
 
     [Fact]
-    public void Therefore_mapping_can_switch_between_an_index_field_and_a_constant()
+    public void Therefore_mapping_selects_an_index_field()
     {
         var field = new IndexField { Name = "Invoice number" };
         var mapping = new ThereforeFieldMapping { FieldNo = 7, Caption = "Source" };
         var row = new ThereforeFieldMappingRow(mapping, [new FieldSelectionRow(new FieldRow(field), false)]);
 
-        Assert.Equal(ThereforeMappingValueSource.IndexField, row.ValueSource);
-        Assert.Equal(["Field", "Fixed"], row.ValueSourceOptions.Select(option => option.Label));
+        Assert.Null(row.SelectedField);
         row.SelectedField = Assert.Single(row.ProfileFields);
-        Assert.Equal(field.Id, mapping.IndexFieldId);
-        Assert.True(row.IsIndexFieldSource);
-
-        row.ValueSource = ThereforeMappingValueSource.Constant;
-        row.ConstantValue = "Capture";
-
-        Assert.True(row.IsConstantSource);
-        Assert.False(row.IsIndexFieldSource);
-        Assert.Equal(ThereforeMappingValueSource.Constant, mapping.ValueSource);
-        Assert.Equal("Capture", mapping.ConstantValue);
         Assert.Equal(field.Id, mapping.IndexFieldId);
     }
 
@@ -298,6 +287,31 @@ public sealed class CaptureProfileDesignerUxTests
         Assert.Equal(["Batch", "Document"], row.FieldOptions.Select(option => option.ScopeLabel));
         Assert.Equal(batchField.Id, Assert.Single(row.ThereforeMappings).SelectedField?.Id);
         Assert.True(Assert.Single(row.FieldOptions, option => option.IsBatchField).IsSelected);
+    }
+
+    [Fact]
+    public void Adding_a_field_does_not_reset_an_existing_Therefore_mapping()
+    {
+        var existingField = new FieldRow(new IndexField { Name = "Invoice number" });
+        var mapping = new ThereforeFieldMapping { FieldNo = 7, Caption = "Invoice", IndexFieldId = existingField.Id };
+        var definition = new ExportDefinition { ThereforeFieldMappings = [mapping] };
+        var row = new ExportDefinitionRow(definition, [existingField]);
+
+        Assert.Equal(existingField.Id, Assert.Single(row.ThereforeMappings).SelectedField?.Id);
+        // ThereforeFieldMappingRow.ProfileFields must be a snapshot, not an alias of the live
+        // FieldOptions collection — RebuildFieldOptions() Clear()s and re-populates FieldOptions on
+        // every field add/remove, and a still-bound ComboBox reacting to that Clear() resets its
+        // SelectedItem to null, which (two-way bound) wrote straight back into Mapping.IndexFieldId
+        // and wiped every existing Therefore mapping the moment any field was added. A plain unit test
+        // can't reproduce that binding cascade without a live Avalonia ComboBox, so assert the
+        // no-aliasing invariant directly instead.
+        Assert.NotSame(row.FieldOptions, Assert.Single(row.ThereforeMappings).ProfileFields);
+
+        var newField = new FieldRow(new IndexField { Name = "Total" });
+        row.RefreshFieldOptions([existingField, newField]);
+
+        Assert.Equal(existingField.Id, Assert.Single(row.ThereforeMappings).SelectedField?.Id);
+        Assert.Equal(existingField.Id, mapping.IndexFieldId);
     }
 
     [Fact]

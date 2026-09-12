@@ -314,7 +314,7 @@
                                     CommandParameter="{Binding}"/>
                           </Grid>
                           <TextBlock Text="Field mapping" Classes="field-label"/>
-                          <TextBlock Text="Supply each Therefore field from a Capture index field or a fixed value, or leave it unmapped." Classes="hint" TextWrapping="Wrap"/>
+                          <TextBlock Text="Supply each Therefore field from a Capture index field, or leave it unmapped. For a fixed or computed value, map to a hidden Script field instead." Classes="hint" TextWrapping="Wrap"/>
                           <ItemsControl ItemsSource="{Binding ThereforeMappings}">
                             <ItemsControl.ItemTemplate>
                               <DataTemplate>
@@ -323,27 +323,18 @@
                                     <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="•" Foreground="{DynamicResource WarnBrush}" ToolTip.Tip="Mandatory in Therefore" IsVisible="{Binding Mandatory}"/>
                                   </StackPanel>
-                                  <Grid Grid.Column="1" ColumnDefinitions="78,*" ColumnSpacing="5">
-                                    <ComboBox Grid.Column="0" ItemsSource="{Binding ValueSourceOptions}"
-                                              SelectedValueBinding="{Binding Value}" SelectedValue="{Binding ValueSource}"
-                                              ToolTip.Tip="Value source: Capture field or fixed value">
-                                      <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                    <ComboBox Grid.Column="1" ItemsSource="{Binding ProfileFields}" SelectedItem="{Binding SelectedField}"
-                                              PlaceholderText="Choose field…" IsVisible="{Binding IsIndexFieldSource}">
-                                      <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                          <StackPanel Orientation="Horizontal" Spacing="5">
-                                            <TextBlock Text="{Binding ScopeLabel}" Classes="hint"/>
-                                            <TextBlock Text="—" Classes="hint"/>
-                                            <TextBlock Text="{Binding Field.Name}"/>
-                                          </StackPanel>
-                                        </DataTemplate>
-                                      </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                    <TextBox Grid.Column="1" Text="{Binding ConstantValue}" Watermark="Enter fixed value"
-                                             IsVisible="{Binding IsConstantSource}"/>
-                                  </Grid>
+                                  <ComboBox Grid.Column="1" ItemsSource="{Binding ProfileFields}" SelectedItem="{Binding SelectedField}"
+                                            PlaceholderText="Choose field…" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                      <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                          <TextBlock Text="{Binding ScopeLabel}" Classes="hint"/>
+                                          <TextBlock Text="—" Classes="hint"/>
+                                          <TextBlock Text="{Binding Field.Name}"/>
+                                        </StackPanel>
+                                      </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                  </ComboBox>
                                 </Grid>
                               </DataTemplate>
                             </ItemsControl.ItemTemplate>
