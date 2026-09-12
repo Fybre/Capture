@@ -21,8 +21,6 @@
     <WrapPanel Margin="0,0,-6,-6">
       <ComboBox Width="132" Margin="0,0,6,6" ItemsSource="{Binding FieldKinds}" SelectedItem="{Binding NewFieldKind}"/>
       <Button Content="Add field" Margin="0,0,6,6" Command="{Binding AddSelectedKindCommand}" />
-      <Button Content="Up" Margin="0,0,6,6" Command="{Binding MoveUpCommand}" />
-      <Button Content="Down" Margin="0,0,6,6" Command="{Binding MoveDownCommand}" />
     </WrapPanel>
     <ListBox x:Name="FieldsList"
              Grid.Row="1"
@@ -39,13 +37,16 @@
                  hidden group starts, so the list reads as two groups rather than one shuffled one. -->
             <Border Height="1" Margin="0,4,0,5" Background="{DynamicResource Surface3Brush}"
                     IsVisible="{Binding IsFirstHidden}"/>
-            <Grid ColumnDefinitions="3*,2*" ColumnSpacing="8" Margin="6,4">
-              <TextBlock Text="{Binding Name}"
+            <Grid ColumnDefinitions="Auto,3*,2*" ColumnSpacing="8" Margin="6,4">
+              <TextBlock Grid.Column="0" Classes="drag-handle hint" Text="⋮⋮" Cursor="Hand"
+                         VerticalAlignment="Center" ToolTip.Tip="Drag to reorder"/>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding Name}"
                          ToolTip.Tip="{Binding Name}"
                          FontWeight="Medium"
                          TextTrimming="CharacterEllipsis"
                          VerticalAlignment="Center"/>
-              <TextBlock Grid.Column="1"
+              <TextBlock Grid.Column="2"
                          Text="{Binding PageDisplay}"
                          ToolTip.Tip="{Binding PageDisplay}"
                          Classes="hint"

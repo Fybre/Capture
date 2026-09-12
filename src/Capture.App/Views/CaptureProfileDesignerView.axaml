@@ -10,18 +10,48 @@
       <ColumnDefinition Width="360" MinWidth="280" MaxWidth="700"/>
     </Grid.ColumnDefinitions>
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="0,0,12,0">
-      <TextBlock Text="CAPTURE PROFILE" Classes="eyebrow" Margin="0,0,0,8"/>
-      <ListBox Grid.Row="1" ItemsSource="{Binding Navigation}" SelectedItem="{Binding SelectedNode}">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto" Margin="0,0,12,0">
+      <!-- Section 1: profile-wide settings — Overview and Batch. -->
+      <TextBlock Grid.Row="0" Text="CAPTURE PROFILE" Classes="eyebrow" Margin="0,0,0,8"/>
+      <ListBox Grid.Row="1" ItemsSource="{Binding ProfileNodes}" SelectedItem="{Binding SelectedNode, Mode=OneWay}"
+               SelectionChanged="OnNavListSelectionChanged">
         <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="4"/></DataTemplate></ListBox.ItemTemplate>
       </ListBox>
-      <WrapPanel Grid.Row="2" Margin="0,10,0,0">
-        <Button Content="+ Type" Command="{Binding AddDocumentTypeCommand}" Margin="0,0,4,4"/>
-        <Button Content="Copy" Command="{Binding CopyDocumentTypeCommand}" Margin="0,0,4,4"/>
-        <Button Content="−" Command="{Binding RemoveDocumentTypeCommand}" Margin="0,0,4,4"/>
-        <Button Content="↑" Command="{Binding MoveDocumentTypeUpCommand}" Margin="0,0,4,4"/>
-        <Button Content="↓" Command="{Binding MoveDocumentTypeDownCommand}" Margin="0,0,4,4"/>
+
+      <Border Grid.Row="2" Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,12,0,10"/>
+
+      <!-- Section 2: the document types this profile recognizes — the toolbar below acts only on this
+           list, so it lives directly under it rather than at the very bottom under everything. -->
+      <TextBlock Grid.Row="3" Text="DOCUMENT TYPES" Classes="eyebrow" Margin="0,0,0,8"/>
+      <ListBox x:Name="DocumentTypeList" Grid.Row="4" ItemsSource="{Binding DocumentTypeNodes}" SelectedItem="{Binding SelectedNode, Mode=OneWay}"
+               SelectionChanged="OnNavListSelectionChanged">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Grid ColumnDefinitions="Auto,*">
+              <TextBlock Grid.Column="0" Classes="drag-handle hint" Text="⋮⋮" Cursor="Hand"
+                         VerticalAlignment="Center" Margin="0,0,6,0" ToolTip.Tip="Drag to reorder"/>
+              <TextBlock Grid.Column="1" Text="{Binding Label}" Padding="4"/>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <WrapPanel Grid.Row="5" Margin="0,10,0,0">
+        <Button Content="+ Add document type" Command="{Binding AddDocumentTypeCommand}" Margin="0,0,4,4"
+                ToolTip.Tip="Add a new document type to this profile"/>
+        <Button Content="Copy" Command="{Binding CopyDocumentTypeCommand}" Margin="0,0,4,4"
+                ToolTip.Tip="Duplicate the selected document type"/>
+        <Button Content="Remove" Command="{Binding RemoveDocumentTypeCommand}" Margin="0,0,4,4"
+                ToolTip.Tip="Remove the selected document type"/>
       </WrapPanel>
+
+      <Border Grid.Row="6" Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,12,0,10"/>
+
+      <!-- Section 3: Test Capture — a tool for trying the profile out, not profile content, so it
+           doesn't belong grouped with either section above. -->
+      <ListBox Grid.Row="7" ItemsSource="{Binding UtilityNodes}" SelectedItem="{Binding SelectedNode, Mode=OneWay}"
+               SelectionChanged="OnNavListSelectionChanged">
+        <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="4"/></DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
     </Grid>
 
     <GridSplitter Grid.Column="1"
@@ -40,6 +70,16 @@
       <StackPanel Spacing="10" MaxWidth="760" HorizontalAlignment="Left">
         <TextBlock Text="Overview" Classes="h1"/>
         <TextBlock Text="One workflow for batching, classification, indexing, scripts, redaction, and export." TextWrapping="Wrap"/>
+        <Border IsVisible="{Binding ShowNoDocumentTypesHint}"
+                Background="{DynamicResource AccentWashBrush}"
+                BorderBrush="{DynamicResource AccentBrush1}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10">
+          <TextBlock TextWrapping="Wrap">
+            <Run Text="A profile has one set of shared "/><Run Text="Batch" FontWeight="SemiBold"/><Run Text=" fields, plus one or more "/><Run Text="Document Types" FontWeight="SemiBold"/><Run Text=" — each with its own rules, fields, and exports. Add your first document type from the "/><Run Text="DOCUMENT TYPES" FontWeight="SemiBold"/><Run Text=" list on the left to get started."/>
+          </TextBlock>
+        </Border>
         <CheckBox Content="Enabled" IsChecked="{Binding ProfileEnabled}"/>
         <TextBlock Text="Disabled profiles can be saved while incomplete, but cannot be selected for capture or watch folders. Enable the profile when its required setup is complete." Classes="hint" TextWrapping="Wrap"/>
         <Border IsVisible="{Binding HasEnablementIssues}"

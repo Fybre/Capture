@@ -1,3 +1,4 @@
+using Capture.App.Services;
 using Capture.App.ViewModels;
 using Capture.Core.CaptureProfiles;
 using Capture.Core.Import;
@@ -167,7 +168,7 @@ public sealed class CaptureProfileDesignerUxTests
         designer.FallbackDocumentTypeId = type.Id;
 
         Assert.Equal("Invoice", type.Name);
-        Assert.Equal("  Invoice", designer.SelectedNode?.Label);
+        Assert.Equal("Invoice", designer.SelectedNode?.Label);
         Assert.Equal(type.Id, profile.DefaultDocumentTypeId);
     }
 
@@ -405,6 +406,57 @@ public sealed class CaptureProfileDesignerUxTests
         Assert.Equal("Student", value.Value);
     }
 
+    [Fact]
+    public async Task Removing_a_document_type_without_a_confirm_service_removes_it_immediately()
+    {
+        var typeA = new DocumentTypeDefinition { Name = "Invoice" };
+        var typeB = new DocumentTypeDefinition { Name = "Receipt" };
+        var profile = new CaptureProfile { DocumentTypes = [typeA, typeB] };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+        designer.SelectedNode = designer.Navigation.Single(node => node.DocumentType == typeA);
+
+        await designer.RemoveDocumentTypeCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain(typeA, profile.DocumentTypes);
+    }
+
+    [Fact]
+    public async Task Removing_a_document_type_is_confirmed_and_can_be_cancelled()
+    {
+        var typeA = new DocumentTypeDefinition { Name = "Invoice" };
+        var profile = new CaptureProfile { DocumentTypes = [typeA] };
+        var dialogs = new RecordingFileDialogService { Host = new object() };
+        var confirm = new RecordingConfirmDialogService { Result = false };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore(), dialogs: dialogs, confirm: confirm);
+        designer.SelectedNode = designer.Navigation.Single(node => node.DocumentType == typeA);
+
+        await designer.RemoveDocumentTypeCommand.ExecuteAsync(null);
+
+        Assert.Contains(typeA, profile.DocumentTypes);
+        Assert.Equal("Remove document type?", confirm.LastTitle);
+        Assert.Contains("Invoice", confirm.LastMessage);
+
+        confirm.Result = true;
+        await designer.RemoveDocumentTypeCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain(typeA, profile.DocumentTypes);
+    }
+
+    [Fact]
+    public void Reordering_a_document_type_moves_it_and_reselects_it()
+    {
+        var typeA = new DocumentTypeDefinition { Name = "Invoice" };
+        var typeB = new DocumentTypeDefinition { Name = "Receipt" };
+        var typeC = new DocumentTypeDefinition { Name = "Statement" };
+        var profile = new CaptureProfile { DocumentTypes = [typeA, typeB, typeC] };
+        var designer = new CaptureProfileDesignerViewModel(profile, new NoOpProfileStore());
+
+        designer.ReorderDocumentType(typeA.Id, typeC.Id);
+
+        Assert.Equal([typeB, typeC, typeA], profile.DocumentTypes);
+        Assert.Equal(typeA, designer.SelectedNode?.DocumentType);
+    }
+
     private sealed class NoOpProfileStore : ICaptureProfileStore
     {
         public Task<IReadOnlyList<CaptureProfile>> GetAllAsync(CancellationToken cancellationToken = default) =>
@@ -454,6 +506,31 @@ public sealed class CaptureProfileDesignerUxTests
             LastContext = context;
             return Task.FromResult(ScriptRunResult.Ok("Student", TimeSpan.Zero));
         }
+    }
+
+    private sealed class RecordingConfirmDialogService : IConfirmDialogService
+    {
+        public bool Result { get; set; }
+        public string? LastTitle { get; private set; }
+        public string? LastMessage { get; private set; }
+
+        public Task<bool> ConfirmAsync(object owner, string title, string message, string confirmText = "Continue", string cancelText = "Cancel")
+        {
+            LastTitle = title;
+            LastMessage = message;
+            return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class RecordingFileDialogService : IFileDialogService
+    {
+        public object? Host { get; set; }
+        public Task<IReadOnlyList<string>> PickFilesAsync() => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<string?> PickFileAsync(string title) => Task.FromResult<string?>(null);
+        public Task<string?> PickFolderAsync(string title = "Import folder") => Task.FromResult<string?>(null);
+        public Task<string?> PickJsonFileAsync(string title) => Task.FromResult<string?>(null);
+        public Task<string?> PickSaveJsonFileAsync(string title, string suggestedFileName) => Task.FromResult<string?>(null);
+        public Task<string?> PickSaveFilePdfAsync(string title, string suggestedFileName) => Task.FromResult<string?>(null);
     }
 
     private sealed class RedactionSetStore(params RedactionEntitySet[] sets) : IRedactionEntitySetStore

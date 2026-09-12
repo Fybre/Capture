@@ -100,20 +100,17 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         RepartitionByHidden();
     }
 
-    [RelayCommand(CanExecute = nameof(CanMoveUp))]
-    private void MoveUp()
+    /// <summary>Moves the field identified by <paramref name="fromId"/> to sit at the position currently
+    /// held by <paramref name="toId"/> — the drag-and-drop analog of the old Up/Down buttons, driven by
+    /// FieldCollectionEditorView's drag-handle wiring. RepartitionByHidden afterwards keeps the same
+    /// visible/hidden boundary the old buttons were clamped against — a drag across it just snaps back.</summary>
+    public void ReorderField(Guid fromId, Guid toId)
     {
-        var index = Fields.IndexOf(SelectedField!);
-        Fields.Move(index, index - 1);
-        NotifyCommands();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanMoveDown))]
-    private void MoveDown()
-    {
-        var index = Fields.IndexOf(SelectedField!);
-        Fields.Move(index, index + 1);
-        NotifyCommands();
+        var from = Fields.FirstOrDefault(field => field.Field.Id == fromId);
+        var to = Fields.FirstOrDefault(field => field.Field.Id == toId);
+        if (from is null || to is null || ReferenceEquals(from, to)) return;
+        Fields.Move(Fields.IndexOf(from), Fields.IndexOf(to));
+        RepartitionByHidden();
     }
 
     /// <summary>Keeps hidden fields grouped after every visible field, in a stable partition — a Hidden
@@ -231,26 +228,6 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         }
     }
     private bool HasSelection() => SelectedField is not null;
-
-    // Fields is kept stably partitioned (visible fields, then hidden fields — see RepartitionByHidden)
-    // so the hidden-group divider stays accurate; Move must not let a row cross that boundary.
-    private int VisibleCount => Fields.Count(field => !field.Hidden);
-
-    private bool CanMoveUp()
-    {
-        if (SelectedField is null) return false;
-        var index = Fields.IndexOf(SelectedField);
-        if (index <= 0) return false;
-        return !SelectedField.Hidden || index > VisibleCount;
-    }
-
-    private bool CanMoveDown()
-    {
-        if (SelectedField is null) return false;
-        var index = Fields.IndexOf(SelectedField);
-        if (index >= Fields.Count - 1) return false;
-        return SelectedField.Hidden || index < VisibleCount - 1;
-    }
     private bool CanEditScript(FieldRow? row) => row is not null && _editScript is not null;
     private bool CanTestScript(FieldRow? row) => row is not null && _testScript is not null;
     private bool CanSuggestKeyFromSample() => SelectedField?.IsKeyValue == true && _suggestKeyFromSample is not null;
@@ -366,8 +343,6 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
     private void NotifyCommands()
     {
         RemoveCommand.NotifyCanExecuteChanged();
-        MoveUpCommand.NotifyCanExecuteChanged();
-        MoveDownCommand.NotifyCanExecuteChanged();
         SuggestKeyFromSampleCommand.NotifyCanExecuteChanged();
         SuggestValueFromSampleCommand.NotifyCanExecuteChanged();
         ExtractAiSampleCommand.NotifyCanExecuteChanged();

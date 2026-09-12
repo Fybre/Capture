@@ -70,6 +70,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private readonly ICaptureProfileStore _store;
     private readonly CaptureWorkflowService? _workflow;
     private readonly IFileDialogService? _dialogs;
+    private readonly IConfirmDialogService? _confirm;
     private readonly IAppPaths? _paths;
     private readonly IPdfRasterizer? _pdfs;
     private readonly IImagePageImporter? _images;
@@ -104,12 +105,14 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         IPiiDetector? piiDetector = null,
         IThereforeCategoryPickerDialogService? thereforeCategoryPicker = null,
         IAiExtractor? ai = null,
-        IHelpWindowService? help = null)
+        IHelpWindowService? help = null,
+        IConfirmDialogService? confirm = null)
     {
         Profile = profile;
         _store = store;
         _workflow = workflow;
         _dialogs = dialogs;
+        _confirm = confirm;
         _paths = paths;
         _pdfs = pdfs;
         _images = images;
@@ -164,6 +167,19 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
 
     public CaptureProfile Profile { get; }
     public ObservableCollection<CaptureDesignerNode> Navigation { get; } = [];
+
+    // Three grouped views over the same Navigation nodes, so the nav column can render "Capture
+    // Profile" (Overview/Batch), "Document Types", and "Test Capture" as visually separate sections
+    // with dividers, while every node stays a CaptureDesignerNode — SelectedNode, IsXSelected, and the
+    // rename path in DocumentTypeName all keep working completely unchanged.
+    public ObservableCollection<CaptureDesignerNode> ProfileNodes { get; } = [];
+    public ObservableCollection<CaptureDesignerNode> DocumentTypeNodes { get; } = [];
+    public ObservableCollection<CaptureDesignerNode> UtilityNodes { get; } = [];
+
+    /// <summary>Shown on the Overview panel only while the profile has no document types yet — the one
+    /// moment a first-time user actually needs "a profile has shared Batch fields plus one or more
+    /// Document Types" explained to them.</summary>
+    public bool ShowNoDocumentTypesHint => Profile.DocumentTypes.Count == 0;
     public RuleSetEditorViewModel BatchRules { get; }
     public FieldCollectionEditorViewModel BatchFields { get; }
     public ScriptCollectionEditorViewModel BatchScripts { get; }
@@ -243,7 +259,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         {
             if (SelectedDocumentType is not { } type || type.Name == value) return;
             type.Name = value;
-            if (SelectedNode is not null) SelectedNode.Label = $"  {value}";
+            if (SelectedNode is not null) SelectedNode.Label = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(FallbackDocumentTypes));
             RefreshEnablementIssues();
@@ -649,21 +665,45 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         return candidate;
     }
 
+    // Removing a document type is irreversible (unlike disabling the profile), so warn about what it
+    // takes with it — mirrors CaptureProfileDialogService.ConfirmDeleteAsync's impact-aware style for
+    // deleting a whole profile.
     [RelayCommand]
-    private void RemoveDocumentType()
+    private async Task RemoveDocumentTypeAsync()
     {
         if (SelectedDocumentType is not { } selected) return;
+        if (_confirm is not null && _dialogs?.Host is { } host)
+        {
+            var confirmed = await _confirm.ConfirmAsync(
+                host,
+                "Remove document type?",
+                $"Remove '{selected.Name}'? Its fields, rules, scripts, and exports will be lost. " +
+                "Documents already captured under this type keep their data, but this can't be undone.",
+                confirmText: "Remove");
+            if (!confirmed) return;
+        }
+
         Profile.DocumentTypes.Remove(selected);
         if (Profile.DefaultDocumentTypeId == selected.Id) Profile.DefaultDocumentTypeId = null;
         RefreshNavigation();
         RefreshDirtyState();
     }
 
-    [RelayCommand]
-    private void MoveDocumentTypeUp() => MoveDocumentType(-1);
-
-    [RelayCommand]
-    private void MoveDocumentTypeDown() => MoveDocumentType(1);
+    /// <summary>Moves the document type identified by <paramref name="fromId"/> to sit at the position
+    /// currently held by <paramref name="toId"/> — the drag-and-drop analog of the old Up/Down buttons,
+    /// driven by CaptureProfileDesignerView's drag-handle wiring.</summary>
+    public void ReorderDocumentType(Guid fromId, Guid toId)
+    {
+        var fromIndex = Profile.DocumentTypes.FindIndex(type => type.Id == fromId);
+        var toIndex = Profile.DocumentTypes.FindIndex(type => type.Id == toId);
+        if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) return;
+        FlushSelectedDocument();
+        var moved = Profile.DocumentTypes[fromIndex];
+        Profile.DocumentTypes.RemoveAt(fromIndex);
+        Profile.DocumentTypes.Insert(toIndex, moved);
+        RefreshNavigation(moved.Id);
+        RefreshDirtyState();
+    }
 
     [RelayCommand]
     private async Task SaveAsync()
@@ -948,28 +988,31 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         OnPropertyChanged(nameof(DocumentExports));
     }
 
-    private void MoveDocumentType(int offset)
-    {
-        if (SelectedDocumentType is not { } selected) return;
-        FlushSelectedDocument();
-        var oldIndex = Profile.DocumentTypes.IndexOf(selected);
-        var newIndex = oldIndex + offset;
-        if (newIndex < 0 || newIndex >= Profile.DocumentTypes.Count) return;
-        Profile.DocumentTypes.RemoveAt(oldIndex);
-        Profile.DocumentTypes.Insert(newIndex, selected);
-        RefreshNavigation(selected.Id);
-        RefreshDirtyState();
-    }
-
     private void RefreshNavigation(Guid? selectType = null)
     {
         Navigation.Clear();
         Navigation.Add(new("Overview", CaptureDesignerSection.Overview));
         Navigation.Add(new("Batch", CaptureDesignerSection.Batch));
-        foreach (var type in Profile.DocumentTypes) Navigation.Add(new($"  {type.Name}", CaptureDesignerSection.DocumentType, type));
+        foreach (var type in Profile.DocumentTypes) Navigation.Add(new(type.Name, CaptureDesignerSection.DocumentType, type));
         Navigation.Add(new("Test Capture", CaptureDesignerSection.TestCapture));
+
+        ProfileNodes.Clear();
+        DocumentTypeNodes.Clear();
+        UtilityNodes.Clear();
+        foreach (var node in Navigation)
+        {
+            var target = node.Section switch
+            {
+                CaptureDesignerSection.Overview or CaptureDesignerSection.Batch => ProfileNodes,
+                CaptureDesignerSection.DocumentType => DocumentTypeNodes,
+                _ => UtilityNodes
+            };
+            target.Add(node);
+        }
+
         OnPropertyChanged(nameof(FallbackDocumentTypes));
         OnPropertyChanged(nameof(FallbackDocumentTypeId));
+        OnPropertyChanged(nameof(ShowNoDocumentTypesHint));
         RefreshEnablementIssues();
         SelectedNode = selectType is { } id
             ? Navigation.First(item => item.DocumentType?.Id == id)

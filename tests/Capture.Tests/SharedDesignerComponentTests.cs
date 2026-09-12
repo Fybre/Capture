@@ -58,7 +58,7 @@ public class SharedDesignerComponentTests
         var second = new IndexField { Name = "Second" };
         var editor = new FieldCollectionEditorViewModel([first, second]) { SelectedField = new FieldRow(second) };
         editor.SelectedField = editor.Fields[1];
-        editor.MoveUpCommand.Execute(null);
+        editor.ReorderField(second.Id, first.Id);
         Assert.Equal([second.Id, first.Id], editor.ToModels().Select(field => field.Id));
     }
 
