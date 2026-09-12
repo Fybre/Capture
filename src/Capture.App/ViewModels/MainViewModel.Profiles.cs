@@ -15,6 +15,13 @@ public partial class MainViewModel
     public ObservableCollection<CaptureProfile> CaptureProfiles { get; } = [];
     public bool HasProfiles => CaptureProfiles.Count > 0;
 
+    /// <summary>What the toolbar's Capture profile picker actually binds its ItemsSource to — the same
+    /// enabled profiles as <see cref="CaptureProfiles"/>, with the "None" sentinel always first. Kept
+    /// separate from <see cref="CaptureProfiles"/> so the sentinel never leaks into the id-based lookups
+    /// elsewhere (ApplyWatchAsync's enabled-profile-id set, Import.cs's profile-by-id resolution) that use
+    /// CaptureProfiles directly.</summary>
+    public ObservableCollection<CaptureProfile> CaptureProfilePickerItems { get; } = [];
+
     /// <summary>All profiles regardless of Enabled state. Used to resolve settings for documents that
     /// were already captured under a profile that has since been disabled — disabling a profile stops it
     /// from being offered for new capture work, but must not break export/ready/redaction for documents
@@ -64,8 +71,14 @@ public partial class MainViewModel
         await ApplyWatchAsync();
     }
 
-    [RelayCommand]
-    private void ClearCaptureProfile() => SelectedCaptureProfile = null;
+    /// <summary>The picker's actual bound selection — translates between the "None" sentinel shown in
+    /// the ComboBox and a null <see cref="SelectedCaptureProfile"/>, so the rest of the app (persistence,
+    /// summary text, ad hoc fallback) keeps treating "no profile" as null exactly as before.</summary>
+    public CaptureProfile SelectedCaptureProfileOrNone
+    {
+        get => SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted;
+        set => SelectedCaptureProfile = value.Id == BuiltInCaptureProfiles.UnsortedId ? null : value;
+    }
 
     private async Task LoadProfilesAsync()
     {
@@ -81,6 +94,10 @@ public partial class MainViewModel
             CaptureProfiles.Clear();
             foreach (var profile in all.Where(profile => profile.Enabled))
                 CaptureProfiles.Add(profile);
+            CaptureProfilePickerItems.Clear();
+            CaptureProfilePickerItems.Add(BuiltInCaptureProfiles.Unsorted);
+            foreach (var profile in CaptureProfiles)
+                CaptureProfilePickerItems.Add(profile);
             SelectedCaptureProfile = restoreId is { } id
                 ? CaptureProfiles.FirstOrDefault(profile => profile.Id == id)
                 : CaptureProfiles.FirstOrDefault();
@@ -105,6 +122,7 @@ public partial class MainViewModel
         ScanCommand.NotifyCanExecuteChanged();
         StartNewBatchCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(SelectedCaptureProfileSummary));
+        OnPropertyChanged(nameof(SelectedCaptureProfileOrNone));
         _ = RefreshManualBatchStateAsync();
         if (!_restoringProfileSelection) _ = PersistLastProfileAsync();
     }

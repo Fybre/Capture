@@ -298,24 +298,15 @@
                         <ComboBox MinWidth="140"
                                   MaxWidth="190"
                                   Width="190"
-                                  ItemsSource="{Binding CaptureProfiles}"
-                                  SelectedItem="{Binding SelectedCaptureProfile}"
-                                  ToolTip.Tip="{Binding SelectedCaptureProfileSummary}"
-                                  PlaceholderText="None">
+                                  ItemsSource="{Binding CaptureProfilePickerItems}"
+                                  SelectedItem="{Binding SelectedCaptureProfileOrNone}"
+                                  ToolTip.Tip="{Binding SelectedCaptureProfileSummary}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="captureProfiles:CaptureProfile">
                                     <TextBlock Text="{Binding Name}" />
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <Button Classes="ghost"
-                                Width="22" Height="22" Padding="0" CornerRadius="6"
-                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Command="{Binding ClearCaptureProfileCommand}"
-                                IsVisible="{Binding SelectedCaptureProfile, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                ToolTip.Tip="Clear capture profile">
-                            <TextBlock Text="×" FontSize="15" FontWeight="Medium" />
-                        </Button>
                         <Button Content="Start new batch"
                                 Command="{Binding StartNewBatchCommand}"
                                 Classes="ghost"
