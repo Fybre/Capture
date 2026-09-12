@@ -244,12 +244,69 @@ public sealed class CaptureMaterializationLifecycleTests
         }
     }
 
+    // Stands in for PdfPigSubsetWriter, which really does throw when handed a non-PDF file (PdfPig's
+    // own xref/trailer parser rejects it outright) — used to prove a single-source scan/import no
+    // longer reaches the subset-writer branch at all now that it isn't a PDF.
+    private sealed class ThrowingSubsetWriter : IPdfSubsetWriter
+    {
+        public Task WritePagesAsync(string sourcePdfPath, IReadOnlyList<int> pageNumbers, string outputPath, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Could not find any xref tables or streams in this document and could not resolve brute force positions.");
+    }
+
     private sealed class CopyMergedWriter : IMergedDocumentWriter
     {
         public Task WriteAsync(IReadOnlyList<DocumentPage> pages, string outputPath, CancellationToken cancellationToken = default)
         {
             File.Copy(pages[0].ImagePath, outputPath, overwrite: true);
             return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Materializing_a_single_non_pdf_source_uses_the_merged_writer_and_stores_it_as_pdf()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-single-scan-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var sourceImage = Path.Combine(root, "scan.png");
+            await File.WriteAllTextAsync(sourceImage, "image placeholder");
+            var paths = new AppPaths(Path.Combine(root, "app"));
+            var documents = new SqliteDocumentStore(paths);
+            await documents.InitializeAsync();
+            var indexes = new JsonIndexValueStore(paths);
+            var type = new DocumentTypeDefinition { Name = "Unsorted" };
+            var profile = new CaptureProfile { DefaultDocumentTypeId = type.Id, DocumentTypes = [type] };
+            var plannedDocument = new PlannedDocument(Guid.NewGuid(), type, [new SourcePage("input-1", 1)], []);
+            var plan = new CapturePlan([new PlannedBatch(Guid.NewGuid(), true, [], [plannedDocument])], [], []);
+            var source = new CaptureMaterializationSource(
+                "input-1",
+                sourceImage,
+                DocumentSource.Scan,
+                [new RasterPage(1, sourceImage, 100, 100, 200)],
+                new Dictionary<int, PageLattice> { [1] = new() { PageNumber = 1, PixelWidth = 100, PixelHeight = 100, Dpi = 200 } });
+            var materializer = new CapturePlanMaterializer(
+                paths,
+                documents,
+                indexes,
+                new JsonLatticeStore(paths),
+                new ProfileApplicator(new FixedBarcodeDecoder()),
+                new ThrowingSubsetWriter(),
+                new CopyMergedWriter());
+
+            var result = await materializer.MaterializeAsync(
+                profile,
+                plan,
+                new Dictionary<string, CaptureMaterializationSource> { [source.Id] = source },
+                inputChannel: "manual");
+
+            var document = Assert.Single(result.Documents);
+            Assert.True(ImportFormats.IsPdf(document.StoredPath));
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(root, recursive: true);
         }
     }
 }

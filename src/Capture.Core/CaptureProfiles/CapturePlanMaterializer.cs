@@ -200,10 +200,23 @@ public sealed class CapturePlanMaterializer(
         if (planned.SourcePages.Count == 0) throw new InvalidOperationException("A planned document must contain a page.");
         var sourceIds = planned.SourcePages.Select(page => page.InputId).Distinct().ToList();
         var primarySource = sources[sourceIds[0]];
+        // subsetWriter only knows how to carve pages out of an existing PDF (it opens SourcePath as one
+        // — see PdfPigSubsetWriter) — a single-page scan or a single non-PDF image import also lands
+        // here with sourceIds.Count == 1, and without this check would hand it a PNG, which PdfPig's
+        // xref/trailer parser rejects outright ("could not find any xref tables or streams..."). Only a
+        // genuinely single-PDF-source document can safely skip the (image-decoding) mergedWriter path.
+        var isSingleSourcePdf = sourceIds.Count == 1 && ImportFormats.IsPdf(primarySource.SourcePath);
         var id = Guid.NewGuid();
         paths.EnsureCreated();
         Directory.CreateDirectory(paths.DocumentPagesDirectory(id));
-        var originalName = sourceIds.Count == 1 ? Path.GetFileName(primarySource.SourcePath) : $"Capture {id:N}.pdf";
+        // mergedWriter always writes real PDF bytes regardless of the source format, so the stored
+        // file's name must carry a .pdf extension whenever it takes that path — every other IsPdf()
+        // check in the app (PageManagementService, LatticeBuilder) trusts the extension, not the bytes.
+        var originalName = isSingleSourcePdf
+            ? Path.GetFileName(primarySource.SourcePath)
+            : sourceIds.Count == 1
+                ? Path.ChangeExtension(Path.GetFileName(primarySource.SourcePath), ".pdf")
+                : $"Capture {id:N}.pdf";
         var output = paths.DocumentOriginalPath(id, originalName);
 
         var pageRows = new List<DocumentPage>();
@@ -217,7 +230,7 @@ public sealed class CapturePlanMaterializer(
             pageRows.Add(new DocumentPage { DocumentId = id, PageNumber = index + 1, SourcePageNumber = index + 1, ImagePath = imagePath, Width = raster.Width, Height = raster.Height, Dpi = raster.Dpi });
         }
 
-        if (sourceIds.Count == 1)
+        if (isSingleSourcePdf)
             await subsetWriter.WritePagesAsync(primarySource.SourcePath, planned.SourcePages.Select(page => page.PageNumber).ToList(), output, cancellationToken).ConfigureAwait(false);
         else
             await mergedWriter.WriteAsync(pageRows, output, cancellationToken).ConfigureAwait(false);
