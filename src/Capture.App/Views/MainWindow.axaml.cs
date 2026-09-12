@@ -518,6 +518,7 @@ public partial class MainWindow : Window
         strip.AddHandler(PointerReleasedEvent, OnPageStripPointerReleased, RoutingStrategies.Tunnel, true);
         strip.AddHandler(DragDrop.DragOverEvent, OnPageStripDragOver, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
         strip.AddHandler(DragDrop.DropEvent, OnPageStripDrop, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
+        strip.AddHandler(DragDrop.DragLeaveEvent, OnPageStripDragLeave, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, true);
     }
 
     private void OnPageStripPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -556,6 +557,7 @@ public partial class MainWindow : Window
             _pressPageThumbnail = null;
             _pressPageStrip = null;
             _pageDragging = false;
+            SetPageDropIndicator(null, null);
         }
     }
 
@@ -570,30 +572,102 @@ public partial class MainWindow : Window
 
     private void OnPageStripDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = sender is ListBox strip && CanDropPage(strip, e) ? DragDropEffects.Move : DragDropEffects.None;
+        PageThumbnailRow? beforeRow = null;
+        PageThumbnailRow? lastRow = null;
+        var resolved = sender is ListBox strip && TryGetDragPageNumber(e.Data, out var fromPageNumber)
+            && TryResolvePageDrop(strip, e.Source, e.GetPosition(strip), fromPageNumber, out beforeRow, out lastRow);
+
+        e.DragEffects = resolved ? DragDropEffects.Move : DragDropEffects.None;
+        SetPageDropIndicator(resolved ? beforeRow : null, resolved ? lastRow : null);
         e.Handled = true;
     }
+
+    private void OnPageStripDragLeave(object? sender, RoutedEventArgs e) => SetPageDropIndicator(null, null);
 
     private async void OnPageStripDrop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
+        SetPageDropIndicator(null, null);
         if (sender is not ListBox strip || DataContext is not MainViewModel viewModel || !TryGetDragPageNumber(e.Data, out var fromPageNumber))
             return;
 
-        var target = ThumbnailAt(strip, e.Source, e.GetPosition(strip));
-        if (target is null || target.PageNumber == fromPageNumber)
+        if (!TryResolvePageDrop(strip, e.Source, e.GetPosition(strip), fromPageNumber, out var beforeRow, out _))
             return;
 
-        await viewModel.ReorderPagesAsync(fromPageNumber, target.PageNumber);
+        await viewModel.ReorderPagesAsync(fromPageNumber, beforeRow?.PageNumber);
     }
 
-    private bool CanDropPage(ListBox strip, DragEventArgs e)
-    {
-        if (!TryGetDragPageNumber(e.Data, out var fromPageNumber))
-            return false;
+    // Tracks which indicator (if any) is currently lit, so moving the drag to a new target/end clears the
+    // old one rather than leaving stale lines behind. beforeRow's above-indicator and lastRow's
+    // below-indicator are mutually exclusive per drag position (see TryResolvePageDrop), but both fields
+    // are tracked since either can independently need clearing when the drag moves on.
+    private PageThumbnailRow? _pageDropIndicatorAboveRow;
+    private PageThumbnailRow? _pageDropIndicatorBelowRow;
 
-        var target = ThumbnailAt(strip, e.Source, e.GetPosition(strip));
-        return target is not null && target.PageNumber != fromPageNumber;
+    private void SetPageDropIndicator(PageThumbnailRow? beforeRow, PageThumbnailRow? lastRowIfAppending)
+    {
+        var belowRow = beforeRow is null ? lastRowIfAppending : null;
+
+        if (!ReferenceEquals(_pageDropIndicatorAboveRow, beforeRow))
+        {
+            if (_pageDropIndicatorAboveRow is not null) _pageDropIndicatorAboveRow.ShowDropIndicatorAbove = false;
+            _pageDropIndicatorAboveRow = beforeRow;
+            if (_pageDropIndicatorAboveRow is not null) _pageDropIndicatorAboveRow.ShowDropIndicatorAbove = true;
+        }
+
+        if (!ReferenceEquals(_pageDropIndicatorBelowRow, belowRow))
+        {
+            if (_pageDropIndicatorBelowRow is not null) _pageDropIndicatorBelowRow.ShowDropIndicatorBelow = false;
+            _pageDropIndicatorBelowRow = belowRow;
+            if (_pageDropIndicatorBelowRow is not null) _pageDropIndicatorBelowRow.ShowDropIndicatorBelow = true;
+        }
+    }
+
+    /// <summary>Resolves where a page drag over the thumbnail strip would land. <paramref name="beforeRow"/>
+    /// null (with a true return) means "insert after everything" — the very last position, which plain
+    /// hit-testing against thumbnails can't express on its own since there's no thumbnail representing
+    /// "after the last one". Splits each row's bounds into a top and bottom half so dropping on a row's
+    /// bottom half means "after it" rather than "before it", and falls back to "after the last row" when
+    /// the pointer is below the last thumbnail entirely (e.g. empty space under a short list).</summary>
+    private static bool TryResolvePageDrop(ListBox strip, object? source, Point position, int fromPageNumber, out PageThumbnailRow? beforeRow, out PageThumbnailRow? lastRow)
+    {
+        beforeRow = null;
+        lastRow = null;
+        var rows = strip.Items.OfType<PageThumbnailRow>().Where(row => row.PageNumber != fromPageNumber).ToList();
+        if (rows.Count == 0)
+            return false;
+        lastRow = rows[^1];
+
+        var hitRow = ThumbnailAt(strip, source, position);
+        if (hitRow is not null && hitRow.PageNumber != fromPageNumber)
+        {
+            var isBottomHalf = false;
+            if (strip.ContainerFromItem(hitRow) is Control container)
+            {
+                var top = container.TranslatePoint(new Point(0, 0), strip) ?? default;
+                isBottomHalf = position.Y - top.Y > container.Bounds.Height / 2;
+            }
+
+            if (!isBottomHalf)
+            {
+                beforeRow = hitRow;
+                return true;
+            }
+
+            var idx = rows.IndexOf(hitRow);
+            beforeRow = idx >= 0 && idx + 1 < rows.Count ? rows[idx + 1] : null;
+            return true;
+        }
+
+        if (strip.ContainerFromItem(lastRow) is Control lastContainer
+            && lastContainer.TranslatePoint(new Point(0, 0), strip) is { } lastTop
+            && position.Y >= lastTop.Y)
+        {
+            beforeRow = null;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryGetDragPageNumber(IDataObject data, out int pageNumber)

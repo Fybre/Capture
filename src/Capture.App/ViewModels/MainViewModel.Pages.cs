@@ -265,9 +265,10 @@ public partial class MainViewModel
         }
     }
 
-    /// <summary>Moves a single page to sit at another page's position, called from the thumbnail strip's
-    /// drag-and-drop handler in code-behind — everything after the drop point shifts along by one.</summary>
-    public async Task ReorderPagesAsync(int fromPageNumber, int toPageNumber)
+    /// <summary>Moves a single page to sit immediately before another page's position, or to the very end
+    /// when <paramref name="toPageNumber"/> is null, called from the thumbnail strip's drag-and-drop
+    /// handler in code-behind — everything after the drop point shifts along by one.</summary>
+    public async Task ReorderPagesAsync(int fromPageNumber, int? toPageNumber)
     {
         // Unlike DeleteSelectedPagesAsync/SplitDocumentAtCurrentPageAsync, this isn't a [RelayCommand]
         // gated on CanExecute(!IsBusy) — it's called directly from the drop handler in code-behind, so a
@@ -279,9 +280,11 @@ public partial class MainViewModel
             return;
 
         var newOrder = _pages.Select(page => page.PageNumber).OrderBy(number => number).ToList();
-        if (!newOrder.Contains(toPageNumber) || !newOrder.Remove(fromPageNumber))
+        if (toPageNumber is { } target && !newOrder.Contains(target))
             return;
-        var insertAt = newOrder.IndexOf(toPageNumber);
+        if (!newOrder.Remove(fromPageNumber))
+            return;
+        var insertAt = toPageNumber is { } insertBefore ? newOrder.IndexOf(insertBefore) : newOrder.Count;
         newOrder.Insert(insertAt < 0 ? newOrder.Count : insertAt, fromPageNumber);
 
         IsBusy = true;
