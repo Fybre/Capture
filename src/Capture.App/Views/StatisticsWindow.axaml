@@ -1,0 +1,199 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="using:Capture.App.Converters"
+        x:Class="Capture.App.Views.StatisticsWindow"
+        x:CompileBindings="False"
+        Title="Capture Statistics"
+        Icon="/Assets/capture.ico"
+        Width="880"
+        Height="780"
+        MinWidth="640"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Window.Styles>
+        <Style Selector="TextBlock.stats-title">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.stats-lead">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.section-title">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.stat-value">
+            <Setter Property="FontSize" Value="28" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.stat-label">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+        <Style Selector="Border.stat-card">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush1}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="16,14" />
+        </Style>
+    </Window.Styles>
+
+    <Grid Background="{DynamicResource GroundBrush}">
+        <TextBlock Text="Loading statistics…" IsVisible="{Binding IsLoading}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Classes="stats-lead" />
+
+        <ScrollViewer IsVisible="{Binding !IsLoading}" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24" Spacing="18">
+                <TextBlock Text="Capture Statistics" Classes="stats-title" />
+                <TextBlock Text="Every document this installation has ever captured — not just what's currently in the Inbox."
+                           Classes="stats-lead" TextWrapping="Wrap" />
+
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                    <Border Grid.Column="0" Classes="stat-card">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding TotalInInbox}" Classes="stat-value" />
+                            <TextBlock Text="In Inbox" Classes="stat-label" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Classes="stat-card">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding TotalInTrash}" Classes="stat-value" />
+                            <TextBlock Text="In Trash" Classes="stat-label" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Classes="stat-card">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding TotalExportedAllTime}" Classes="stat-value" />
+                            <TextBlock Text="Exported (all time)" Classes="stat-label" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Documents by status" Classes="section-title" />
+                        <ItemsControl ItemsSource="{Binding StatusBreakdown}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="120,*,44" Margin="0,4">
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                                        <Border Grid.Column="1" Height="14" Background="{DynamicResource Surface3Brush}" CornerRadius="3">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
+                                                    <ColumnDefinition Width="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Fill}}" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="1" Background="{DynamicResource AccentBrush1}" CornerRadius="3" />
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="{Binding CountDisplay}" TextAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Captured per day — last 30 days" Classes="section-title" />
+                        <ItemsControl ItemsSource="{Binding CapturedPerDay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="3" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="18" Height="90" ToolTip.Tip="{Binding Label}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
+                                                <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Fill}}" />
+                                            </Grid.RowDefinitions>
+                                            <Border Grid.Row="1" Background="{DynamicResource AccentBrush1}" CornerRadius="2,2,0,0" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid ColumnDefinitions="*,*">
+                            <TextBlock Text="{Binding CapturedPerDay[0].Label}" Classes="stat-label" />
+                            <TextBlock Grid.Column="1" Text="Today" Classes="stat-label" TextAlignment="Right" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card" IsVisible="{Binding HasExportActivity}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Exported per day — last 30 days" Classes="section-title" />
+                        <ItemsControl ItemsSource="{Binding ExportedPerDay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="3" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="18" Height="90" ToolTip.Tip="{Binding Label}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
+                                                <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Fill}}" />
+                                            </Grid.RowDefinitions>
+                                            <Border Grid.Row="1" Background="{DynamicResource GoodBrush}" CornerRadius="2,2,0,0" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid ColumnDefinitions="*,*">
+                            <TextBlock Text="{Binding ExportedPerDay[0].Label}" Classes="stat-label" />
+                            <TextBlock Grid.Column="1" Text="Today" Classes="stat-label" TextAlignment="Right" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <TextBlock Text="No exports recorded yet — this chart appears once at least one document has been exported."
+                           Classes="stats-lead" TextWrapping="Wrap"
+                           IsVisible="{Binding !HasExportActivity}" />
+
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Top document types by volume" Classes="section-title" />
+                        <ItemsControl ItemsSource="{Binding TopDocumentTypes}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="160,*,44" Margin="0,4">
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <Border Grid.Column="1" Height="14" Background="{DynamicResource Surface3Brush}" CornerRadius="3">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
+                                                    <ColumnDefinition Width="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Fill}}" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="1" Background="{DynamicResource AccentBrush1}" CornerRadius="3" />
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="{Binding CountDisplay}" TextAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="No documents captured yet." Classes="stats-lead"
+                                   IsVisible="{Binding !HasTopDocumentTypes}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

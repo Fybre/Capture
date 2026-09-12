@@ -84,6 +84,7 @@ public static class ServiceConfiguration
         services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
         services.AddSingleton<IHelpWindowService, HelpWindowService>();
         services.AddSingleton<IAboutDialogService, AboutDialogService>();
+        services.AddSingleton<IStatisticsWindowService, StatisticsWindowService>();
         services.AddSingleton<IConfirmDialogService, ConfirmDialogService>();
         services.AddSingleton<IExportPdfDialogService, ExportPdfDialogService>();
         services.AddSingleton<IScriptEditorDialogService, ScriptEditorDialogService>();

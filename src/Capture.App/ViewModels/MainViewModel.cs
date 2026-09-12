@@ -47,6 +47,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly ISettingsDialogService _settings;
     private readonly IHelpWindowService _help;
     private readonly IAboutDialogService _about;
+    private readonly IStatisticsWindowService _statistics;
     private readonly IRedactionCandidateStore _redactionCandidates;
     private readonly IRedactionEntitySetStore _redactionSets;
     private readonly RedactionApplier _redactionApplier;
@@ -89,6 +90,7 @@ public partial class MainViewModel : ViewModelBase
         ISettingsDialogService settings,
         IHelpWindowService help,
         IAboutDialogService about,
+        IStatisticsWindowService statistics,
         IRedactionCandidateStore redactionCandidates,
         IRedactionEntitySetStore redactionSets,
         RedactionApplier redactionApplier,
@@ -122,6 +124,7 @@ public partial class MainViewModel : ViewModelBase
         _settings = settings;
         _help = help;
         _about = about;
+        _statistics = statistics;
         _redactionCandidates = redactionCandidates;
         _redactionSets = redactionSets;
         _redactionApplier = redactionApplier;
@@ -383,6 +386,16 @@ public partial class MainViewModel : ViewModelBase
         if (host is null)
             return;
         await _about.ShowAsync(host);
+        _dialogs.Host = host;
+    }
+
+    [RelayCommand]
+    private async Task OpenStatisticsAsync()
+    {
+        var host = _dialogs.Host;
+        if (host is null)
+            return;
+        await _statistics.ShowAsync(host);
         _dialogs.Host = host;
     }
 
