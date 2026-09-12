@@ -64,6 +64,7 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
             Watch(row);
             Fields.Add(row);
         }
+        RepartitionByHidden();
         RefreshValueSourceOptions();
     }
 
@@ -82,6 +83,7 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         Watch(row);
         Fields.Add(row);
         SelectedField = row;
+        RepartitionByHidden();
         return row;
     }
 
@@ -95,6 +97,7 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         var index = Fields.IndexOf(SelectedField);
         Fields.RemoveAt(index);
         SelectedField = Fields.Count == 0 ? null : Fields[Math.Min(index, Fields.Count - 1)];
+        RepartitionByHidden();
     }
 
     [RelayCommand(CanExecute = nameof(CanMoveUp))]
@@ -110,6 +113,31 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
     {
         var index = Fields.IndexOf(SelectedField!);
         Fields.Move(index, index + 1);
+        NotifyCommands();
+    }
+
+    /// <summary>Keeps hidden fields grouped after every visible field, in a stable partition — a Hidden
+    /// checkbox toggle or an added/removed field can otherwise leave a hidden field sitting above a
+    /// visible one, which would put the divider (<see cref="FieldRow.IsFirstHidden"/>) in the wrong
+    /// place. Uses ObservableCollection.Move rather than Clear+re-Add so SelectedField/selection state
+    /// survives the reshuffle.</summary>
+    private void RepartitionByHidden()
+    {
+        var target = Fields.Where(field => !field.Hidden).Concat(Fields.Where(field => field.Hidden)).ToList();
+        for (var i = 0; i < target.Count; i++)
+        {
+            var currentIndex = Fields.IndexOf(target[i]);
+            if (currentIndex != i)
+                Fields.Move(currentIndex, i);
+        }
+
+        FieldRow? previous = null;
+        foreach (var field in Fields)
+        {
+            field.IsFirstHidden = field.Hidden && previous?.Hidden != true;
+            previous = field;
+        }
+
         NotifyCommands();
     }
 
@@ -203,8 +231,26 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         }
     }
     private bool HasSelection() => SelectedField is not null;
-    private bool CanMoveUp() => SelectedField is not null && Fields.IndexOf(SelectedField) > 0;
-    private bool CanMoveDown() => SelectedField is not null && Fields.IndexOf(SelectedField) < Fields.Count - 1;
+
+    // Fields is kept stably partitioned (visible fields, then hidden fields — see RepartitionByHidden)
+    // so the hidden-group divider stays accurate; Move must not let a row cross that boundary.
+    private int VisibleCount => Fields.Count(field => !field.Hidden);
+
+    private bool CanMoveUp()
+    {
+        if (SelectedField is null) return false;
+        var index = Fields.IndexOf(SelectedField);
+        if (index <= 0) return false;
+        return !SelectedField.Hidden || index > VisibleCount;
+    }
+
+    private bool CanMoveDown()
+    {
+        if (SelectedField is null) return false;
+        var index = Fields.IndexOf(SelectedField);
+        if (index >= Fields.Count - 1) return false;
+        return SelectedField.Hidden || index < VisibleCount - 1;
+    }
     private bool CanEditScript(FieldRow? row) => row is not null && _editScript is not null;
     private bool CanTestScript(FieldRow? row) => row is not null && _testScript is not null;
     private bool CanSuggestKeyFromSample() => SelectedField?.IsKeyValue == true && _suggestKeyFromSample is not null;
@@ -313,6 +359,8 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         else if (!_syncingValueSource && row == SelectedField &&
                  args.PropertyName is nameof(FieldRow.BoundaryRuleId) or nameof(FieldRow.DefaultValueTemplate))
             SyncSelectedValueSource();
+        if (args.PropertyName == nameof(FieldRow.Hidden))
+            RepartitionByHidden();
         _fieldChanged?.Invoke(row, args.PropertyName);
     };
     private void NotifyCommands()

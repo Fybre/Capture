@@ -163,6 +163,11 @@ public sealed partial class FieldRow : ObservableObject
     [ObservableProperty]
     private bool _hidden;
 
+    /// <summary>UI-only marker (not persisted) — true for the first row in a hidden run, so the field
+    /// list can draw a divider above it. Maintained by <see cref="FieldCollectionEditorViewModel"/>.</summary>
+    [ObservableProperty]
+    private bool _isFirstHidden;
+
     [ObservableProperty]
     private bool _isReadOnly;
 

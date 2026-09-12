@@ -33,21 +33,28 @@
              ToolTip.Tip="Select a field to edit it; select it again to collapse its properties.">
       <ListBox.ItemTemplate>
         <DataTemplate>
-          <Grid ColumnDefinitions="3*,2*" ColumnSpacing="8" Margin="6,4">
-            <TextBlock Text="{Binding Name}"
-                       ToolTip.Tip="{Binding Name}"
-                       FontWeight="Medium"
-                       TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1"
-                       Text="{Binding PageDisplay}"
-                       ToolTip.Tip="{Binding PageDisplay}"
-                       Classes="hint"
-                       TextTrimming="CharacterEllipsis"
-                       TextAlignment="Right"
-                       HorizontalAlignment="Stretch"
-                       VerticalAlignment="Center"/>
-          </Grid>
+          <StackPanel>
+            <!-- Hidden fields are stably partitioned to the end of the list (see
+                 FieldCollectionEditorViewModel.RepartitionByHidden) — this divider marks where that
+                 hidden group starts, so the list reads as two groups rather than one shuffled one. -->
+            <Border Height="1" Margin="0,4,0,5" Background="{DynamicResource Surface3Brush}"
+                    IsVisible="{Binding IsFirstHidden}"/>
+            <Grid ColumnDefinitions="3*,2*" ColumnSpacing="8" Margin="6,4">
+              <TextBlock Text="{Binding Name}"
+                         ToolTip.Tip="{Binding Name}"
+                         FontWeight="Medium"
+                         TextTrimming="CharacterEllipsis"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding PageDisplay}"
+                         ToolTip.Tip="{Binding PageDisplay}"
+                         Classes="hint"
+                         TextTrimming="CharacterEllipsis"
+                         TextAlignment="Right"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Center"/>
+            </Grid>
+          </StackPanel>
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
