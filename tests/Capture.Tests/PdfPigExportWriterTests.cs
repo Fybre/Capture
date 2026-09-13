@@ -1,3 +1,4 @@
+using Capture.Core.Lattice;
 using Capture.Core.Models;
 using Capture.Pdf;
 using SkiaSharp;
@@ -21,7 +22,7 @@ public class PdfPigExportWriterTests
             };
             var outputPath = Path.Combine(directory, "export.pdf");
 
-            await new PdfPigExportWriter().WriteAsync(pages, outputPath, compress: false);
+            await NewWriter().WriteAsync(pages, outputPath, compress: false);
 
             using var document = PdfDocument.Open(outputPath);
             Assert.Equal(3, document.NumberOfPages);
@@ -42,7 +43,7 @@ public class PdfPigExportWriterTests
         try
         {
             var outputPath = Path.Combine(directory, "export.pdf");
-            await new PdfPigExportWriter().WriteAsync([Page(directory, 1, SKColors.Red)], outputPath, compress: false);
+            await NewWriter().WriteAsync([Page(directory, 1, SKColors.Red)], outputPath, compress: false);
 
             using var document = PdfDocument.Open(outputPath);
             var page = document.GetPage(1);
@@ -67,7 +68,7 @@ public class PdfPigExportWriterTests
             var fullQualityPath = Path.Combine(directory, "full.pdf");
             var compressedPath = Path.Combine(directory, "compressed.pdf");
 
-            var writer = new PdfPigExportWriter();
+            var writer = NewWriter();
             await writer.WriteAsync(pages, fullQualityPath, compress: false);
             await writer.WriteAsync(pages, compressedPath, compress: true);
 
@@ -80,6 +81,68 @@ public class PdfPigExportWriterTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task Pdfa_option_produces_a_document_with_xmp_metadata()
+    {
+        var directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var outputPath = Path.Combine(directory, "export.pdf");
+            await NewWriter().WriteAsync([Page(directory, 1, SKColors.Red)], outputPath, compress: false, pdfa: true);
+
+            using var stream = File.OpenRead(outputPath);
+            using var document = PdfDocument.Open(stream);
+            Assert.True(document.TryGetXmpMetadata(out _));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SearchablePdf_option_makes_ocr_words_extractable()
+    {
+        var directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var page = Page(directory, 1, SKColors.Red);
+            var lattice = new FakeLatticeStore();
+            lattice.Words[(page.DocumentId, 1)] = new PageLattice
+            {
+                PageNumber = 1,
+                PixelWidth = 200,
+                PixelHeight = 260,
+                Dpi = 150,
+                Source = LatticeSource.Ocr,
+                Words = [new LatticeWord { Text = "Invoice", X = 10, Y = 10, Width = 80, Height = 20 }]
+            };
+            var outputPath = Path.Combine(directory, "export.pdf");
+
+            await new PdfPigExportWriter(lattice).WriteAsync([page], outputPath, compress: false, searchablePdf: true);
+
+            using var document = PdfDocument.Open(outputPath);
+            Assert.Contains("Invoice", document.GetPage(1).Text);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static PdfPigExportWriter NewWriter() => new(new FakeLatticeStore());
+
+    private sealed class FakeLatticeStore : ILatticeStore
+    {
+        public Dictionary<(Guid, int), PageLattice> Words { get; } = new();
+
+        public Task SaveAsync(Guid documentId, PageLattice lattice, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<PageLattice?> GetAsync(Guid documentId, int pageNumber, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Words.GetValueOrDefault((documentId, pageNumber)));
     }
 
     private static DocumentPage Page(string directory, int number, SKColor color)

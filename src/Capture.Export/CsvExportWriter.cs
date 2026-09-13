@@ -11,6 +11,13 @@ public sealed class CsvExportWriter : IExportWriter
     // append serially instead of interleaving or truncating each other's rows.
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new();
 
+    private readonly IExportAttachmentProcessor _attachments;
+
+    public CsvExportWriter(IExportAttachmentProcessor attachments)
+    {
+        _attachments = attachments;
+    }
+
     public ExportType Type => ExportType.Csv;
 
     public async Task<ExportResult> ExportAsync(
@@ -34,7 +41,7 @@ public sealed class CsvExportWriter : IExportWriter
             string? copiedFilePath = null;
             if (definition.FileMode != ExportFileMode.None)
             {
-                var sourcePath = ExportSourceFile.Resolve(definition, context.Document);
+                var sourcePath = await _attachments.ResolveAsync(definition, context.Document, cancellationToken).ConfigureAwait(false);
                 var destination = EnsureUniquePath(
                     Path.Combine(definition.OutputFolder, baseName + Path.GetExtension(sourcePath)));
                 File.Copy(sourcePath, destination, overwrite: false);

@@ -75,6 +75,54 @@ public class PageManagementServiceTests
     }
 
     [Fact]
+    public async Task RotatePagesAsync_updates_dimensions_and_invalidates_only_the_rotated_pages_data()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 3, isPdf: true);
+        await env.IndexValues.SaveAsync(document.Id,
+        [
+            new IndexValue { FieldName = "RotatedZonal", PageNumber = 2, Bounds = new ZoneRect { PageNumber = 2, X = 0.1f, Y = 0.1f, Width = 0.2f, Height = 0.1f } },
+            new IndexValue { FieldName = "UntouchedZonal", PageNumber = 3, Bounds = new ZoneRect { PageNumber = 3, X = 0.1f, Y = 0.1f, Width = 0.2f, Height = 0.1f } }
+        ]);
+        await env.RedactionCandidates.SaveAsync(document.Id,
+        [
+            new RedactionCandidate { PageNumber = 2, Width = 0.1f, Height = 0.1f },
+            new RedactionCandidate { PageNumber = 3, Width = 0.1f, Height = 0.1f }
+        ]);
+
+        var result = await env.Service.RotatePagesAsync(document.Id, [2], degreesClockwise: 90);
+
+        Assert.Equal(3, result.PageCount);
+        var pages = (await env.Store.GetPagesAsync(document.Id)).OrderBy(p => p.PageNumber).ToList();
+        // NoOpImageRotator reports a swapped (200, 100) for a 90-degree turn.
+        Assert.Equal(200, pages[1].Width);
+        Assert.Equal(100, pages[1].Height);
+
+        using var pdf = PdfDocument.Open(result.StoredPath);
+        Assert.Equal(3, pdf.NumberOfPages);
+
+        var values = await env.IndexValues.GetAsync(document.Id);
+        var rotated = Assert.Single(values, v => v.FieldName == "RotatedZonal");
+        Assert.Null(rotated.Bounds); // stale highlight dropped, but the value itself survives
+        var untouched = Assert.Single(values, v => v.FieldName == "UntouchedZonal");
+        Assert.NotNull(untouched.Bounds); // a different page's value is unaffected
+
+        var candidates = await env.RedactionCandidates.GetAsync(document.Id);
+        var candidate = Assert.Single(candidates);
+        Assert.Equal(3, candidate.PageNumber); // the rotated page's candidate was dropped, not just moved
+    }
+
+    [Fact]
+    public async Task RotatePagesAsync_rejects_an_angle_that_is_not_a_multiple_of_90()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 2, isPdf: true);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => env.Service.RotatePagesAsync(document.Id, [1], degreesClockwise: 45));
+    }
+
+    [Fact]
     public async Task ReorderPagesAsync_moves_page_content_to_match_the_requested_order()
     {
         var env = await TestEnv.CreateAsync();
@@ -411,7 +459,8 @@ public class PageManagementServiceTests
                 new PdfPigSubsetWriter(),
                 new TestMergedDocumentWriter(),
                 indexValues,
-                redactionCandidates);
+                redactionCandidates,
+                new NoOpImageRotator());
 
             return new TestEnv
             {

@@ -106,6 +106,62 @@ public sealed class CaptureMaterializationLifecycleTests
     }
 
     [Fact]
+    public async Task Materialization_uses_true_original_page_numbers_after_blank_page_renumbering()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-blank-renumber-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var sourcePdf = Path.Combine(root, "source.pdf");
+            await File.WriteAllTextAsync(sourcePdf, "pdf placeholder");
+            var paths = new AppPaths(Path.Combine(root, "app"));
+            var documents = new SqliteDocumentStore(paths);
+            await documents.InitializeAsync();
+            var indexes = new JsonIndexValueStore(paths);
+            var type = new DocumentTypeDefinition { Name = "Invoice" };
+            var profile = new CaptureProfile
+            {
+                DefaultDocumentTypeId = type.Id,
+                DocumentTypes = [type],
+                RemoveBlankPagesOnIngestion = true
+            };
+
+            // The original 3-page PDF had a blank page 2 that CaptureWorkflowService.AnalyzeAsync
+            // discarded and renumbered away — the surviving pages are logical pages 1 and 2 here, but
+            // their true positions in the source PDF (OriginalPageNumbers) are 1 and 3.
+            var plannedDocument = new PlannedDocument(Guid.NewGuid(), type, [new SourcePage("input-1", 1), new SourcePage("input-1", 2)], []);
+            var plan = new CapturePlan([new PlannedBatch(Guid.NewGuid(), true, [], [plannedDocument])], [], []);
+            var source = new CaptureMaterializationSource(
+                "input-1",
+                sourcePdf,
+                DocumentSource.Import,
+                [new RasterPage(1, sourcePdf, 100, 100, 200), new RasterPage(2, sourcePdf, 100, 100, 200)],
+                new Dictionary<int, PageLattice>
+                {
+                    [1] = new() { PageNumber = 1, PixelWidth = 100, PixelHeight = 100, Dpi = 200 },
+                    [2] = new() { PageNumber = 2, PixelWidth = 100, PixelHeight = 100, Dpi = 200 }
+                })
+            {
+                OriginalPageNumbers = new Dictionary<int, int> { [1] = 1, [2] = 3 }
+            };
+            var subsetWriter = new RecordingSubsetWriter();
+            var materializer = new CapturePlanMaterializer(
+                paths, documents, indexes, new JsonLatticeStore(paths),
+                new ProfileApplicator(new FixedBarcodeDecoder()), subsetWriter, new CopyMergedWriter());
+
+            await materializer.MaterializeAsync(
+                profile, plan, new Dictionary<string, CaptureMaterializationSource> { [source.Id] = source }, inputChannel: "manual");
+
+            Assert.Equal([1, 3], subsetWriter.RequestedPageNumbers);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Materialization_extracts_a_batch_barcode_from_a_removed_separator_page()
     {
         var root = Path.Combine(Path.GetTempPath(), "capture-consumed-batch-barcode-" + Guid.NewGuid().ToString("N"));
@@ -239,6 +295,21 @@ public sealed class CaptureMaterializationLifecycleTests
     {
         public Task WritePagesAsync(string sourcePdfPath, IReadOnlyList<int> pageNumbers, string outputPath, CancellationToken cancellationToken = default)
         {
+            File.Copy(sourcePdfPath, outputPath, overwrite: true);
+            return Task.CompletedTask;
+        }
+    }
+
+    // Captures exactly which page numbers materialization asked to extract from the original PDF — used
+    // to prove CaptureMaterializationSource.OriginalPageNumbers is consulted, not the (possibly
+    // renumbered-after-blank-removal) logical page numbers on PlannedDocument.SourcePages.
+    private sealed class RecordingSubsetWriter : IPdfSubsetWriter
+    {
+        public IReadOnlyList<int>? RequestedPageNumbers { get; private set; }
+
+        public Task WritePagesAsync(string sourcePdfPath, IReadOnlyList<int> pageNumbers, string outputPath, CancellationToken cancellationToken = default)
+        {
+            RequestedPageNumbers = pageNumbers;
             File.Copy(sourcePdfPath, outputPath, overwrite: true);
             return Task.CompletedTask;
         }

@@ -314,7 +314,8 @@
                                   MaxWidth="190"
                                   Width="190"
                                   ItemsSource="{Binding CaptureProfilePickerItems}"
-                                  SelectedItem="{Binding SelectedCaptureProfileOrNone}"
+                                  SelectedValue="{Binding SelectedCaptureProfileIdOrNone}"
+                                  SelectedValueBinding="{Binding Id}"
                                   ToolTip.Tip="{Binding SelectedCaptureProfileSummary}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="captureProfiles:CaptureProfile">
@@ -778,6 +779,14 @@
                                                 </MenuItem>
                                                 <MenuItem Header="Split here"
                                                           Command="{Binding #PageThumbnailStrip.((vm:MainViewModel)DataContext).SplitDocumentAtCurrentPageCommand}" />
+                                                <MenuItem Header="Rotate">
+                                                    <MenuItem Header="90°"
+                                                              Command="{Binding #PageThumbnailStrip.((vm:MainViewModel)DataContext).RotateSelectedPages90Command}" />
+                                                    <MenuItem Header="180°"
+                                                              Command="{Binding #PageThumbnailStrip.((vm:MainViewModel)DataContext).RotateSelectedPages180Command}" />
+                                                    <MenuItem Header="270°"
+                                                              Command="{Binding #PageThumbnailStrip.((vm:MainViewModel)DataContext).RotateSelectedPages270Command}" />
+                                                </MenuItem>
                                             </ContextMenu>
                                         </Border.ContextMenu>
                                         <DockPanel>

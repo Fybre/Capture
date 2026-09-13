@@ -100,6 +100,16 @@
         <TextBlock Text="Profile name" Classes="field-label"/><TextBox Text="{Binding ProfileName}" Watermark="Profile name"/>
         <CheckBox Content="End each document at the end of its input file" IsChecked="{Binding Profile.FileIsDocumentBoundary}"/>
         <CheckBox Content="Export Ready documents automatically after import" IsChecked="{Binding Profile.AutoExportReadyDocuments}"/>
+        <CheckBox Content="Remove blank pages on ingestion" IsChecked="{Binding RemoveBlankPagesOnIngestion}"
+                  ToolTip.Tip="Discards blank pages before any other ingestion work — OCR, rule evaluation, batch/document classification"/>
+        <StackPanel Spacing="5" Margin="22,0,0,0" IsVisible="{Binding RemoveBlankPagesOnIngestion}">
+          <TextBlock Text="Treat as blank when ink is below (%)" Classes="field-label"/>
+          <NumericUpDown Value="{Binding RemoveBlankPagesInkPercent}" Minimum="0" Maximum="100" HorizontalAlignment="Left" Width="140"/>
+          <Border Background="{DynamicResource Surface2Brush}" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
+            <TextBlock TextWrapping="Wrap" Classes="hint"
+                       Text="Because removal runs before any other task, a discarded page is invisible to every rule — including any BlankPage separation rule on the Batch or on a document type, which will never match while this is enabled."/>
+          </Border>
+        </StackPanel>
         <TextBlock Text="Fallback document type" Classes="field-label"/>
         <ComboBox ItemsSource="{Binding FallbackDocumentTypes}" SelectedValue="{Binding FallbackDocumentTypeId}" SelectedValueBinding="{Binding Id}">
           <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate>
@@ -383,6 +393,64 @@
                           </ItemsControl>
                         </StackPanel>
 
+                        <StackPanel Spacing="7" IsVisible="{Binding IsRest}">
+                          <TextBlock Text="URL" Classes="field-label"/>
+                          <TextBox Text="{Binding RestUrl}" Watermark="https://example.com/ingest"/>
+                          <TextBlock Text="Bearer token" Classes="field-label"/>
+                          <TextBox Text="{Binding RestBearerToken}" PasswordChar="•" Watermark="Optional"/>
+                          <TextBlock Text="Stored in plain text in the profile file — unlike the Therefore connection's saved credentials, this isn't protected by the OS keychain."
+                                     Classes="hint" TextWrapping="Wrap"/>
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Custom headers" Classes="field-label" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="+ Add header" Command="{Binding AddRestHeaderCommand}"/>
+                          </Grid>
+                          <ItemsControl ItemsSource="{Binding RestCustomHeaders}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Grid ColumnDefinitions="2*,3*,Auto" ColumnSpacing="6" Margin="0,3">
+                                  <TextBox Text="{Binding Name}" Watermark="Header name"/>
+                                  <TextBox Grid.Column="1" Text="{Binding Value}" Watermark="Header value"/>
+                                  <Button Grid.Column="2" Content="✕" Classes="ghost"
+                                          Command="{Binding $parent[ItemsControl].DataContext.RemoveRestHeaderCommand}"
+                                          CommandParameter="{Binding}"/>
+                                </Grid>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+
+                          <TextBlock Text="Field mapping" Classes="field-label"/>
+                          <TextBlock Text="Each row becomes one key in the JSON body's &quot;fields&quot; object, supplied from a Capture index field."
+                                     Classes="hint" TextWrapping="Wrap"/>
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock/>
+                            <Button Grid.Column="1" Content="+ Add mapping" Command="{Binding AddRestMappingCommand}"/>
+                          </Grid>
+                          <ItemsControl ItemsSource="{Binding RestMappings}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Grid ColumnDefinitions="2*,3*,Auto" ColumnSpacing="6" Margin="0,3">
+                                  <TextBox Text="{Binding JsonKey}" Watermark="JSON key"/>
+                                  <ComboBox Grid.Column="1" ItemsSource="{Binding ProfileFields}" SelectedItem="{Binding SelectedField}"
+                                            PlaceholderText="Choose field…" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                      <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                          <TextBlock Text="{Binding ScopeLabel}" Classes="hint"/>
+                                          <TextBlock Text="—" Classes="hint"/>
+                                          <TextBlock Text="{Binding Field.Name}"/>
+                                        </StackPanel>
+                                      </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                  </ComboBox>
+                                  <Button Grid.Column="2" Content="✕" Classes="ghost"
+                                          Command="{Binding $parent[ItemsControl].DataContext.RemoveRestMappingCommand}"
+                                          CommandParameter="{Binding}"/>
+                                </Grid>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+
                         <TextBlock Text="Attach file" Classes="field-label"/>
                         <ComboBox ItemsSource="{Binding FileModeOptions}"
                                   SelectedValueBinding="{Binding Value}"
@@ -391,6 +459,12 @@
                         </ComboBox>
                         <TextBlock Text="Redacted — required stops safely if no applied redacted copy exists. Redacted, otherwise original uses the original only when a redacted copy is unavailable."
                                    Classes="hint" TextWrapping="Wrap" IsVisible="{Binding HasFileMode}"/>
+                        <StackPanel Spacing="5" IsVisible="{Binding HasFileMode}">
+                          <CheckBox Content="Convert to PDF/A" IsChecked="{Binding Pdfa}"
+                                    ToolTip.Tip="Best-effort PDF/A-shaped output (OutputIntent, XMP metadata, embedded font) — not externally conformance-validated."/>
+                          <CheckBox Content="Searchable PDF" IsChecked="{Binding SearchablePdf}"
+                                    ToolTip.Tip="Overlays an invisible OCR text layer so the exported PDF's text is selectable and searchable."/>
+                        </StackPanel>
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
                           <Button Grid.Column="0" Content="Copy to…" HorizontalAlignment="Stretch"
                                   Click="OnCopyExportClick"

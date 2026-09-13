@@ -67,7 +67,12 @@ public partial class ExportPdfWindow : Window
         if (_destinationPath is null)
             return;
 
-        Result = new ExportPdfOptions(CombineCheckBox.IsChecked == true, CompressCheckBox.IsChecked == true, _destinationPath);
+        Result = new ExportPdfOptions(
+            CombineCheckBox.IsChecked == true,
+            CompressCheckBox.IsChecked == true,
+            _destinationPath,
+            PdfaCheckBox.IsChecked == true,
+            SearchablePdfCheckBox.IsChecked == true);
         Close();
     }
 

@@ -237,7 +237,8 @@ public enum ExportType
     /// pre-select a type (and therefore a whole settings panel) the user hasn't picked.</summary>
     None = -1,
     Csv = 0,
-    Therefore = 1
+    Therefore = 1,
+    Rest = 2
     // Xml, etc. added later — new IExportWriter + ExportType value, no data-model change.
 }
 
@@ -285,6 +286,19 @@ public sealed class ExportDefinition
     public ExportFileMode FileMode { get; set; } = ExportFileMode.None;
     public bool IncludeHeader { get; set; } = true;
 
+    /// <summary>Rebuilds the attached/copied file (whichever <see cref="FileMode"/> resolves to) as a
+    /// best-effort PDF/A-shaped document — OutputIntent + XMP metadata + an embedded font — before any
+    /// export writer reads it. Applies to every <see cref="ExportType"/>, not just Rest. Not externally
+    /// conformance-validated.</summary>
+    public bool Pdfa { get; set; }
+
+    /// <summary>Rebuilds the attached/copied file with an invisible OCR text layer (one run per
+    /// <c>LatticeWord</c>, positioned over its source pixels) so the exported PDF becomes
+    /// searchable/copy-pasteable. Applies to every <see cref="ExportType"/>, not just Rest. Words
+    /// falling inside a confirmed redaction candidate are skipped when the resolved file is the
+    /// redacted copy, so this can never resurface redacted text.</summary>
+    public bool SearchablePdf { get; set; }
+
     // Therefore-specific — unused when Type is Csv. FieldIds above is unused for Therefore; mapping
     // (below) replaces it. FileMode still applies to the file attached to the created document's
     // Streams. Strict redacted mode fails closed; RedactedOrOriginal deliberately falls back.
@@ -293,6 +307,32 @@ public sealed class ExportDefinition
     /// <summary>Display only — avoids refetching the category just to show the current selection.</summary>
     public string? ThereforeCategoryName { get; set; }
     public List<ThereforeFieldMapping> ThereforeFieldMappings { get; set; } = [];
+
+    // Rest-specific — unused when Type is not Rest.
+    public string RestUrl { get; set; } = string.Empty;
+
+    /// <summary>Stored in plaintext inside the profile file — unlike WatchSettings' secrets
+    /// (AiApiKey/ThereforePassword/ThereforeBearerToken), ExportDefinition has no OS-keychain
+    /// protection pass. Flagged in the designer UI; hardening this is a reasonable follow-up but out
+    /// of scope for the initial Rest export.</summary>
+    public string? RestBearerToken { get; set; }
+    public List<RestCustomHeader> RestCustomHeaders { get; set; } = [];
+    public List<RestFieldMapping> RestFieldMappings { get; set; } = [];
+}
+
+public sealed class RestCustomHeader
+{
+    public string Name { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+}
+
+/// <summary>One JSON body key in the Rest export's payload, optionally supplied by one of this
+/// profile's own index fields — mirrors <see cref="ThereforeFieldMapping"/>'s shape, deliberately an
+/// explicit list rather than "all fields by default" like Csv.</summary>
+public sealed class RestFieldMapping
+{
+    public string JsonKey { get; set; } = string.Empty;
+    public Guid? IndexFieldId { get; set; }
 }
 
 /// <summary>One Therefore category field discovered via the category picker, optionally supplied by

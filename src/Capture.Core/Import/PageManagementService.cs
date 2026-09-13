@@ -24,6 +24,7 @@ public sealed class PageManagementService : IPageManagementService
     private readonly IMergedDocumentWriter _mergedDocumentWriter;
     private readonly IIndexValueStore _indexValues;
     private readonly IRedactionCandidateStore _redactionCandidates;
+    private readonly IImageRotator _imageRotator;
 
     public PageManagementService(
         IAppPaths paths,
@@ -33,7 +34,8 @@ public sealed class PageManagementService : IPageManagementService
         IPdfSubsetWriter pdfSubsetWriter,
         IMergedDocumentWriter mergedDocumentWriter,
         IIndexValueStore indexValues,
-        IRedactionCandidateStore redactionCandidates)
+        IRedactionCandidateStore redactionCandidates,
+        IImageRotator imageRotator)
     {
         _paths = paths;
         _store = store;
@@ -43,6 +45,7 @@ public sealed class PageManagementService : IPageManagementService
         _mergedDocumentWriter = mergedDocumentWriter;
         _indexValues = indexValues;
         _redactionCandidates = redactionCandidates;
+        _imageRotator = imageRotator;
     }
 
     public async Task<CaptureDocument> DeletePagesAsync(
@@ -326,6 +329,99 @@ public sealed class PageManagementService : IPageManagementService
             if (File.Exists(tempPdfPath))
                 File.Delete(tempPdfPath);
         }
+    }
+
+    public async Task<CaptureDocument> RotatePagesAsync(
+        Guid documentId, IReadOnlyList<int> pageNumbers, int degreesClockwise, CancellationToken cancellationToken = default)
+    {
+        var normalized = ((degreesClockwise % 360) + 360) % 360;
+        if (normalized is not (90 or 180 or 270))
+            throw new ArgumentOutOfRangeException(nameof(degreesClockwise), degreesClockwise, "Rotation must be 90, 180, or 270 degrees.");
+
+        var document = await GetDocumentOrThrowAsync(documentId, cancellationToken).ConfigureAwait(false);
+        var pages = (await _store.GetPagesAsync(documentId, cancellationToken).ConfigureAwait(false))
+            .OrderBy(page => page.PageNumber).ToList();
+        var targets = new HashSet<int>(pageNumbers);
+        var rotatedPages = new List<DocumentPage>();
+        foreach (var page in pages)
+        {
+            if (!targets.Contains(page.PageNumber))
+                continue;
+            var (width, height) = _imageRotator.Rotate(page.ImagePath, normalized);
+            page.Width = width;
+            page.Height = height;
+            rotatedPages.Add(page);
+        }
+
+        if (rotatedPages.Count == 0)
+            return document;
+
+        // The stored file is rebuilt from the current page images, the same tradeoff AppendPagesAsync
+        // and MergeDocumentsAsync already make for anything a plain PDF-page-subset extraction can't
+        // express — here, an actual rotation of a page's content. This keeps the file attached to
+        // exports consistent with what Preview mode shows, which always reads page.ImagePath, never the
+        // original PDF bytes.
+        var rotatedPdfPath = _paths.DocumentOriginalPath(document.Id, "rotated.pdf");
+        var tempPdfPath = rotatedPdfPath + $".tmp-{Guid.NewGuid():N}";
+        try
+        {
+            await _mergedDocumentWriter.WriteAsync(pages, tempPdfPath, cancellationToken).ConfigureAwait(false);
+
+            if (File.Exists(rotatedPdfPath))
+                File.Delete(rotatedPdfPath);
+            File.Move(tempPdfPath, rotatedPdfPath);
+            if (!string.Equals(document.StoredPath, rotatedPdfPath, StringComparison.Ordinal)
+                && File.Exists(document.StoredPath))
+                File.Delete(document.StoredPath);
+
+            document.StoredPath = rotatedPdfPath;
+            // The rebuilt bytes no longer represent the original single scan/import occurrence.
+            document.ContentHash = null;
+            document.SourceImportId = null;
+        }
+        finally
+        {
+            if (File.Exists(tempPdfPath))
+                File.Delete(tempPdfPath);
+        }
+
+        foreach (var page in rotatedPages)
+            DeleteStaleLatticeFiles(document, page.PageNumber, page.PageNumber);
+        await _latticeBuilder.BuildDocumentAsync(document, rotatedPages, cancellationToken).ConfigureAwait(false);
+
+        await InvalidateRotatedPageDataAsync(document, targets, cancellationToken).ConfigureAwait(false);
+
+        await _store.SaveAsync(document, pages, cancellationToken).ConfigureAwait(false);
+        return document;
+    }
+
+    /// <summary>A rotated page's index-value bounds and redaction candidates were computed against the
+    /// old orientation, so both are now wrong rather than merely stale-but-close. A zone value keeps its
+    /// already-extracted text (still probably correct content) but loses its highlight box; a redaction
+    /// candidate is simply dropped, since a wrong-position "confirmed" redaction box is actively unsafe.</summary>
+    private async Task InvalidateRotatedPageDataAsync(CaptureDocument document, HashSet<int> rotatedPageNumbers, CancellationToken cancellationToken)
+    {
+        var values = await _indexValues.GetAsync(document.Id, cancellationToken).ConfigureAwait(false);
+        var valuesChanged = false;
+        foreach (var value in values.Where(value => value.Bounds is not null && rotatedPageNumbers.Contains(value.PageNumber)))
+        {
+            value.Bounds = null;
+            valuesChanged = true;
+        }
+        if (valuesChanged)
+            await _indexValues.SaveAsync(document.Id, values, cancellationToken).ConfigureAwait(false);
+
+        var candidates = await _redactionCandidates.GetAsync(document.Id, cancellationToken).ConfigureAwait(false);
+        var remaining = candidates.Where(candidate => !rotatedPageNumbers.Contains(candidate.PageNumber)).ToList();
+        if (remaining.Count == candidates.Count)
+            return;
+
+        await _redactionCandidates.SaveAsync(document.Id, remaining, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(document.RedactedPath) && File.Exists(document.RedactedPath))
+            File.Delete(document.RedactedPath);
+        document.RedactedPath = null;
+        document.RedactionStatus = remaining.Count > 0 ? RedactionStatus.PendingReview : RedactionStatus.None;
+        document.RedactionError = null;
     }
 
     private static RedactionCandidate CopyCandidate(RedactionCandidate candidate, int pageNumber) => new()

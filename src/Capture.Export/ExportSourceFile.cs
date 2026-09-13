@@ -3,7 +3,7 @@ using Capture.Core.Profiles;
 
 namespace Capture.Export;
 
-internal static class ExportSourceFile
+public static class ExportSourceFile
 {
     public static string Resolve(ExportDefinition definition, CaptureDocument document)
     {

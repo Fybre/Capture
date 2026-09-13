@@ -13,17 +13,10 @@ public static class KeyValueExtractor
         if (string.IsNullOrWhiteSpace(field.KeyPattern) || string.IsNullOrWhiteSpace(field.ValuePattern))
             return empty;
 
-        Regex keyRegex;
-        Regex valueRegex;
-        try
-        {
-            keyRegex = new Regex(field.KeyPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, MatchTimeout);
-            valueRegex = new Regex(field.ValuePattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, MatchTimeout);
-        }
-        catch (ArgumentException)
-        {
+        var options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+        if (CachedRegex.GetOrNull(field.KeyPattern, options, MatchTimeout) is not { } keyRegex
+            || CachedRegex.GetOrNull(field.ValuePattern, options, MatchTimeout) is not { } valueRegex)
             return empty;
-        }
 
         var targets = pages
             .Where(page => PatternPages.Matches(page.PageNumber, field))

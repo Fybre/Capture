@@ -39,4 +39,14 @@ public interface IPageManagementService
     /// original source occurrence once more pages are appended.</summary>
     Task<CaptureDocument> AppendPagesAsync(
         Guid documentId, IReadOnlyList<RasterPage> newPages, CancellationToken cancellationToken = default);
+
+    /// <summary>Rotates the given pages in place (clockwise; must be 90, 180, or 270) — rewrites each
+    /// page's image file and dimensions, rebuilds the document's stored file from the current page images
+    /// (a plain PDF-page-subset extraction can't express a rotation, so this takes the same "no longer a
+    /// pure subset of the original" tradeoff <see cref="AppendPagesAsync"/> and MergeDocumentsAsync
+    /// already do), and rebuilds OCR for the rotated pages only. Index values on a rotated page keep
+    /// their extracted text but lose their highlight bounds; redaction candidates on a rotated page are
+    /// dropped, since both are tied to the old orientation.</summary>
+    Task<CaptureDocument> RotatePagesAsync(
+        Guid documentId, IReadOnlyList<int> pageNumbers, int degreesClockwise, CancellationToken cancellationToken = default);
 }

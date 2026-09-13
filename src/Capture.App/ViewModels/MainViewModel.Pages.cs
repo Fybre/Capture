@@ -110,6 +110,56 @@ public partial class MainViewModel
         _ = ShowPageAsync(generation);
     }
 
+    private bool CanRotateSelectedPages() => !IsBusy && SelectedPageThumbnails.Count > 0;
+
+    // Three parameterless commands rather than one taking a degrees parameter — Avalonia's
+    // CommandParameter is boxed as whatever the XAML literal's static type is (a plain string for
+    // CommandParameter="90"), and CommunityToolkit's generated RelayCommand<int> unboxes it as int with
+    // no implicit string-to-int coercion, so a literal XAML parameter would throw at click time.
+    [RelayCommand(CanExecute = nameof(CanRotateSelectedPages))]
+    private Task RotateSelectedPages90Async() => RotateSelectedPagesAsync(90);
+
+    [RelayCommand(CanExecute = nameof(CanRotateSelectedPages))]
+    private Task RotateSelectedPages180Async() => RotateSelectedPagesAsync(180);
+
+    [RelayCommand(CanExecute = nameof(CanRotateSelectedPages))]
+    private Task RotateSelectedPages270Async() => RotateSelectedPagesAsync(270);
+
+    private async Task RotateSelectedPagesAsync(int degreesClockwise)
+    {
+        if (SelectedDocument is not { } row)
+            return;
+
+        var pageNumbers = SelectedPageThumbnails.Select(item => item.PageNumber).ToList();
+        IsBusy = true;
+        try
+        {
+            var updated = await _pageManagement.RotatePagesAsync(row.Id, pageNumbers, degreesClockwise).ConfigureAwait(true);
+            // RefreshDocumentRowInPlaceAsync's own reload (via LoadSelectedDocumentAsync) always resets
+            // the preview to page 1 when this is the document on screen — pass the rotated page through
+            // as the reload's target instead of defaulting to page 1 and jumping afterward: a separate
+            // JumpToPage call would bump _loadGeneration a second time and race the reload's own
+            // fire-and-forget thumbnail decoding, cancelling it mid-flight and leaving blank thumbnails.
+            await RefreshDocumentRowInPlaceAsync(row, updated, pageNumbers.Min()).ConfigureAwait(true);
+            RefreshDocumentGroups();
+            StatusText = pageNumbers.Count == 1
+                ? $"Rotated 1 page {degreesClockwise}°"
+                : $"Rotated {pageNumbers.Count} pages {degreesClockwise}°";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private bool CanDeleteSelectedPages() =>
         !IsBusy && SelectedPageThumbnails.Count > 0 && SelectedPageThumbnails.Count < PageThumbnails.Count;
 
@@ -503,7 +553,7 @@ public partial class MainViewModel
 
     private bool CanGoNext() => !IsBusy && CurrentPageNumber < PageCount;
 
-    private async Task LoadSelectedDocumentAsync(DocumentRow? row)
+    private async Task LoadSelectedDocumentAsync(DocumentRow? row, int initialPageNumber = 1)
     {
         var generation = Interlocked.Increment(ref _loadGeneration);
         _pages = [];
@@ -527,7 +577,7 @@ public partial class MainViewModel
 
             _pages = pages;
             PageCount = pages.Count;
-            CurrentPageNumber = pages.Count == 0 ? 1 : 1;
+            CurrentPageNumber = pages.Count == 0 ? 1 : Math.Clamp(initialPageNumber, 1, pages.Count);
             foreach (var page in pages)
                 PageThumbnails.Add(new PageThumbnailRow(page));
             await ShowPageAsync(generation).ConfigureAwait(true);
@@ -547,36 +597,50 @@ public partial class MainViewModel
 
     private const int ThumbnailPixelWidth = 120;
 
+    // Decodes every page's thumbnail concurrently (bounded by core count, mirroring the same pattern
+    // ReloadDocumentsAsync and CaptureWorkflowService.AnalyzeAsync already use for equivalent independent
+    // per-page I/O) instead of awaiting one decode at a time — a long document's strip used to decode
+    // fully serially. UI assignment still happens in one pass back on the calling context afterward,
+    // since only that context should touch the bound PageThumbnailRow objects.
     private async Task LoadPageThumbnailsAsync(IReadOnlyList<DocumentPage> pages, int generation)
     {
-        foreach (var page in pages)
+        var decoded = new Bitmap?[pages.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, pages.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            async (index, cancellationToken) =>
+            {
+                var page = pages[index];
+                if (generation != _loadGeneration || !File.Exists(page.ImagePath))
+                    return;
+
+                try
+                {
+                    decoded[index] = await Task.Run(() =>
+                    {
+                        using var stream = File.OpenRead(page.ImagePath);
+                        return Bitmap.DecodeToWidth(stream, ThumbnailPixelWidth);
+                    }, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // skip an unreadable page's thumbnail rather than failing the whole strip
+                }
+            }).ConfigureAwait(true);
+
+        if (generation != _loadGeneration)
         {
-            if (generation != _loadGeneration)
-                return;
-            if (!File.Exists(page.ImagePath))
+            foreach (var thumbnail in decoded)
+                thumbnail?.Dispose();
+            return;
+        }
+
+        for (var index = 0; index < pages.Count; index++)
+        {
+            if (decoded[index] is not { } thumbnail)
                 continue;
 
-            Bitmap thumbnail;
-            try
-            {
-                thumbnail = await Task.Run(() =>
-                {
-                    using var stream = File.OpenRead(page.ImagePath);
-                    return Bitmap.DecodeToWidth(stream, ThumbnailPixelWidth);
-                }).ConfigureAwait(true);
-            }
-            catch (Exception)
-            {
-                continue; // skip an unreadable page's thumbnail rather than failing the whole strip
-            }
-
-            if (generation != _loadGeneration)
-            {
-                thumbnail.Dispose();
-                return;
-            }
-
-            var thumbnailRow = PageThumbnails.FirstOrDefault(item => item.PageNumber == page.PageNumber);
+            var thumbnailRow = PageThumbnails.FirstOrDefault(item => item.PageNumber == pages[index].PageNumber);
             if (thumbnailRow is not null)
                 thumbnailRow.Thumbnail = thumbnail;
             else

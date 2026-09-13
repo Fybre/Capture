@@ -141,6 +141,49 @@ public class JsonWatchSettingsStoreTests
     }
 
     [Fact]
+    public async Task LastCaptureProfileId_roundtrips_the_None_sentinels_own_fixed_id_like_any_real_profile()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        var store = new JsonWatchSettingsStore(paths, new NullOsCredentialStore());
+
+        // A fresh install has never saved a preference.
+        var fresh = await store.LoadAsync();
+        Assert.Null(fresh.LastCaptureProfileId);
+
+        // "None" is just BuiltInCaptureProfiles.UnsortedId — a real, permanent Guid, not a null/flag
+        // pair — so persisting it round-trips exactly like any other profile's Id would.
+        var noneId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        await store.SaveAsync(new WatchSettings { LastCaptureProfileId = noneId });
+
+        var afterExplicitNone = await store.LoadAsync();
+        Assert.Equal(noneId, afterExplicitNone.LastCaptureProfileId);
+    }
+
+    [Fact]
+    public async Task LoadAsync_caches_after_the_first_call_and_does_not_hit_the_credential_store_again()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        var credentialStore = new FakeCredentialStore();
+        var store = new JsonWatchSettingsStore(paths, credentialStore);
+        await store.SaveAsync(new WatchSettings { AiApiKey = "sk-real-secret" });
+        // SaveAsync already primed the cache from the settings it was given — reset the read count so
+        // this test is purely about whether a *second* LoadAsync call re-reads the credential store.
+        credentialStore.ReadCount = 0;
+
+        var first = await store.LoadAsync();
+        var second = await store.LoadAsync();
+
+        Assert.Equal("sk-real-secret", first.AiApiKey);
+        Assert.Equal("sk-real-secret", second.AiApiKey);
+        Assert.Equal(0, credentialStore.ReadCount);
+        // Each call must still get its own independent object — mutating one must never affect the
+        // other or the store's internal cache.
+        Assert.NotSame(first, second);
+        second.AiApiKey = "mutated";
+        Assert.Equal("sk-real-secret", (await store.LoadAsync()).AiApiKey);
+    }
+
+    [Fact]
     public async Task Falls_back_to_plaintext_when_the_credential_store_is_unavailable()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
@@ -156,12 +199,18 @@ public class JsonWatchSettingsStoreTests
     {
         private readonly Dictionary<string, string> _stored = new();
 
+        public int ReadCount { get; set; }
+
         public bool TryStore(string account, string value)
         {
             _stored[account] = value;
             return true;
         }
 
-        public string? TryRead(string account) => _stored.GetValueOrDefault(account);
+        public string? TryRead(string account)
+        {
+            ReadCount++;
+            return _stored.GetValueOrDefault(account);
+        }
     }
 }

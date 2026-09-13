@@ -50,6 +50,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IBarcodeDecoder, ZxingBarcodeDecoder>();
         services.AddSingleton<IFieldScriptRunner, RoslynFieldScriptRunner>();
         services.AddSingleton<IBlankPageDetector, InkCoverageBlankPageDetector>();
+        services.AddSingleton<IImageRotator, SkiaImageRotator>();
         services.AddSingleton<PresidioSidecarLauncher>();
         services.AddSingleton<IPiiDetector, PresidioAnalyzerClient>();
         services.AddSingleton<IRedactionCandidateStore, JsonRedactionCandidateStore>();
@@ -75,8 +76,10 @@ public static class ServiceConfiguration
             OperatingSystem.IsMacOS() ? new MacScanSource()
             : OperatingSystem.IsWindows() ? new WiaScanSource()
             : new UnavailableScanSource());
+        services.AddSingleton<IExportAttachmentProcessor, PdfExportAttachmentProcessor>();
         services.AddSingleton<IExportWriter, CsvExportWriter>();
         services.AddSingleton<IExportWriter, ThereforeExportWriter>();
+        services.AddSingleton<IExportWriter, RestExportWriter>();
         services.AddSingleton<ProfileExportRunner>();
         services.AddSingleton<IThereforeClient, ThereforeClient>();
         services.AddSingleton<IFileDialogService, FileDialogService>();

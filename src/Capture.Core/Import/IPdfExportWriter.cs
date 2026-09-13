@@ -12,5 +12,7 @@ public interface IPdfExportWriter
         IReadOnlyList<DocumentPage> pages,
         string outputPath,
         bool compress,
+        bool pdfa = false,
+        bool searchablePdf = false,
         CancellationToken cancellationToken = default);
 }

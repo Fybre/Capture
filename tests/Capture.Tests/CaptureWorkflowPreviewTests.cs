@@ -151,6 +151,79 @@ public sealed class CaptureWorkflowPreviewTests
         }
     }
 
+    [Fact]
+    public async Task Blank_page_removal_discards_blank_pages_and_renumbers_survivors_before_planning()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-blank-removal-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "scan.png");
+            await File.WriteAllTextAsync(source, "test input");
+            var paths = new AppPaths(Path.Combine(root, "app"));
+            var type = new DocumentTypeDefinition { Name = "Scan" };
+            var profile = new CaptureProfile
+            {
+                DefaultDocumentTypeId = type.Id,
+                DocumentTypes = [type],
+                RemoveBlankPagesOnIngestion = true,
+                // Every 2nd surviving (non-blank) page starts a new document — proves counting happens
+                // against the compacted sequence, not the original 4-page numbering (page 2 is blank).
+                FileIsDocumentBoundary = true
+            };
+            type.StartRules = new RuleSet
+            {
+                MatchMode = SeparationMatchMode.Any,
+                Rules = [new SeparationStrategy { Type = SeparationStrategyType.EveryNPages, PageCount = 2 }]
+            };
+            var workflow = new CaptureWorkflowService(
+                paths,
+                pdfs: null!,
+                new FourPageImageImporter(blankPageNumber: 2),
+                new InvoiceLatticeBuilder(),
+                new NoBarcodeDecoder(),
+                new BlankOnSuffixDetector("-blank"),
+                new CapturePlanner(),
+                materializer: null!);
+
+            var plan = await workflow.PreviewAsync(profile, [source], DocumentSource.Import);
+
+            var batch = Assert.Single(plan.Batches);
+            // 3 surviving pages (originally 1, 3, 4 — page 2 was blank): the first document is whatever
+            // fallback-classifies survivor #1 before any start rule has a chance to match, then the
+            // EveryNPages(2) rule starts a new document exactly at survivor #2 (originally page 3).
+            Assert.Equal(2, batch.Documents.Count);
+            Assert.Single(batch.Documents[0].SourcePages);
+            Assert.Equal(2, batch.Documents[1].SourcePages.Count);
+            Assert.Equal([1], batch.Documents[0].SourcePages.Select(page => page.PageNumber));
+            Assert.Equal([2, 3], batch.Documents[1].SourcePages.Select(page => page.PageNumber));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private sealed class FourPageImageImporter(int blankPageNumber) : IImagePageImporter
+    {
+        public Task<IReadOnlyList<RasterPage>> ImportAsync(
+            string imagePath,
+            string outputDirectory,
+            CancellationToken cancellationToken = default,
+            int? dpiOverride = null) =>
+            Task.FromResult<IReadOnlyList<RasterPage>>(Enumerable.Range(1, 4)
+                .Select(number => new RasterPage(
+                    number,
+                    number == blankPageNumber ? imagePath + "-blank" : imagePath,
+                    100, 100, 200))
+                .ToList());
+    }
+
+    private sealed class BlankOnSuffixDetector(string suffix) : IBlankPageDetector
+    {
+        public bool IsBlank(string imagePath, float maxInkPercent) => imagePath.EndsWith(suffix, StringComparison.Ordinal);
+    }
+
     private sealed class OnePageImageImporter : IImagePageImporter
     {
         public Task<IReadOnlyList<RasterPage>> ImportAsync(

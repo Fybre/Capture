@@ -13,15 +13,8 @@ public static class RegexExtractor
         if (string.IsNullOrWhiteSpace(field.ValuePattern))
             return empty;
 
-        Regex regex;
-        try
-        {
-            regex = new Regex(field.ValuePattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, MatchTimeout);
-        }
-        catch (ArgumentException)
-        {
+        if (CachedRegex.GetOrNull(field.ValuePattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, MatchTimeout) is not { } regex)
             return empty;
-        }
 
         var targets = pages
             .Where(page => PatternPages.Matches(page.PageNumber, field))

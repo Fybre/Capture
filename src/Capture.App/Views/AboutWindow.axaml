@@ -50,6 +50,9 @@
                            FontSize="12.5"
                            HorizontalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+                    <Button Classes="license-link" Tag="https://fybre.me" Click="OnLinkClick">
+                        <TextBlock Text="fybre.me" FontSize="12.5" />
+                    </Button>
                     <Button Classes="license-link" Tag="https://github.com/Fybre/Capture" Click="OnLinkClick">
                         <TextBlock Text="View on GitHub" FontSize="12.5" />
                     </Button>

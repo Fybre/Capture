@@ -46,7 +46,7 @@ public class CsvExportWriterTests
             FileNamePattern = "{OriginalFileName}"
         };
 
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
         var result = await writer.ExportAsync(definition, new ExportDocumentContext(document, fields, values));
 
         Assert.True(result.Success, result.Message);
@@ -82,7 +82,7 @@ public class CsvExportWriterTests
             FileNamePattern = "{OriginalFileName}"
         };
 
-        var result = await new CsvExportWriter().ExportAsync(definition, context);
+        var result = await new CsvExportWriter(new PassthroughExportAttachmentProcessor()).ExportAsync(definition, context);
 
         Assert.True(result.Success, result.Message);
         var lines = await File.ReadAllLinesAsync(Path.Combine(root, "student.csv"));
@@ -100,7 +100,7 @@ public class CsvExportWriterTests
             OutputMode = ExportOutputMode.AppendToSharedFile,
             SharedFileName = "shared.csv"
         };
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
 
         var (doc1, fields, values1) = MakeDocument("a.pdf", Path.Combine(root, "a-source.pdf"));
         File.WriteAllText(doc1.StoredPath, "a");
@@ -127,7 +127,7 @@ public class CsvExportWriterTests
             OutputMode = ExportOutputMode.OneFilePerDocument,
             FileNamePattern = "{OriginalFileName}"
         };
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
 
         var (doc1, fields, values1) = MakeDocument("first.pdf", Path.Combine(root, "first-source.pdf"));
         File.WriteAllText(doc1.StoredPath, "1");
@@ -157,7 +157,7 @@ public class CsvExportWriterTests
             FieldIds = [fields[1].Id] // Supplier only
         };
 
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
         await writer.ExportAsync(definition, new ExportDocumentContext(document, fields, values));
 
         var lines = await File.ReadAllLinesAsync(Path.Combine(root, "invoice.csv"));
@@ -180,7 +180,7 @@ public class CsvExportWriterTests
             FieldIds = [fields[0].Id]
         };
 
-        var result = await new CsvExportWriter().ExportAsync(
+        var result = await new CsvExportWriter(new PassthroughExportAttachmentProcessor()).ExportAsync(
             definition,
             new ExportDocumentContext(document, fields, values));
 
@@ -230,7 +230,7 @@ public class CsvExportWriterTests
             FileMode = ExportFileMode.Original
         };
 
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
         var result = await writer.ExportAsync(definition, new ExportDocumentContext(document, fields, values));
 
         Assert.True(result.Success, result.Message);
@@ -257,7 +257,7 @@ public class CsvExportWriterTests
             FileMode = ExportFileMode.Redacted
         };
 
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
         var result = await writer.ExportAsync(definition, new ExportDocumentContext(document, fields, values));
 
         Assert.False(result.Success);
@@ -282,7 +282,7 @@ public class CsvExportWriterTests
             FileMode = ExportFileMode.Redacted
         };
         Directory.CreateDirectory(definition.OutputFolder);
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
 
         var notApplied = await writer.ExportAsync(
             definition, new ExportDocumentContext(document, fields, values));
@@ -306,7 +306,7 @@ public class CsvExportWriterTests
             OutputMode = ExportOutputMode.OneFilePerDocument,
             FileNamePattern = "same-name"
         };
-        var writer = new CsvExportWriter();
+        var writer = new CsvExportWriter(new PassthroughExportAttachmentProcessor());
 
         var (doc1, fields, values1) = MakeDocument("a.pdf", Path.Combine(root, "a-source.pdf"));
         File.WriteAllText(doc1.StoredPath, "1");

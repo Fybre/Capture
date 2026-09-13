@@ -2,7 +2,8 @@ namespace Capture.App.Services;
 
 /// <summary>Options collected from the "Export selected to PDF" dialog. <see cref="DestinationPath"/>
 /// is a single output file when <see cref="Combine"/> is true, or a destination folder otherwise.</summary>
-public sealed record ExportPdfOptions(bool Combine, bool Compress, string DestinationPath);
+public sealed record ExportPdfOptions(
+    bool Combine, bool Compress, string DestinationPath, bool Pdfa = false, bool SearchablePdf = false);
 
 public interface IExportPdfDialogService
 {

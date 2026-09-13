@@ -28,6 +28,12 @@ public partial class MainViewModel
     /// already assigned to it.</summary>
     private readonly ObservableCollection<CaptureProfile> _allCaptureProfiles = [];
 
+    // Rebuilt alongside _allCaptureProfiles (LoadProfilesAsync only — profile/type counts don't change
+    // between loads) so FindDocumentType/FindCaptureProfileForDocumentType are O(1) instead of an
+    // O(profiles x types) linear scan repeated once per document during a bulk Inbox load.
+    private Dictionary<Guid, DocumentTypeDefinition> _documentTypesById = [];
+    private Dictionary<Guid, CaptureProfile> _profileByDocumentTypeId = [];
+
     [ObservableProperty]
     private CaptureProfile? _selectedCaptureProfile;
 
@@ -45,7 +51,7 @@ public partial class MainViewModel
     {
         get
         {
-            if (SelectedCaptureProfile is not { } profile)
+            if (SelectedCaptureProfile is not { } profile || profile.Id == BuiltInCaptureProfiles.UnsortedId)
                 return "No profile — ad hoc capture; documents get no fields and land under \"No profile applied\"";
             var batching = profile.Batch.StartNewBatchForEachFile
                 ? "New batch for each input file"
@@ -71,13 +77,31 @@ public partial class MainViewModel
         await ApplyWatchAsync();
     }
 
-    /// <summary>The picker's actual bound selection — translates between the "None" sentinel shown in
-    /// the ComboBox and a null <see cref="SelectedCaptureProfile"/>, so the rest of the app (persistence,
-    /// summary text, ad hoc fallback) keeps treating "no profile" as null exactly as before.</summary>
-    public CaptureProfile SelectedCaptureProfileOrNone
+    /// <summary>The picker's actual bound selection — a plain <see cref="Guid"/> matched against each
+    /// item's own Id via SelectedValueBinding, rather than binding SelectedItem to the CaptureProfile
+    /// object directly. This is deliberate, not a style choice: CaptureProfilePickerItems is repopulated
+    /// every time profiles reload (including at startup), and a reference-based SelectedItem binding
+    /// doesn't survive that reliably when the items are freshly deserialized objects. A scalar id has no
+    /// such failure mode: an unrecognized value simply matches no profile and is ignored below, rather
+    /// than silently overwriting a real selection. Mirrors the same SelectedValue/SelectedValueBinding
+    /// pattern already used for FallbackDocumentTypeId and the PageDisposition pickers elsewhere in the
+    /// Capture Profile designer.
+    ///
+    /// "None" (<see cref="BuiltInCaptureProfiles.Unsorted"/>) is just another entry in
+    /// <see cref="CaptureProfilePickerItems"/> with a fixed, permanent Id — not represented by a C# null
+    /// anywhere in this lookup. That is what keeps this simple: None restores, persists, and matches
+    /// exactly like a real profile, with no separate "was a preference ever saved" bookkeeping needed to
+    /// tell "never chosen" apart from "explicitly chose None".</summary>
+    public Guid SelectedCaptureProfileIdOrNone
     {
-        get => SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted;
-        set => SelectedCaptureProfile = value.Id == BuiltInCaptureProfiles.UnsortedId ? null : value;
+        get => SelectedCaptureProfile?.Id ?? BuiltInCaptureProfiles.UnsortedId;
+        set
+        {
+            if (CaptureProfilePickerItems.FirstOrDefault(profile => profile.Id == value) is { } profile)
+                SelectedCaptureProfile = profile;
+            // Any other value (e.g. Guid.Empty from a transient ComboBox reset) matches nothing on
+            // purpose — ignored, leaving whatever is currently selected untouched.
+        }
     }
 
     private async Task LoadProfilesAsync()
@@ -91,16 +115,32 @@ public partial class MainViewModel
             _allCaptureProfiles.Clear();
             foreach (var profile in all)
                 _allCaptureProfiles.Add(profile);
-            CaptureProfiles.Clear();
-            foreach (var profile in all.Where(profile => profile.Enabled))
-                CaptureProfiles.Add(profile);
-            CaptureProfilePickerItems.Clear();
-            CaptureProfilePickerItems.Add(BuiltInCaptureProfiles.Unsorted);
-            foreach (var profile in CaptureProfiles)
-                CaptureProfilePickerItems.Add(profile);
+            RebuildDocumentTypeLookups(all);
+
+            var enabledProfiles = all.Where(profile => profile.Enabled).ToList();
+            // SyncFrom rather than Clear()+Add(): CaptureProfilePickerItems drives the toolbar
+            // ComboBox's SelectedValue, and Clear() raises a Reset while the collection is momentarily
+            // empty — a ComboBox reacting to that can end up displaying nothing even once the desired
+            // items (always at least "None") are back in place. Never touching the collection unless an
+            // index's value actually changed avoids that empty-list window entirely. See
+            // ObservableCollectionSync's own doc comment for the general rationale.
+            CaptureProfiles.SyncFrom(enabledProfiles);
+            var pickerItems = new List<CaptureProfile>(enabledProfiles.Count + 1) { BuiltInCaptureProfiles.Unsorted };
+            pickerItems.AddRange(enabledProfiles);
+            CaptureProfilePickerItems.SyncFrom(pickerItems);
+
+            // restoreId is null only when no preference has ever been saved (a fresh install) — None
+            // itself always has a real, permanent Id here, so it never needs this fallback. Defaulting
+            // the "nothing else to pick" case (zero enabled profiles) to Unsorted rather than null keeps
+            // SelectedCaptureProfile a real, always-selectable value in every steady state.
             SelectedCaptureProfile = restoreId is { } id
-                ? CaptureProfiles.FirstOrDefault(profile => profile.Id == id)
-                : CaptureProfiles.FirstOrDefault();
+                ? CaptureProfilePickerItems.FirstOrDefault(profile => profile.Id == id) ?? BuiltInCaptureProfiles.Unsorted
+                : CaptureProfiles.FirstOrDefault() ?? BuiltInCaptureProfiles.Unsorted;
+            // Unconditional: if this assignment happens to land on the exact same object
+            // SelectedCaptureProfile already held, CommunityToolkit's own change detection skips
+            // OnSelectedCaptureProfileChanged entirely, so the picker would otherwise never be told to
+            // re-sync against the just-updated CaptureProfilePickerItems.
+            OnPropertyChanged(nameof(SelectedCaptureProfileIdOrNone));
 
             if (previouslySelectedId is { } previousId
                 && SelectedCaptureProfile?.Id != previousId
@@ -122,7 +162,7 @@ public partial class MainViewModel
         ScanCommand.NotifyCanExecuteChanged();
         StartNewBatchCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(SelectedCaptureProfileSummary));
-        OnPropertyChanged(nameof(SelectedCaptureProfileOrNone));
+        OnPropertyChanged(nameof(SelectedCaptureProfileIdOrNone));
         _ = RefreshManualBatchStateAsync();
         if (!_restoringProfileSelection) _ = PersistLastProfileAsync();
     }
@@ -175,18 +215,34 @@ public partial class MainViewModel
 
     private async Task PersistLastProfileAsync()
     {
-        if (_watchSettings.LastCaptureProfileId == SelectedCaptureProfile?.Id) return;
-        _watchSettings.LastCaptureProfileId = SelectedCaptureProfile?.Id;
+        var currentId = SelectedCaptureProfile?.Id;
+        if (_watchSettings.LastCaptureProfileId == currentId)
+            return;
+        _watchSettings.LastCaptureProfileId = currentId;
         await _watchStore.SaveAsync(_watchSettings).ConfigureAwait(true);
     }
 
     // Searches every stored profile, not just the enabled ones offered for new capture work — a document
     // already captured under a profile must still resolve its type/settings after that profile is disabled.
-    private DocumentTypeDefinition? FindDocumentType(Guid? id) => id is null
-        ? null
-        : _allCaptureProfiles.SelectMany(profile => profile.DocumentTypes).FirstOrDefault(type => type.Id == id);
+    private DocumentTypeDefinition? FindDocumentType(Guid? id) =>
+        id is { } value ? _documentTypesById.GetValueOrDefault(value) : null;
 
-    private CaptureProfile? FindCaptureProfileForDocumentType(Guid? id) => id is null
-        ? null
-        : _allCaptureProfiles.FirstOrDefault(profile => profile.DocumentTypes.Any(type => type.Id == id));
+    private CaptureProfile? FindCaptureProfileForDocumentType(Guid? id) =>
+        id is { } value ? _profileByDocumentTypeId.GetValueOrDefault(value) : null;
+
+    // First-match-wins, matching the old FirstOrDefault-based lookups' semantics for the (invalid, but
+    // not worth crashing over) case of a duplicate document-type id across profiles.
+    private void RebuildDocumentTypeLookups(IReadOnlyList<CaptureProfile> profiles)
+    {
+        _documentTypesById = [];
+        _profileByDocumentTypeId = [];
+        foreach (var profile in profiles)
+        {
+            foreach (var type in profile.DocumentTypes)
+            {
+                _documentTypesById.TryAdd(type.Id, type);
+                _profileByDocumentTypeId.TryAdd(type.Id, profile);
+            }
+        }
+    }
 }

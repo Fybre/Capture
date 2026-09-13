@@ -156,7 +156,7 @@ public partial class MainViewModel : ViewModelBase
         _presidioLauncher.StatusChanged += message => Dispatcher.UIThread.Post(() => StatusText = message);
     }
 
-    public ObservableCollection<DocumentRow> Documents { get; } = [];
+    public BulkObservableCollection<DocumentRow> Documents { get; } = [];
 
     public bool HasNoDocuments => Documents.Count == 0;
 

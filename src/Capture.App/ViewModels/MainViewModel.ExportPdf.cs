@@ -33,7 +33,8 @@ public partial class MainViewModel
                 var pages = new List<DocumentPage>();
                 foreach (var row in rows)
                     pages.AddRange(await _store.GetPagesAsync(row.Document.Id).ConfigureAwait(true));
-                await _pdfExportWriter.WriteAsync(pages, options.DestinationPath, options.Compress).ConfigureAwait(true);
+                await _pdfExportWriter.WriteAsync(
+                    pages, options.DestinationPath, options.Compress, options.Pdfa, options.SearchablePdf).ConfigureAwait(true);
                 StatusText = $"Exported {rows.Count} document(s) to {Path.GetFileName(options.DestinationPath)}";
             }
             else
@@ -44,7 +45,8 @@ public partial class MainViewModel
                     var pages = await _store.GetPagesAsync(row.Document.Id).ConfigureAwait(true);
                     var fileName = UniqueFileName(usedNames, row.Document.OriginalFileName);
                     var outputPath = Path.Combine(options.DestinationPath, fileName);
-                    await _pdfExportWriter.WriteAsync(pages, outputPath, options.Compress).ConfigureAwait(true);
+                    await _pdfExportWriter.WriteAsync(
+                        pages, outputPath, options.Compress, options.Pdfa, options.SearchablePdf).ConfigureAwait(true);
                 }
                 StatusText = $"Exported {rows.Count} document(s) to {options.DestinationPath}";
             }

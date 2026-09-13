@@ -220,6 +220,29 @@ public sealed class CaptureWorkflowService(
                 ? await pdfs.RasterizeAsync(sourcePath, rasterDirectory, AnalysisDpi, cancellationToken).ConfigureAwait(false)
                 : await images.ImportAsync(sourcePath, rasterDirectory, cancellationToken).ConfigureAwait(false);
 
+            // Blank-page removal runs before any other ingestion work below — OCR, barcode/zone/blank-
+            // page rule evaluation, batch/document classification — so a discarded page is invisible to
+            // every rule, including a BlankPage separation rule (batch or document-type): such a rule can
+            // never match while this is enabled, since its trigger page is gone before rule evaluation
+            // starts. Survivors are renumbered so position-based rules (EveryNPages) count only real
+            // content pages, as if the blanks never existed; originalPageNumbers preserves each
+            // survivor's true page position in the source file for CapturePlanMaterializer's
+            // single-source-PDF fast path, which extracts pages directly from the original PDF by number.
+            IReadOnlyDictionary<int, int>? originalPageNumbers = null;
+            if (profile.RemoveBlankPagesOnIngestion)
+            {
+                var survivors = rasters.Where(raster => !blanks.IsBlank(raster.ImagePath, profile.RemoveBlankPagesInkPercent)).ToList();
+                var mapping = new Dictionary<int, int>();
+                var renumbered = new List<RasterPage>(survivors.Count);
+                for (var survivorIndex = 0; survivorIndex < survivors.Count; survivorIndex++)
+                {
+                    mapping[survivorIndex + 1] = survivors[survivorIndex].PageNumber;
+                    renumbered.Add(survivors[survivorIndex] with { PageNumber = survivorIndex + 1 });
+                }
+                rasters = renumbered;
+                originalPageNumbers = mapping;
+            }
+
             // Each page's OCR/lattice build, barcode decode, zone extraction, and blank-page check are
             // independent of every other page — OCR in particular spawns its own Tesseract process per
             // page, so running these serially wastes every core beyond the first on a multi-page import.
@@ -290,7 +313,10 @@ public sealed class CaptureWorkflowService(
                 source,
                 rasters,
                 latticeMap,
-                await ContentHashAsync(sourcePath, cancellationToken).ConfigureAwait(false));
+                await ContentHashAsync(sourcePath, cancellationToken).ConfigureAwait(false))
+            {
+                OriginalPageNumbers = originalPageNumbers
+            };
         }
 
         return new AnalysisResult(analyzedInputs, materializationSources);

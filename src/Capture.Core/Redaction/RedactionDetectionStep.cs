@@ -57,44 +57,57 @@ public sealed class RedactionDetectionStep : IPostIndexStep
         {
             if (settings.DetectPii && _piiDetector.IsConfigured)
             {
-                foreach (var page in pages)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var lattice = await _lattices.GetAsync(document.Id, page.PageNumber, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (lattice is null || lattice.Words.Count == 0)
-                        continue;
-
-                    var built = LatticeText.Build(lattice.Words);
-                    var matches = await _piiDetector
-                        .AnalyzeAsync(built.Text, settings.Entities, settings.Language, cancellationToken)
-                        .ConfigureAwait(false);
-
-                    foreach (var match in matches)
+                // Each page's PII analysis is an independent round-trip to the local Presidio sidecar —
+                // running them one at a time made a multi-page document's detection time scale linearly
+                // with page count for no reason, since the sidecar can service concurrent requests fine.
+                // Each parallel branch writes only to its own array slot, so the merge back into `found`
+                // afterward (in page order, same as the old sequential loop) needs no locking.
+                var perPage = new List<RedactionCandidate>?[pages.Count];
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, pages.Count),
+                    new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken },
+                    async (index, ct) =>
                     {
-                        if (match.Score * 100 < settings.ScoreThresholdPercent)
-                            continue;
+                        var page = pages[index];
+                        var lattice = await _lattices.GetAsync(document.Id, page.PageNumber, ct).ConfigureAwait(false);
+                        if (lattice is null || lattice.Words.Count == 0)
+                            return;
 
-                        var words = LatticeText.WordsCovering(built, match.Start, match.End);
-                        if (words.Count == 0)
-                            continue;
+                        var built = LatticeText.Build(lattice.Words);
+                        var matches = await _piiDetector
+                            .AnalyzeAsync(built.Text, settings.Entities, settings.Language, ct)
+                            .ConfigureAwait(false);
 
-                        var (x, y, width, height) = UnionBounds(words);
-                        found.Add(new RedactionCandidate
+                        var candidates = new List<RedactionCandidate>();
+                        foreach (var match in matches)
                         {
-                            Source = RedactionSource.Presidio,
-                            Label = match.EntityType,
-                            PreviewText = built.Text[Math.Max(0, match.Start)..Math.Min(built.Text.Length, match.End)],
-                            PageNumber = page.PageNumber,
-                            Score = match.Score,
-                            X = x,
-                            Y = y,
-                            Width = width,
-                            Height = height
-                        });
-                    }
-                }
+                            if (match.Score * 100 < settings.ScoreThresholdPercent)
+                                continue;
+
+                            var words = LatticeText.WordsCovering(built, match.Start, match.End);
+                            if (words.Count == 0)
+                                continue;
+
+                            var (x, y, width, height) = UnionBounds(words);
+                            candidates.Add(new RedactionCandidate
+                            {
+                                Source = RedactionSource.Presidio,
+                                Label = match.EntityType,
+                                PreviewText = built.Text[Math.Max(0, match.Start)..Math.Min(built.Text.Length, match.End)],
+                                PageNumber = page.PageNumber,
+                                Score = match.Score,
+                                X = x,
+                                Y = y,
+                                Width = width,
+                                Height = height
+                            });
+                        }
+                        perPage[index] = candidates;
+                    }).ConfigureAwait(false);
+
+                foreach (var candidates in perPage)
+                    if (candidates is not null)
+                        found.AddRange(candidates);
             }
         }
         catch (Exception ex)

@@ -68,8 +68,7 @@ public partial class MainViewModel
 
         Documents.Clear();
         SelectedDocuments.Clear();
-        foreach (var row in rows)
-            Documents.Add(row);
+        Documents.AddRange(rows);
         RefreshBatchAccents();
         RefreshDocumentGroups();
     }

@@ -9,11 +9,13 @@ public sealed class ThereforeExportWriter : IExportWriter
 {
     private readonly IThereforeClient _client;
     private readonly IWatchSettingsStore _watchSettings;
+    private readonly IExportAttachmentProcessor _attachments;
 
-    public ThereforeExportWriter(IThereforeClient client, IWatchSettingsStore watchSettings)
+    public ThereforeExportWriter(IThereforeClient client, IWatchSettingsStore watchSettings, IExportAttachmentProcessor attachments)
     {
         _client = client;
         _watchSettings = watchSettings;
+        _attachments = attachments;
     }
 
     public ExportType Type => ExportType.Therefore;
@@ -50,7 +52,7 @@ public sealed class ThereforeExportWriter : IExportWriter
             List<ThereforeStream>? streams = null;
             if (definition.FileMode != ExportFileMode.None)
             {
-                var sourcePath = ExportSourceFile.Resolve(definition, context.Document);
+                var sourcePath = await _attachments.ResolveAsync(definition, context.Document, cancellationToken).ConfigureAwait(false);
                 var bytes = await File.ReadAllBytesAsync(sourcePath, cancellationToken).ConfigureAwait(false);
                 streams = [new ThereforeStream(0, Path.GetFileName(sourcePath), Convert.ToBase64String(bytes))];
             }

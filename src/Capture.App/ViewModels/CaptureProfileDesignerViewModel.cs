@@ -265,6 +265,28 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
             RefreshEnablementIssues();
         }
     }
+
+    public bool RemoveBlankPagesOnIngestion
+    {
+        get => Profile.RemoveBlankPagesOnIngestion;
+        set
+        {
+            if (Profile.RemoveBlankPagesOnIngestion == value) return;
+            Profile.RemoveBlankPagesOnIngestion = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public float RemoveBlankPagesInkPercent
+    {
+        get => Profile.RemoveBlankPagesInkPercent;
+        set
+        {
+            if (Math.Abs(Profile.RemoveBlankPagesInkPercent - value) < 0.0001f) return;
+            Profile.RemoveBlankPagesInkPercent = value;
+            OnPropertyChanged();
+        }
+    }
     public string DocumentTypeName
     {
         get => SelectedDocumentType?.Name ?? string.Empty;

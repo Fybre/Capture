@@ -444,7 +444,7 @@ public partial class MainViewModel
     /// DataGrid's own later correction, unlike the simpler item-removal case RemoveSelectedAsync already
     /// works around), silently bouncing the selection to another document right after the edit. Keeping
     /// the same object reference selected the whole time sidesteps that entirely.</summary>
-    private async Task RefreshDocumentRowInPlaceAsync(DocumentRow row, CaptureDocument updated)
+    private async Task RefreshDocumentRowInPlaceAsync(DocumentRow row, CaptureDocument updated, int initialPageNumber = 1)
     {
         row.Document.StoredPath = updated.StoredPath;
         row.Document.PageCount = updated.PageCount;
@@ -482,7 +482,7 @@ public partial class MainViewModel
             LoadReviewIndexes(row);
             await LoadRedactionCandidatesAsync(row).ConfigureAwait(true);
             ApplyRedactionsCommand.NotifyCanExecuteChanged();
-            await LoadSelectedDocumentAsync(row).ConfigureAwait(true);
+            await LoadSelectedDocumentAsync(row, initialPageNumber).ConfigureAwait(true);
         }
     }
 

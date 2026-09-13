@@ -13,11 +13,14 @@ public sealed class ProfileExportRunner
 {
     private readonly IReadOnlyDictionary<ExportType, IExportWriter> _writers;
     private readonly IFieldScriptRunner? _scripts;
+    private readonly IExportAttachmentProcessor? _attachments;
 
-    public ProfileExportRunner(IEnumerable<IExportWriter> writers, IFieldScriptRunner? scripts = null)
+    public ProfileExportRunner(
+        IEnumerable<IExportWriter> writers, IFieldScriptRunner? scripts = null, IExportAttachmentProcessor? attachments = null)
     {
         _writers = writers.ToDictionary(writer => writer.Type);
         _scripts = scripts;
+        _attachments = attachments;
     }
 
     public async Task<IReadOnlyList<ExportResult>> RunAsync(
@@ -57,6 +60,9 @@ public sealed class ProfileExportRunner
         // AfterExport scripts are side-effect-only (a webhook, an audit log entry) — any field write
         // here is discarded along with the rest of this method's local `snapshot`.
         await RunScriptsAsync(profile, document, snapshot, ScriptTrigger.AfterExport, cancellationToken).ConfigureAwait(false);
+
+        if (_attachments is not null)
+            await _attachments.CleanupAsync(document.Id, cancellationToken).ConfigureAwait(false);
 
         return results;
     }

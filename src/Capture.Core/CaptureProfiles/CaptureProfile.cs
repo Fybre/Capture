@@ -13,6 +13,17 @@ public sealed class CaptureProfile
     public Guid? DefaultDocumentTypeId { get; set; }
     public bool FileIsDocumentBoundary { get; set; } = true;
     public bool AutoExportReadyDocuments { get; set; }
+
+    /// <summary>Discards every blank page on ingestion, before any other work — OCR, barcode/zone/
+    /// blank-page rule evaluation, batch/document classification. Because a discarded page is invisible
+    /// to every rule, a BlankPage separation rule on the batch or on any document type can never match
+    /// while this is enabled; its trigger page is gone before rule evaluation starts.</summary>
+    public bool RemoveBlankPagesOnIngestion { get; set; }
+
+    /// <summary>Ink-coverage threshold for <see cref="RemoveBlankPagesOnIngestion"/> — same meaning and
+    /// scale as a BlankPage separation rule's own <see cref="SeparationStrategy.BlankInkPercent"/>.</summary>
+    public float RemoveBlankPagesInkPercent { get; set; } = 1f;
+
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
 }

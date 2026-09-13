@@ -38,6 +38,8 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
 
     private readonly IAppPaths _paths;
     private readonly IOsCredentialStore _credentialStore;
+    private readonly object _cacheLock = new();
+    private WatchSettings? _cached;
 
     public JsonWatchSettingsStore(IAppPaths paths) : this(paths, ResolveDefaultCredentialStore())
     {
@@ -58,23 +60,50 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         return new NullOsCredentialStore(); // Windows protects the value with DPAPI directly instead.
     }
 
+    // Unprotect() shells out to a native credential store (macOS `security`, Linux `secret-tool`) per
+    // secret — a real subprocess spawn, not a cheap call — and LoadAsync used to pay that (up to three
+    // times, one per secret) on every single call. IFieldScriptRunner.IsAvailable and IAiExtractor.
+    // IsConfigured both call LoadAsync synchronously on every field/document during capture, so an
+    // unattended run with AI or script fields could spawn hundreds of these processes for no reason —
+    // none of them read a secret's value, they only need a couple of unrelated booleans. Caching the
+    // fully-loaded (and already-unprotected) settings here means only the first LoadAsync after startup
+    // or after a SaveAsync pays that cost; every later call returns instantly from memory. Each call
+    // still gets its own independent clone (a JSON round-trip — cheap relative to what it replaces) so
+    // no caller can mutate another caller's copy or the cache by editing the object it got back, the
+    // same guarantee a fresh deserialize gave before.
     public async Task<WatchSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
-        _paths.EnsureCreated();
-        if (!File.Exists(_paths.SettingsPath))
-            return new WatchSettings();
+        lock (_cacheLock)
+        {
+            if (_cached is not null)
+                return Clone(_cached);
+        }
 
-        await using var stream = File.OpenRead(_paths.SettingsPath);
-        var settings = await JsonSerializer.DeserializeAsync<WatchSettings>(stream, LatticeJson.Options, cancellationToken)
-            .ConfigureAwait(false);
-        settings ??= new WatchSettings();
-        settings.AiApiKey = Unprotect("AiApiKey", settings.AiApiKey);
-        settings.ThereforePassword = Unprotect("ThereforePassword", settings.ThereforePassword);
-        settings.ThereforeBearerToken = Unprotect("ThereforeBearerToken", settings.ThereforeBearerToken);
-        return settings;
+        _paths.EnsureCreated();
+        WatchSettings settings;
+        if (!File.Exists(_paths.SettingsPath))
+        {
+            settings = new WatchSettings();
+        }
+        else
+        {
+            await using var stream = File.OpenRead(_paths.SettingsPath);
+            settings = await JsonSerializer.DeserializeAsync<WatchSettings>(stream, LatticeJson.Options, cancellationToken)
+                .ConfigureAwait(false) ?? new WatchSettings();
+            settings.AiApiKey = Unprotect("AiApiKey", settings.AiApiKey);
+            settings.ThereforePassword = Unprotect("ThereforePassword", settings.ThereforePassword);
+            settings.ThereforeBearerToken = Unprotect("ThereforeBearerToken", settings.ThereforeBearerToken);
+        }
+
+        lock (_cacheLock)
+            _cached = settings;
+        return Clone(settings);
     }
 
-    public Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default)
+    private static WatchSettings Clone(WatchSettings source) =>
+        JsonSerializer.Deserialize<WatchSettings>(JsonSerializer.Serialize(source, LatticeJson.Options), LatticeJson.Options)!;
+
+    public async Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default)
     {
         _paths.EnsureCreated();
         var toSave = new WatchSettings
@@ -110,7 +139,13 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             ScanDuplex = settings.ScanDuplex,
             ScanPreferredDeviceId = settings.ScanPreferredDeviceId
         };
-        return LatticeJson.WriteJsonAsync(_paths.SettingsPath, toSave, LatticeJson.Options, cancellationToken);
+        await LatticeJson.WriteJsonAsync(_paths.SettingsPath, toSave, LatticeJson.Options, cancellationToken).ConfigureAwait(false);
+
+        // The caller's settings object already holds the current (unprotected) values — toSave only
+        // exists to write the protected-for-disk form — so it becomes the new cache directly rather
+        // than re-reading the file and re-running Unprotect() against what was just written.
+        lock (_cacheLock)
+            _cached = Clone(settings);
     }
 
     private string? Protect(string account, string? plainText)

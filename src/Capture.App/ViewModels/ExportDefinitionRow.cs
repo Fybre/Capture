@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using Capture.Core.Profiles;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Capture.App.ViewModels;
 
@@ -62,6 +63,60 @@ public sealed partial class ThereforeFieldMappingRow : ObservableObject
     partial void OnSelectedFieldChanged(FieldSelectionRow? value) => Mapping.IndexFieldId = value?.Id;
 }
 
+/// <summary>One custom HTTP header row in a Rest export's designer panel — mirrors
+/// <see cref="ThereforeFieldMappingRow"/>'s "write straight back to the wrapped model object" shape.</summary>
+public sealed partial class RestCustomHeaderRow : ObservableObject
+{
+    public RestCustomHeaderRow(RestCustomHeader header)
+    {
+        Header = header;
+        _name = header.Name;
+        _value = header.Value;
+    }
+
+    public RestCustomHeader Header { get; }
+
+    [ObservableProperty]
+    private string _name;
+
+    partial void OnNameChanged(string value) => Header.Name = value;
+
+    [ObservableProperty]
+    private string _value;
+
+    partial void OnValueChanged(string value) => Header.Value = value;
+}
+
+/// <summary>One JSON body key awaiting a mapping to a profile field, shown in a Rest export's field
+/// mapping list — unlike <see cref="ThereforeFieldMappingRow"/> (populated from a browsed category),
+/// the user adds/removes/names these rows directly, per the explicit-mapping design confirmed for the
+/// Rest export type.</summary>
+public sealed partial class RestFieldMappingRow : ObservableObject
+{
+    public RestFieldMappingRow(RestFieldMapping mapping, IReadOnlyList<FieldSelectionRow> profileFields)
+    {
+        Mapping = mapping;
+        // Same snapshot rationale as ThereforeFieldMappingRow — see its constructor's comment.
+        ProfileFields = profileFields.ToList();
+        _jsonKey = mapping.JsonKey;
+        _selectedField = ProfileFields.FirstOrDefault(field => field.Id == mapping.IndexFieldId);
+    }
+
+    public RestFieldMapping Mapping { get; }
+
+    public IReadOnlyList<FieldSelectionRow> ProfileFields { get; }
+
+    [ObservableProperty]
+    private string _jsonKey;
+
+    partial void OnJsonKeyChanged(string value) => Mapping.JsonKey = value;
+
+    [ObservableProperty]
+    private FieldSelectionRow? _selectedField;
+
+    partial void OnSelectedFieldChanged(FieldSelectionRow? value) => Mapping.IndexFieldId = value?.Id;
+}
+
 /// <summary>Editable wrapper around one <see cref="ExportDefinition"/> — same "write straight back to
 /// the wrapped model object on every property change" shape as <see cref="FieldRow"/>.</summary>
 public sealed partial class ExportDefinitionRow : ObservableObject
@@ -86,8 +141,13 @@ public sealed partial class ExportDefinitionRow : ObservableObject
         _fileNamePattern = definition.FileNamePattern;
         _fileMode = definition.FileMode;
         _includeHeader = definition.IncludeHeader;
+        _pdfa = definition.Pdfa;
+        _searchablePdf = definition.SearchablePdf;
+        _restUrl = definition.RestUrl;
+        _restBearerToken = definition.RestBearerToken ?? string.Empty;
         RebuildFieldOptions();
         RefreshThereforeMappings();
+        RefreshRestRows();
     }
 
     public ExportDefinition Definition { get; }
@@ -126,6 +186,7 @@ public sealed partial class ExportDefinitionRow : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsCsv))]
     [NotifyPropertyChangedFor(nameof(IsTherefore))]
+    [NotifyPropertyChangedFor(nameof(IsRest))]
     private ExportType _type;
 
     partial void OnTypeChanged(ExportType value) => Definition.Type = value;
@@ -133,6 +194,8 @@ public sealed partial class ExportDefinitionRow : ObservableObject
     public bool IsCsv => Type == ExportType.Csv;
 
     public bool IsTherefore => Type == ExportType.Therefore;
+
+    public bool IsRest => Type == ExportType.Rest;
 
     [ObservableProperty]
     private string _outputFolder;
@@ -164,6 +227,16 @@ public sealed partial class ExportDefinitionRow : ObservableObject
     public bool HasFileMode => FileMode != ExportFileMode.None;
 
     [ObservableProperty]
+    private bool _pdfa;
+
+    partial void OnPdfaChanged(bool value) => Definition.Pdfa = value;
+
+    [ObservableProperty]
+    private bool _searchablePdf;
+
+    partial void OnSearchablePdfChanged(bool value) => Definition.SearchablePdf = value;
+
+    [ObservableProperty]
     private bool _includeHeader;
 
     partial void OnIncludeHeaderChanged(bool value) => Definition.IncludeHeader = value;
@@ -178,6 +251,7 @@ public sealed partial class ExportDefinitionRow : ObservableObject
         _documentFields = documentFields;
         RebuildFieldOptions();
         RefreshThereforeMappings();
+        RefreshRestRows();
     }
 
     public void RefreshBatchFieldOptions(IReadOnlyList<FieldRow> batchFields)
@@ -185,6 +259,7 @@ public sealed partial class ExportDefinitionRow : ObservableObject
         _batchFields = batchFields;
         RebuildFieldOptions();
         RefreshThereforeMappings();
+        RefreshRestRows();
     }
 
     private void RebuildFieldOptions()
@@ -242,5 +317,65 @@ public sealed partial class ExportDefinitionRow : ObservableObject
             ThereforeMappings.Add(new ThereforeFieldMappingRow(mapping, FieldOptions));
 
         OnPropertyChanged(nameof(ThereforeCategoryDisplay));
+    }
+
+    [ObservableProperty]
+    private string _restUrl;
+
+    partial void OnRestUrlChanged(string value) => Definition.RestUrl = value;
+
+    [ObservableProperty]
+    private string _restBearerToken;
+
+    partial void OnRestBearerTokenChanged(string value) =>
+        Definition.RestBearerToken = string.IsNullOrEmpty(value) ? null : value;
+
+    public ObservableCollection<RestCustomHeaderRow> RestCustomHeaders { get; } = [];
+
+    public ObservableCollection<RestFieldMappingRow> RestMappings { get; } = [];
+
+    /// <summary>Rebuilds the Rest header/mapping rows from the model — called on init and again whenever
+    /// the field list changes (mirrors <see cref="RefreshThereforeMappings"/>).</summary>
+    public void RefreshRestRows()
+    {
+        RestCustomHeaders.Clear();
+        foreach (var header in Definition.RestCustomHeaders)
+            RestCustomHeaders.Add(new RestCustomHeaderRow(header));
+
+        RestMappings.Clear();
+        foreach (var mapping in Definition.RestFieldMappings)
+            RestMappings.Add(new RestFieldMappingRow(mapping, FieldOptions));
+    }
+
+    [RelayCommand]
+    private void AddRestHeader()
+    {
+        var header = new RestCustomHeader();
+        Definition.RestCustomHeaders.Add(header);
+        RestCustomHeaders.Add(new RestCustomHeaderRow(header));
+    }
+
+    [RelayCommand]
+    private void RemoveRestHeader(RestCustomHeaderRow? row)
+    {
+        if (row is null) return;
+        Definition.RestCustomHeaders.Remove(row.Header);
+        RestCustomHeaders.Remove(row);
+    }
+
+    [RelayCommand]
+    private void AddRestMapping()
+    {
+        var mapping = new RestFieldMapping();
+        Definition.RestFieldMappings.Add(mapping);
+        RestMappings.Add(new RestFieldMappingRow(mapping, FieldOptions));
+    }
+
+    [RelayCommand]
+    private void RemoveRestMapping(RestFieldMappingRow? row)
+    {
+        if (row is null) return;
+        Definition.RestFieldMappings.Remove(row.Mapping);
+        RestMappings.Remove(row);
     }
 }

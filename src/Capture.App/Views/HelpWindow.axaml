@@ -227,6 +227,11 @@
                         <TextBlock Text="The input-file boundary setting is independent: turn it off when one logical document may continue into the next file. Capture merges those planned pages into the materialised document."
                                    Classes="help-body" />
 
+                        <TextBlock Text="Remove blank pages on ingestion" Classes="help-h2" />
+                        <TextBlock Text="On the Overview tab, this discards every blank page before any other ingestion work — OCR, rule evaluation, batch/document classification — as if those pages never existed. Remaining pages are renumbered so position-based rules (Every N pages) still count correctly against real content only."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Because removal runs first, a discarded page is invisible to every later rule — including a Blank page separation rule on the Batch or on any document type, which can never match while this setting is enabled." Classes="help-note" /></Border>
+
                         <TextBlock Text="Capture V2 storage" Classes="help-h2" />
                         <TextBlock Text="Capture V2 stores its database, settings, profiles, documents, and models separately from the previous application version. Capture Profiles are the only supported profile format in this version."
                                    Classes="help-body" />
@@ -273,7 +278,7 @@
                                    Classes="help-body" />
 
                         <TextBlock Text="Page management" Classes="help-h2" />
-                        <TextBlock Text="Right-click a thumbnail in the page strip for Delete page(s) (works on a multi-selection) or Split here, which moves that page and everything after it into a new document inheriting the same document type, batch, and populated document values. Both resulting documents are indexed again, so first-page, last-page, barcode, zonal, AI, and scripted fields reflect their new page sets. A newly extracted value replaces the inherited value; if extraction is blank because the original separator/header page was removed, the inherited value is retained without invalid highlight coordinates. Drag a thumbnail to a new position to reorder pages within the document — a line shows exactly where it will land as you drag, including dropping below the last thumbnail to move a page to the very end. Deleting, splitting, and reordering also update any redaction candidates to match the new page numbers."
+                        <TextBlock Text="Right-click a thumbnail in the page strip for Delete page(s) (works on a multi-selection) or Split here, which moves that page and everything after it into a new document inheriting the same document type, batch, and populated document values. Both resulting documents are indexed again, so first-page, last-page, barcode, zonal, AI, and scripted fields reflect their new page sets. A newly extracted value replaces the inherited value; if extraction is blank because the original separator/header page was removed, the inherited value is retained without invalid highlight coordinates. Drag a thumbnail to a new position to reorder pages within the document — a line shows exactly where it will land as you drag, including dropping below the last thumbnail to move a page to the very end. The same right-click menu's Rotate submenu turns the selected page(s) 90°, 180°, or 270° — this re-runs OCR for the rotated pages, and drops (rather than tries to reposition) any index-field highlight or redaction candidate on them, since neither can be trusted at the old position after a rotation. Deleting, splitting, and reordering also update any redaction candidates to match the new page numbers."
                                    Classes="help-body" />
 
                         <TextBlock Text="Importing by drag-and-drop" Classes="help-h2" />

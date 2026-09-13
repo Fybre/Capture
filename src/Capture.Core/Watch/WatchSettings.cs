@@ -6,6 +6,12 @@ namespace Capture.Core.Watch;
 public sealed class WatchSettings
 {
     public List<WatchFolderEntry> WatchFolders { get; set; } = [];
+
+    /// <summary>The toolbar picker's last selection. Null only means "no preference saved yet" (a fresh
+    /// install — default to the first enabled profile); "None" has its own permanent, real Id
+    /// (<c>BuiltInCaptureProfiles.UnsortedId</c>) and is stored here just like any other profile
+    /// choice, so no separate flag is needed to tell "never chosen" apart from "explicitly chose
+    /// None".</summary>
     public Guid? LastCaptureProfileId { get; set; }
 
     public string? AiEndpoint { get; set; } = "https://api.openai.com/v1";

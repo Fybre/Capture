@@ -13,6 +13,10 @@
             <TextBlock x:Name="SummaryText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
             <CheckBox x:Name="CombineCheckBox" Content="Combine into a single PDF" IsCheckedChanged="OnCombineChanged" />
             <CheckBox x:Name="CompressCheckBox" Content="Smaller file size (compress)" />
+            <CheckBox x:Name="PdfaCheckBox" Content="Convert to PDF/A"
+                      ToolTip.Tip="Best-effort PDF/A-shaped output (OutputIntent, XMP metadata, embedded font) — not externally conformance-validated." />
+            <CheckBox x:Name="SearchablePdfCheckBox" Content="Searchable PDF"
+                      ToolTip.Tip="Overlays an invisible OCR text layer so the exported PDF's text is selectable and searchable." />
             <StackPanel Spacing="6">
                 <Button x:Name="BrowseButton" Content="Choose location…" Click="OnBrowseClick" HorizontalAlignment="Left" />
                 <TextBlock x:Name="LocationText"

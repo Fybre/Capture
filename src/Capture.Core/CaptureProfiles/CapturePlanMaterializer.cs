@@ -20,6 +20,13 @@ public sealed record CaptureMaterializationSource(
 {
     /// <summary>One stable id for this source occurrence, shared by every document split from it.</summary>
     public Guid SourceImportId { get; init; } = Guid.NewGuid();
+
+    /// <summary>Maps a (possibly renumbered) <see cref="RasterPage.PageNumber"/> back to the true page
+    /// position in <see cref="SourcePath"/> — null unless CaptureProfile.RemoveBlankPagesOnIngestion
+    /// discarded and renumbered pages for this source. Needed only by the single-source-PDF fast path in
+    /// CapturePlanMaterializer, which extracts pages directly from the original PDF by page number and
+    /// would otherwise pull the wrong pages once numbering no longer matches the source file.</summary>
+    public IReadOnlyDictionary<int, int>? OriginalPageNumbers { get; init; }
 }
 
 public sealed record CaptureMaterializationProgress(int CompletedDocuments, int TotalDocuments, string Message);
@@ -231,7 +238,12 @@ public sealed class CapturePlanMaterializer(
         }
 
         if (isSingleSourcePdf)
-            await subsetWriter.WritePagesAsync(primarySource.SourcePath, planned.SourcePages.Select(page => page.PageNumber).ToList(), output, cancellationToken).ConfigureAwait(false);
+        {
+            var sourcePageNumbers = planned.SourcePages
+                .Select(page => primarySource.OriginalPageNumbers is { } map && map.TryGetValue(page.PageNumber, out var original) ? original : page.PageNumber)
+                .ToList();
+            await subsetWriter.WritePagesAsync(primarySource.SourcePath, sourcePageNumbers, output, cancellationToken).ConfigureAwait(false);
+        }
         else
             await mergedWriter.WriteAsync(pageRows, output, cancellationToken).ConfigureAwait(false);
 

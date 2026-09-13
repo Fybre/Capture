@@ -5,6 +5,12 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Capture.Core\Capture.Core.csproj" />
+    <ProjectReference Include="..\Capture.Export\Capture.Export.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Embedded in exported PDFs (invisible OCR text layer / PDF/A font-embedding requirement) —
+         same IBM Plex Sans already bundled and licensed (SIL OFL) for the app's own UI. -->
+    <EmbeddedResource Include="Resources\IBMPlexSans-Regular.ttf" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="PdfPig" Version="0.1.16" />
