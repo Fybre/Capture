@@ -255,7 +255,14 @@ public sealed class CapturePlanMaterializer(
             Source = primarySource.Source,
             BatchId = batchId,
             ProfileId = planned.Type?.Id,
-            Status = DocumentStatus.NeedsReview,
+            // A profile with zero document types (the built-in "None"/Unsorted profile, or a custom
+            // one deliberately left empty) can never match a type — there are no index fields to
+            // extract or validate, so there's nothing for a reviewer to complete and the document goes
+            // straight to Ready. A profile that DOES define document types but failed to match this
+            // particular document is a genuine classification miss and stays NeedsReview. When a type
+            // IS matched, this gets overwritten by IndexFormat.StatusFor(...) below once its fields are
+            // actually applied.
+            Status = profile.DocumentTypes.Count == 0 ? DocumentStatus.Ready : DocumentStatus.NeedsReview,
             PageCount = pageRows.Count,
             ContentHash = sourceIds.Count == 1 ? primarySource.ContentHash : null,
             SourceImportId = sourceIds.Count == 1 ? primarySource.SourceImportId : null

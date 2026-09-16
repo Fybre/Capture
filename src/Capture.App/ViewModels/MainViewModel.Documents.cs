@@ -366,8 +366,10 @@ public partial class MainViewModel
             var skipped = 0;
             foreach (var row in rows)
             {
+                // A document with no indexable fields (no capture profile applied) has nothing to
+                // validate — vacuously eligible, not a skip candidate.
                 var indexable = row.Indexes.Where(index => !index.HideFromIndexing && !index.IsReadOnly).ToList();
-                if (indexable.Count == 0 || indexable.Any(index => index.IsMissing))
+                if (indexable.Any(index => index.IsMissing))
                 {
                     skipped++;
                     continue;
@@ -418,11 +420,12 @@ public partial class MainViewModel
         }
     }
 
+    // No requirement that at least one indexable field exist — a document with no capture profile
+    // applied has nothing to validate, so it's vacuously eligible rather than permanently blocked.
     private bool CanMarkReady() =>
         !IsBusy
         && !ShowTrash
         && SelectedDocument is not null
-        && SelectedDocument.Indexes.Any(index => !index.HideFromIndexing && !index.IsReadOnly)
         && SelectedDocument.Indexes.Where(index => !index.HideFromIndexing && !index.IsReadOnly).All(index => !index.IsMissing);
 
     async partial void OnSelectedDocumentChanged(DocumentRow? value)

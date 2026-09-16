@@ -7,6 +7,11 @@ public sealed class WatchSettings
 {
     public List<WatchFolderEntry> WatchFolders { get; set; } = [];
 
+    /// <summary>True once the first-run setup wizard has been shown and completed — App.axaml.cs
+    /// checks this at startup to decide whether to show <c>FirstRunWizardWindow</c> before
+    /// <c>MainWindow</c>. Never reset once true.</summary>
+    public bool HasCompletedFirstRunSetup { get; set; }
+
     /// <summary>The toolbar picker's last selection. Null only means "no preference saved yet" (a fresh
     /// install — default to the first enabled profile); "None" has its own permanent, real Id
     /// (<c>BuiltInCaptureProfiles.UnsortedId</c>) and is stored here just like any other profile

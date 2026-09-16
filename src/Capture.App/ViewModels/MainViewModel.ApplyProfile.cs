@@ -88,7 +88,11 @@ public partial class MainViewModel
                 document.ProfileId = type?.Id;
                 document.Status = type is not null
                     ? IndexFormat.StatusFor(batchValues.Concat(values), type.AutoReadyThreshold)
-                    : DocumentStatus.NeedsReview;
+                    // A profile with no document types (applying "None"/Unsorted) has nothing to
+                    // extract or validate, so there's nothing left for a reviewer to do — but a
+                    // profile that defines types and still failed to match is a genuine
+                    // classification miss and stays NeedsReview. See CapturePlanMaterializer.
+                    : profile.DocumentTypes.Count == 0 ? DocumentStatus.Ready : DocumentStatus.NeedsReview;
                 await _store.UpdateAsync(document).ConfigureAwait(true);
                 if (oldBatchId is { } previousBatchId && previousBatchId != targetBatch.Id)
                     await _store.DeleteEmptyBatchAsync(previousBatchId).ConfigureAwait(true);

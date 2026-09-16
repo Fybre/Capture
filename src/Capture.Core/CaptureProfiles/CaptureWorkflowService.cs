@@ -136,7 +136,11 @@ public sealed class CaptureWorkflowService(
                     var prepared = preparedDocuments[documentIndex];
                     var plannedDocument = plannedBatch.Documents[documentIndex];
                     IReadOnlyList<IndexValue> documentValues = [];
-                    var status = DocumentStatus.NeedsReview;
+                    // See CapturePlanMaterializer.MaterializeDocumentAsync: a profile with no document
+                    // types at all has nothing to extract/validate, so there's nothing for a reviewer
+                    // to complete — but a profile that defines types and still failed to match this
+                    // document is a genuine classification miss and stays NeedsReview.
+                    var status = profile.DocumentTypes.Count == 0 ? DocumentStatus.Ready : DocumentStatus.NeedsReview;
 
                     if (plannedDocument.Type is { } type)
                     {

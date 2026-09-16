@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        x:Class="Capture.App.Views.FirstRunWizardWindow"
+        x:DataType="vm:FirstRunWizardViewModel"
+        Title="Welcome to Capture"
+        Icon="/Assets/capture.ico"
+        Width="520"
+        Height="560"
+        MinWidth="460"
+        MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        SystemDecorations="Full"
+        ShowInTaskbar="True">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource GroundBrush}">
+        <StackPanel Grid.Row="0" Margin="28,24,28,4" Spacing="4">
+            <TextBlock Text="Welcome to Capture" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="A few quick preferences to get started — you can change any of these later in Settings."
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource MutedBrush}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,16,28,16" Spacing="18">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Start view" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding StartViewOptions}"
+                              SelectedItem="{Binding StartView}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Text="Preview opens straight to a document; Table opens a spreadsheet-style summary of the whole inbox."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Theme" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding ThemeOptions}"
+                              SelectedItem="{Binding Theme}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Text="System follows your OS's light/dark setting."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}" />
+                    <TextBlock Text="Checks GitHub for a newer release each time Capture starts. Only a version number is requested — no document or usage data is sent."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <CheckBox Content="Allow profile scripts" IsChecked="{Binding AllowFieldScripts}" />
+                    <TextBlock Text="Lets Capture Profiles run C# scripts during import/export. Off by default: a script runs with full access to this computer, same as any program you'd run yourself — there is no sandboxing. Only turn this on if you trust the profiles you'll be using."
+                               TextWrapping="Wrap"
+                               Classes="hint" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12"
+                Background="{DynamicResource Surface2Brush}">
+            <Button Content="Get Started"
+                    HorizontalAlignment="Right"
+                    MinWidth="120"
+                    IsDefault="True"
+                    Classes="accent"
+                    Command="{Binding GetStartedCommand}" />
+        </Border>
+    </Grid>
+</Window>

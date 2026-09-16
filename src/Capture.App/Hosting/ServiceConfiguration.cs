@@ -102,6 +102,7 @@ public static class ServiceConfiguration
         // ever creating a second instance.
         services.AddSingleton<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<FirstRunWizardViewModel>();
         services.AddTransient<ThereforeCategoryPickerViewModel>();
         return services;
     }

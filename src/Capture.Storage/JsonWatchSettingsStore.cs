@@ -109,6 +109,7 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         var toSave = new WatchSettings
         {
             WatchFolders = settings.WatchFolders,
+            HasCompletedFirstRunSetup = settings.HasCompletedFirstRunSetup,
             StartView = settings.StartView,
             Theme = settings.Theme,
             InboxOrder = settings.InboxOrder,

@@ -91,6 +91,11 @@ public partial class SettingsViewModel : ViewModelBase
 
     public Action? Close { get; set; }
 
+    /// <summary>Carried through unchanged by TryBuildSettings — this window has no UI for it, so
+    /// without this a save here would silently reset it to false and the first-run wizard (see
+    /// WatchSettings.HasCompletedFirstRunSetup) would reappear on next launch.</summary>
+    private bool _hasCompletedFirstRunSetup;
+
     [ObservableProperty]
     private WorkspaceMode _startView = WorkspaceMode.Preview;
 
@@ -343,6 +348,7 @@ public partial class SettingsViewModel : ViewModelBase
             CaptureProfiles.Add(profile);
 
         var settings = await _store.LoadAsync();
+        _hasCompletedFirstRunSetup = settings.HasCompletedFirstRunSetup;
         StartView = settings.StartView;
         Theme = settings.Theme;
         InboxOrder = settings.InboxOrder;
@@ -720,6 +726,7 @@ public partial class SettingsViewModel : ViewModelBase
 
         settings = new WatchSettings
         {
+            HasCompletedFirstRunSetup = _hasCompletedFirstRunSetup,
             StartView = StartView,
             Theme = Theme,
             InboxOrder = InboxOrder,

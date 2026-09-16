@@ -110,12 +110,16 @@
                         <ItemsControl ItemsSource="{Binding CapturedPerDay}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="3" />
+                                    <!-- Columns fixed at 30 to match DayWindow/"last 30 days" — a UniformGrid stretches
+                                         to the card's full width, unlike the StackPanel it replaces (which sized to its
+                                         own content and left today's bar stranded well short of the "Today" label below,
+                                         which DOES stretch across the same width via its own Grid ColumnDefinitions="*,*"). -->
+                                    <UniformGrid Rows="1" Columns="30" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Width="18" Height="90" ToolTip.Tip="{Binding Label}">
+                                    <Border Width="18" Height="90" HorizontalAlignment="Center" ToolTip.Tip="{Binding Label}">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
@@ -140,12 +144,13 @@
                         <ItemsControl ItemsSource="{Binding ExportedPerDay}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="3" />
+                                    <!-- See the "Captured per day" chart above for why this is a UniformGrid, not a StackPanel. -->
+                                    <UniformGrid Rows="1" Columns="30" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Width="18" Height="90" ToolTip.Tip="{Binding Label}">
+                                    <Border Width="18" Height="90" HorizontalAlignment="Center" ToolTip.Tip="{Binding Label}">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
