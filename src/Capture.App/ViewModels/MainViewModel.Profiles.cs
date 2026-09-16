@@ -41,8 +41,19 @@ public partial class MainViewModel
     [NotifyCanExecuteChangedFor(nameof(StartNewBatchCommand))]
     private bool _hasOpenManualBatch;
 
+    /// <summary>Which of the three manual-batch states the toolbar dot shows — replaces the old
+    /// "No manual batch is open…"/"A batch is open…" text line with a status dot (see MainWindow.axaml,
+    /// the "Capture profile" toolbar group), with the full sentence moved to <see cref="ManualBatchTooltip"/>
+    /// instead of sitting in the toolbar permanently.</summary>
     [ObservableProperty]
-    private string _manualBatchStatus = string.Empty;
+    [NotifyPropertyChangedFor(nameof(IsManualBatchClosed))]
+    [NotifyPropertyChangedFor(nameof(IsManualBatchOpen))]
+    [NotifyPropertyChangedFor(nameof(IsManualBatchAutoSplit))]
+    private ManualBatchIndicator _manualBatchIndicator = ManualBatchIndicator.Closed;
+
+    public bool IsManualBatchClosed => ManualBatchIndicator == ManualBatchIndicator.Closed;
+    public bool IsManualBatchOpen => ManualBatchIndicator == ManualBatchIndicator.Open;
+    public bool IsManualBatchAutoSplit => ManualBatchIndicator == ManualBatchIndicator.AutoSplit;
 
     [ObservableProperty]
     private string _manualBatchTooltip = string.Empty;
@@ -179,6 +190,15 @@ public partial class MainViewModel
             StatusText = "Closed the current batch; the next manual import will start a new batch";
             StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
+
+            // The DB row is closed above, but _batchesById (loaded once at ReloadDocumentsAsync, not
+            // re-fetched here) still holds the old Open state — without patching it directly, the
+            // inbox/table "Open" badge on this batch's divider row would keep showing Open until some
+            // unrelated action happened to trigger a full reload.
+            if (_batchesById.TryGetValue(open.Id, out var cached))
+                cached.State = BatchState.Closed;
+            RefreshBatchAccents();
+            RefreshDocumentGroups();
         }
         else
         {
@@ -195,8 +215,8 @@ public partial class MainViewModel
         if (_store is not IOpenBatchStore batches)
         {
             HasOpenManualBatch = false;
-            ManualBatchStatus = string.Empty;
-            ManualBatchTooltip = string.Empty;
+            ManualBatchIndicator = ManualBatchIndicator.Closed;
+            ManualBatchTooltip = "No manual batch is open — the next import starts one";
             return;
         }
 
@@ -205,12 +225,17 @@ public partial class MainViewModel
         var currentProfileId = (SelectedCaptureProfile ?? BuiltInCaptureProfiles.Unsorted).Id;
         if (currentProfileId != profile.Id) return;
         HasOpenManualBatch = open is not null;
-        ManualBatchStatus = open is null
+        ManualBatchIndicator = open is null
+            ? ManualBatchIndicator.Closed
+            : profile.Batch.StartNewBatchForEachFile
+                ? ManualBatchIndicator.AutoSplit
+                : ManualBatchIndicator.Open;
+        var openText = open is null
             ? "No manual batch is open — the next import starts one"
             : profile.Batch.StartNewBatchForEachFile
                 ? "A batch is current — the next file starts a new batch automatically"
                 : "A batch is open — new manual imports join it";
-        ManualBatchTooltip = open is null ? string.Empty : $"Internal batch number: {open.Number}";
+        ManualBatchTooltip = open is null ? openText : $"{openText} (Batch {open.DisplayNumber})";
     }
 
     private async Task PersistLastProfileAsync()
@@ -245,4 +270,20 @@ public partial class MainViewModel
             }
         }
     }
+}
+
+/// <summary>Drives the toolbar's manual-batch status dot (see MainViewModel.RefreshManualBatchStateAsync
+/// and MainWindow.axaml's "Capture profile" toolbar group) — replaces what used to be a permanent text
+/// line under the profile picker.</summary>
+public enum ManualBatchIndicator
+{
+    /// <summary>No manual batch open for the selected profile — the next import starts one.</summary>
+    Closed,
+
+    /// <summary>A manual batch is open and new imports join it.</summary>
+    Open,
+
+    /// <summary>A manual batch is open, but the profile's StartNewBatchForEachFile setting means the
+    /// next file starts a new one automatically rather than joining this one.</summary>
+    AutoSplit
 }

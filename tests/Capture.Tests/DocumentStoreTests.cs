@@ -210,6 +210,41 @@ public class DocumentStoreTests
     }
 
     [Fact]
+    public async Task Batch_DisplayNumber_resets_on_a_new_store_instance_but_Number_keeps_climbing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-batch-display-" + Guid.NewGuid().ToString("N"));
+        var paths = new AppPaths(root);
+        paths.EnsureCreated();
+
+        // First "session": two batches, numbered/display-numbered 1 and 2 alike, freshly created.
+        var store1 = new SqliteDocumentStore(paths);
+        await store1.InitializeAsync();
+        var firstBatch = await store1.CreateBatchAsync();
+        var secondBatch = await store1.CreateBatchAsync();
+        Assert.Equal(1, firstBatch.Number);
+        Assert.Equal(1, firstBatch.DisplayNumber);
+        Assert.Equal(2, secondBatch.Number);
+        Assert.Equal(2, secondBatch.DisplayNumber);
+
+        // A new store instance against the same database simulates the app reopening — InitializeAsync
+        // renumbers every existing batch's DisplayNumber back to 1, 2, ... in creation order, while the
+        // permanent Number (used by capture-profile scripts/fields and exports) is never touched.
+        var store2 = new SqliteDocumentStore(paths);
+        await store2.InitializeAsync();
+        var reloaded = await store2.GetBatchesAsync([firstBatch.Id, secondBatch.Id]);
+        Assert.Equal(1, reloaded[firstBatch.Id].Number);
+        Assert.Equal(1, reloaded[firstBatch.Id].DisplayNumber);
+        Assert.Equal(2, reloaded[secondBatch.Id].Number);
+        Assert.Equal(2, reloaded[secondBatch.Id].DisplayNumber);
+
+        // A batch created in this new "session" continues the just-reset DisplayNumber sequence (3, not
+        // 4), while its permanent Number keeps climbing from the true historical count (3).
+        var thirdBatch = await store2.CreateBatchAsync();
+        Assert.Equal(3, thirdBatch.Number);
+        Assert.Equal(3, thirdBatch.DisplayNumber);
+    }
+
+    [Fact]
     public async Task ContentHash_and_source_import_id_roundtrip_through_save_and_update()
     {
         var root = Path.Combine(Path.GetTempPath(), "capture-hash-" + Guid.NewGuid().ToString("N"));

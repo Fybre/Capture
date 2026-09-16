@@ -43,6 +43,13 @@ public sealed partial class DocumentRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(BatchDividerLabel))]
     private int _batchDocumentCount;
 
+    /// <summary>True when this batch's <see cref="CaptureBatch.State"/> is <see cref="BatchState.Open"/> —
+    /// drives the "Open" badge on the batch-divider row. Independent of the toolbar's manual-batch
+    /// status text: this reflects the batch actually shown here, not just the currently selected
+    /// profile's "manual" channel.</summary>
+    [ObservableProperty]
+    private bool _batchIsOpen;
+
     /// <summary>"Batch 41 · Scanner · 3 docs" — blank when batch metadata hasn't loaded yet (e.g. a
     /// batch created moments ago, before the next full reload populates the lookup), in which case the
     /// divider still shows via <see cref="IsFirstInBatch"/>, just without this text.</summary>

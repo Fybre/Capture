@@ -173,7 +173,13 @@ public sealed class CapturePlanMaterializer(
 
             }
 
-            if (closeBatchWhenFinished && openBatches is not null)
+            // A StartNewBatchForEachFile batch is closed here too, regardless of the caller's own
+            // closeBatchWhenFinished (manual imports pass false there) — it will never be joined by a
+            // later import (line ~70 above only reuses an open batch when StartNewBatchForEachFile is
+            // false), so leaving it BatchState.Open until some *later* import's "close the previous
+            // batch" step (line ~78 above) got around to it made it look joinable/"Open" to a reviewer
+            // in the meantime when it never actually was.
+            if ((closeBatchWhenFinished || profile.Batch.StartNewBatchForEachFile) && openBatches is not null)
             {
                 var open = await openBatches.GetOpenBatchAsync(profile.Id, inputChannel, cancellationToken).ConfigureAwait(false);
                 if (open is not null)

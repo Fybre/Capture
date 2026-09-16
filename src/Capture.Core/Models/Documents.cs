@@ -96,7 +96,17 @@ public sealed class CaptureBatch
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public DateTimeOffset CreatedUtc { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>The permanent, ever-increasing batch number — feeds the {Batch#} default-value token
+    /// available to capture profile fields/scripts and exported index data. Never resets, never
+    /// reused. For what a reviewer sees on screen, see <see cref="DisplayNumber"/> instead.</summary>
     public int Number { get; init; }
+
+    /// <summary>What's shown to a reviewer as "Batch N" — resets to 1 each time the app starts (see
+    /// <c>SqliteDocumentStore.RenumberBatchesForNewSessionAsync</c>), unlike the permanent
+    /// <see cref="Number"/>. Not unique across the batch's lifetime; purely cosmetic.</summary>
+    public int DisplayNumber { get; init; }
+
     public Guid? WatchFolderEntryId { get; init; }
     public Guid? CaptureProfileId { get; init; }
     public string? InputChannel { get; init; }

@@ -11,6 +11,11 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
     private readonly IAppPaths _paths;
     private readonly string _connectionString;
 
+    // Seeded by RenumberBatchesForNewSessionAsync (called once from InitializeAsync) and incremented
+    // for every batch created afterward — see that method's doc comment for why this lives on the
+    // instance rather than being recomputed from the table each time.
+    private int _nextDisplayNumber = 1;
+
     public SqliteDocumentStore(IAppPaths paths)
     {
         _paths = paths;
@@ -83,6 +88,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
               id TEXT PRIMARY KEY,
               created_utc TEXT NOT NULL,
               number INTEGER NOT NULL,
+              display_number INTEGER,
               watch_folder_entry_id TEXT,
               capture_profile_id TEXT,
               input_channel TEXT,
@@ -110,7 +116,42 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         // by an earlier build of this same prototype still needs to remain usable while it is running.
         await EnsureColumnAsync(connection, "documents", "source_import_id", "TEXT", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "documents", "exported_utc", "TEXT", cancellationToken).ConfigureAwait(false);
+        await EnsureColumnAsync(connection, "batches", "display_number", "INTEGER", cancellationToken).ConfigureAwait(false);
 
+        await RenumberBatchesForNewSessionAsync(connection, cancellationToken).ConfigureAwait(false);
+    }
+
+    // "Batch N" shown to a reviewer is display_number — a plain, non-unique column, deliberately
+    // separate from the permanent, ever-increasing `number` column (which feeds {Batch#} in capture
+    // profile scripts/fields and exported index data, so it must never renumber or repeat). Called
+    // once per process, from InitializeAsync, so every app open starts the visible numbering back at
+    // 1 for whatever batches currently exist (in creation order), and _nextDisplayNumber continues
+    // that sequence for batches created later in the same session — reused because this store is a
+    // DI singleton for the process's whole lifetime (see ServiceConfiguration.cs).
+    private async Task RenumberBatchesForNewSessionAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var ids = new List<string>();
+        await using (var select = connection.CreateCommand())
+        {
+            select.CommandText = "SELECT id FROM batches ORDER BY created_utc, rowid;";
+            await using var reader = await select.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                ids.Add(reader.GetString(0));
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        for (var index = 0; index < ids.Count; index++)
+        {
+            await using var update = connection.CreateCommand();
+            update.Transaction = (SqliteTransaction)transaction;
+            update.CommandText = "UPDATE batches SET display_number = $display WHERE id = $id;";
+            update.Parameters.AddWithValue("$display", index + 1);
+            update.Parameters.AddWithValue("$id", ids[index]);
+            await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        _nextDisplayNumber = ids.Count + 1;
     }
 
     public async Task SaveAsync(
@@ -376,15 +417,16 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             number = Convert.ToInt32(await max.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) + 1;
         }
 
-        var batch = new CaptureBatch { Number = number, WatchFolderEntryId = watchFolderEntryId };
+        var batch = new CaptureBatch { Number = number, DisplayNumber = _nextDisplayNumber++, WatchFolderEntryId = watchFolderEntryId };
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO batches (id, created_utc, number, watch_folder_entry_id)
-            VALUES ($id, $created, $number, $folder);
+            INSERT INTO batches (id, created_utc, number, display_number, watch_folder_entry_id)
+            VALUES ($id, $created, $number, $display, $folder);
             """;
         command.Parameters.AddWithValue("$id", batch.Id.ToString("D"));
         command.Parameters.AddWithValue("$created", batch.CreatedUtc.ToString("O", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$number", batch.Number);
+        command.Parameters.AddWithValue("$display", batch.DisplayNumber);
         command.Parameters.AddWithValue("$folder", (object?)watchFolderEntryId?.ToString("D") ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return batch;
@@ -400,12 +442,13 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             max.CommandText = "SELECT IFNULL(MAX(number), 0) FROM batches;";
             number = Convert.ToInt32(await max.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) + 1;
         }
-        var batch = new CaptureBatch { Number = number, CaptureProfileId = captureProfileId, InputChannel = inputChannel, State = BatchState.Open };
+        var batch = new CaptureBatch { Number = number, DisplayNumber = _nextDisplayNumber++, CaptureProfileId = captureProfileId, InputChannel = inputChannel, State = BatchState.Open };
         await using var command = connection.CreateCommand();
-        command.CommandText = "INSERT INTO batches (id, created_utc, number, capture_profile_id, input_channel, state) VALUES ($id, $created, $number, $profile, $channel, $state);";
+        command.CommandText = "INSERT INTO batches (id, created_utc, number, display_number, capture_profile_id, input_channel, state) VALUES ($id, $created, $number, $display, $profile, $channel, $state);";
         command.Parameters.AddWithValue("$id", batch.Id.ToString("D"));
         command.Parameters.AddWithValue("$created", batch.CreatedUtc.ToString("O", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$number", batch.Number);
+        command.Parameters.AddWithValue("$display", batch.DisplayNumber);
         command.Parameters.AddWithValue("$profile", captureProfileId.ToString("D"));
         command.Parameters.AddWithValue("$channel", inputChannel);
         command.Parameters.AddWithValue("$state", (int)BatchState.Open);
@@ -417,7 +460,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
     {
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, created_utc, number, state FROM batches WHERE capture_profile_id=$profile AND input_channel=$channel AND state=$open ORDER BY created_utc DESC, rowid DESC LIMIT 1;";
+        command.CommandText = "SELECT id, created_utc, number, state, display_number FROM batches WHERE capture_profile_id=$profile AND input_channel=$channel AND state=$open ORDER BY created_utc DESC, rowid DESC LIMIT 1;";
         command.Parameters.AddWithValue("$profile", captureProfileId.ToString("D"));
         command.Parameters.AddWithValue("$channel", inputChannel);
         command.Parameters.AddWithValue("$open", (int)BatchState.Open);
@@ -430,7 +473,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             Number = reader.GetInt32(2),
             CaptureProfileId = captureProfileId,
             InputChannel = inputChannel,
-            State = (BatchState)reader.GetInt32(3)
+            State = (BatchState)reader.GetInt32(3),
+            DisplayNumber = reader.IsDBNull(4) ? reader.GetInt32(2) : reader.GetInt32(4)
         };
     }
 
@@ -451,7 +495,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, created_utc, number
+            SELECT id, created_utc, number, display_number
             FROM batches
             WHERE watch_folder_entry_id = $folder
             ORDER BY created_utc DESC, rowid DESC
@@ -467,6 +511,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             Id = Guid.Parse(reader.GetString(0)),
             CreatedUtc = DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             Number = reader.GetInt32(2),
+            DisplayNumber = reader.IsDBNull(3) ? reader.GetInt32(2) : reader.GetInt32(3),
             WatchFolderEntryId = watchFolderEntryId
         };
     }
@@ -512,7 +557,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var command = connection.CreateCommand();
         var parameterNames = distinctIds.Select((_, index) => $"$id{index}").ToList();
         command.CommandText = $"""
-            SELECT id, created_utc, number, watch_folder_entry_id, capture_profile_id, input_channel, state
+            SELECT id, created_utc, number, watch_folder_entry_id, capture_profile_id, input_channel, state, display_number
             FROM batches
             WHERE id IN ({string.Join(", ", parameterNames)});
             """;
@@ -532,7 +577,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
                 WatchFolderEntryId = reader.IsDBNull(3) ? null : Guid.Parse(reader.GetString(3)),
                 CaptureProfileId = reader.IsDBNull(4) ? null : Guid.Parse(reader.GetString(4)),
                 InputChannel = reader.IsDBNull(5) ? null : reader.GetString(5),
-                State = (BatchState)reader.GetInt32(6)
+                State = (BatchState)reader.GetInt32(6),
+                DisplayNumber = reader.IsDBNull(7) ? reader.GetInt32(2) : reader.GetInt32(7)
             };
         }
 

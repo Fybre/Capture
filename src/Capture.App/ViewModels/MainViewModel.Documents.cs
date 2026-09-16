@@ -574,7 +574,7 @@ public partial class MainViewModel
         foreach (var row in rows)
         {
             if (row.IsFirstInBatch && row.Document.BatchId is { } batchId)
-                result.Add(new BatchDividerRow(batchId, row.BatchDividerLabel, row.BatchAccent));
+                result.Add(new BatchDividerRow(batchId, row.BatchDividerLabel, row.BatchAccent, row.BatchIsOpen));
             result.Add(row);
         }
 
@@ -605,9 +605,11 @@ public partial class MainViewModel
             if (row.IsFirstInBatch && batchId is { } id)
             {
                 batchesById.TryGetValue(id, out var batch);
-                row.BatchNumber = batch?.Number;
+                // DisplayNumber, not the permanent Number — resets each app session; see CaptureBatch.
+                row.BatchNumber = batch?.DisplayNumber;
                 row.BatchInputChannel = batch?.InputChannel;
                 row.BatchDocumentCount = countsByBatch.GetValueOrDefault(id);
+                row.BatchIsOpen = batch?.State == BatchState.Open;
             }
 
             previous = batchId;

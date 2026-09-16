@@ -33,7 +33,7 @@ public class BatchDividerTests
         var batchId = Guid.NewGuid();
         var batches = new Dictionary<Guid, CaptureBatch>
         {
-            [batchId] = new CaptureBatch { Id = batchId, Number = 41, InputChannel = "Scanner" }
+            [batchId] = new CaptureBatch { Id = batchId, DisplayNumber = 41, InputChannel = "Scanner" }
         };
         var rows = new[] { Row(batchId), Row(batchId), Row(batchId) };
 
@@ -52,7 +52,7 @@ public class BatchDividerTests
         var batchId = Guid.NewGuid();
         var batches = new Dictionary<Guid, CaptureBatch>
         {
-            [batchId] = new CaptureBatch { Id = batchId, Number = 7 }
+            [batchId] = new CaptureBatch { Id = batchId, DisplayNumber = 7 }
         };
         var rows = new[] { Row(batchId) };
 

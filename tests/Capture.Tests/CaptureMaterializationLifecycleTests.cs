@@ -257,6 +257,28 @@ public sealed class CaptureMaterializationLifecycleTests
         Assert.Equal(expected, batches.Batch.State);
     }
 
+    // Regression test: a manual import (closeBatchWhenFinished: false, matching MainViewModel.Import.cs's
+    // "manual" channel call) with StartNewBatchForEachFile must still close the batch it just created —
+    // otherwise it's left BatchState.Open even though CapturePlanner/line ~70 above guarantees no later
+    // import will ever reuse it, which showed up as a misleading "Open" badge in the inbox UI.
+    [Fact]
+    public async Task StartNewBatchForEachFile_closes_its_batch_even_when_the_caller_says_not_to()
+    {
+        var profile = new CaptureProfile { Batch = new BatchDefinition { StartNewBatchForEachFile = true } };
+        var batches = new FakeOpenBatchStore(profile.Id, "manual");
+        var materializer = new CapturePlanMaterializer(
+            null!, null!, null!, null!, null!, null!, null!, batches);
+
+        await materializer.MaterializeAsync(
+            profile,
+            new CapturePlan([], [], []),
+            new Dictionary<string, CaptureMaterializationSource>(),
+            inputChannel: "manual",
+            closeBatchWhenFinished: false);
+
+        Assert.Equal(BatchState.Closed, batches.Batch.State);
+    }
+
     private sealed class FakeOpenBatchStore(Guid profileId, string channel) : IOpenBatchStore
     {
         public CaptureBatch Batch { get; } = new()

@@ -421,6 +421,21 @@
     <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
   </Style>
 
+  <!-- ===================== Manual-batch status dot ===================== -->
+  <!-- See MainWindow.axaml's "Capture profile" toolbar group and MainViewModel.ManualBatchIndicator. -->
+
+  <Style Selector="Ellipse.batch-dot-closed">
+    <Setter Property="Fill" Value="Transparent" />
+    <Setter Property="Stroke" Value="{DynamicResource MutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.3" />
+  </Style>
+  <Style Selector="Ellipse.batch-dot-open">
+    <Setter Property="Fill" Value="{DynamicResource GoodBrush}" />
+  </Style>
+  <Style Selector="Ellipse.batch-dot-autosplit">
+    <Setter Property="Fill" Value="{DynamicResource WarnBrush}" />
+  </Style>
+
   <!-- ===================== DataGrid ===================== -->
 
   <Style Selector="DataGrid">

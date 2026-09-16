@@ -7,4 +7,4 @@ namespace Capture.App.ViewModels;
 /// instance of this type is automatically treated as "not a document" (no selection, no drag source)
 /// everywhere, with no extra guarding needed. See MainViewModel.ApplyBatchDividers/BuildDisplayRows for
 /// how these get interleaved into each grid's display-only row list.</summary>
-public sealed record BatchDividerRow(Guid BatchId, string Label, bool Accent);
+public sealed record BatchDividerRow(Guid BatchId, string Label, bool Accent, bool IsOpen);
