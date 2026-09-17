@@ -1127,6 +1127,11 @@
                                                     Click="OnSelectAllGroupClick" />
                                         </DockPanel>
                                         <Border Height="1" Background="{DynamicResource BorderBrush1}" />
+                                        <!-- RowHeight is explicit (rather than the DataGrid default, tight enough for a
+                                             plain TextBlock) because a date field's inline editor is a CalendarDatePicker,
+                                             not a plain TextBox — its own chrome (calendar toggle button) needs more
+                                             vertical room than the default row gives it, or its border and the date text
+                                             visibly overlap once a cell enters edit mode. See BuildIndexCellEditor. -->
                                         <DataGrid ItemsSource="{Binding DisplayRows}"
                                                   AutoGenerateColumns="False"
                                                   IsReadOnly="True"
@@ -1138,6 +1143,7 @@
                                                   SelectionMode="Extended"
                                                   Focusable="False"
                                                   ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                  RowHeight="38"
                                                   Loaded="OnGroupTableLoaded"
                                                   SelectionChanged="OnGroupTableSelectionChanged"
                                                   KeyDown="OnGroupTableKeyDown">

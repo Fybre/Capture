@@ -252,8 +252,9 @@ public partial class MainViewModel
         await ApplyDocumentFieldToSelectionAsync(source, row.Value).ConfigureAwait(true);
     }
 
-    /// <summary>Table cells do not use <see cref="IndexValueRow"/> wrappers, so resolve the field on
-    /// the row the user hovered and then share the same copy implementation used by Preview mode.</summary>
+    /// <summary>Table cells display via plain <see cref="IndexValue"/> lookups, not <see cref="IndexValueRow"/>
+    /// wrappers (see <see cref="CreateTableFieldEditor"/> for the one place that changes), so resolve the
+    /// field on the row the user hovered and then share the same copy implementation used by Preview mode.</summary>
     public async Task ApplyTableFieldToSelectionAsync(DocumentRow source, string fieldName)
     {
         var value = source.DocumentIndexes.FirstOrDefault(item =>
@@ -262,6 +263,27 @@ public partial class MainViewModel
             return;
 
         await ApplyDocumentFieldToSelectionAsync(source, value).ConfigureAwait(true);
+    }
+
+    /// <summary>Builds a transient <see cref="IndexValueRow"/> for inline-editing one Table mode cell —
+    /// the same construction and auto-save-on-change path as Preview's Indexes panel
+    /// (<see cref="CreateReviewRow"/>), just not tracked in <see cref="ReviewBatchIndexes"/>/
+    /// <see cref="ReviewDocumentIndexes"/>, since a Table mode edit targets one specific document's field
+    /// directly rather than "the" currently selected document's whole field list. Returns null when the
+    /// field can't be found, is read-only, is a kind Table mode doesn't offer inline editing for (Button
+    /// runs a script instead of holding a value; Script is computed, not manually entered), or would
+    /// render as a masked "••••••" placeholder with no live editor to show (a sensitive batch lookup/date
+    /// field not yet revealed) — see MainWindow.axaml.cs's BuildIndexColumn, which checks the same three
+    /// "can this row actually show a control" flags before entering edit mode.</summary>
+    public IndexValueRow? CreateTableFieldEditor(DocumentRow document, string fieldName, bool isBatchField)
+    {
+        var value = (isBatchField ? document.BatchIndexes : document.DocumentIndexes).FirstOrDefault(item =>
+            !item.HideFromIndexing && string.Equals(item.FieldName, fieldName, StringComparison.OrdinalIgnoreCase));
+        if (value is null || value.IsReadOnly || value.Kind is FieldKind.Button or FieldKind.Script)
+            return null;
+
+        var row = CreateReviewRow(document, value, isBatchField);
+        return row.IsTextEntry || row.IsLookupEditorVisible || row.IsDateEditorVisible ? row : null;
     }
 
     private async Task ApplyDocumentFieldToSelectionAsync(DocumentRow source, IndexValue sourceValue)

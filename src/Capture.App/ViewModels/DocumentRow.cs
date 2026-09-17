@@ -1,3 +1,4 @@
+using Capture.App.Converters;
 using Capture.Core.Indexing;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
@@ -13,6 +14,22 @@ public sealed partial class DocumentRow : ObservableObject
     }
 
     public CaptureDocument Document { get; }
+
+    /// <summary>The one field currently being edited inline in a Table mode cell, or null when none is
+    /// — at most one field editable at a time per row, mirroring how Preview's Indexes panel only ever
+    /// shows one document's fields live. See MainWindow.axaml.cs's BuildIndexColumn.</summary>
+    [ObservableProperty]
+    private IndexCellBinding? _editingField;
+
+    /// <summary>Backs the live editor (TextBox/ComboBox/CalendarDatePicker) shown for <see cref="EditingField"/>,
+    /// null otherwise. The editor controls bind to this via a nested path (e.g. "ActiveFieldEditor.Text")
+    /// off this row's own DataContext, rather than having their own DataContext set directly to an
+    /// IndexValueRow — DataGrid recycles cell containers across rows as it scrolls/rebuilds, and a
+    /// directly-assigned DataContext stops following that recycling (Avalonia only re-inherits a
+    /// DataContext that was never explicitly overridden), which showed up as one row's date editor
+    /// visually "stuck" over whatever row the recycled container was later reused for.</summary>
+    [ObservableProperty]
+    private IndexValueRow? _activeFieldEditor;
 
     public Guid Id => Document.Id;
 

@@ -9,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Capture.App.Converters;
 using Capture.App.ViewModels;
@@ -25,6 +26,24 @@ public partial class MainWindow : Window
     private const int TableModeStaticColumnCount = 5;
 
     private readonly List<DataGrid> _groupGrids = [];
+
+    // Table mode index-field cells enter edit mode on a single click, but a real double-click (which
+    // still opens Preview, unchanged — see OnGroupTableDoubleTapped) is ALSO a single click followed by
+    // another single click in quick succession. Rather than swap the cell's TextBlock for a live editor
+    // on the very first Tapped (which could change what the second tap of a double-click actually hits),
+    // the first Tapped only arms this timer; a second Tapped anywhere in a group grid within the window
+    // cancels it (treating that as the second half of a double-click) instead of letting it fire.
+    private DispatcherTimer? _pendingCellEditTimer;
+
+    // The one Table mode cell (if any) currently showing a live editor instead of read-only text.
+    // Exists because the editor's own LostFocus doesn't reliably fire when it stops being the reason to
+    // close it — switching to a different cell doesn't move OS focus away from a plain read-only
+    // TextBlock, and switching away from Table mode entirely just hides the whole grid (IsVisible
+    // toggled higher up the tree) rather than removing this control, so it can keep logical focus
+    // indefinitely. Both cases are handled explicitly instead: EnterIndexCellEditMode closes this before
+    // opening a new one, and OnMainDataContextChanged's IsTableMode subscriber closes it on tab switch.
+    private (DocumentRow Row, IndexCellBinding Field, Action Exit)? _activeCellEdit;
+
     private DataGrid? _pressGrid;
     private DocumentRow? _pressRow;
     private Point _pressPoint;
@@ -63,6 +82,16 @@ public partial class MainWindow : Window
                 FlyoutBase.ShowAttachedFlyout(RedactPickerAnchor);
             else
                 FlyoutBase.GetAttachedFlyout(RedactPickerAnchor)?.Hide();
+        };
+
+        // Switching away from Table mode just hides its grid (IsVisible toggled higher up the tree, see
+        // MainWindow.axaml's IsVisible="{Binding IsTableMode}") rather than removing it, so a live cell
+        // editor's own LostFocus never fires — close it explicitly instead of leaving it open (and
+        // reappearing exactly as left, mid-edit) the next time Table mode is shown.
+        viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(MainViewModel.IsTableMode) && !viewModel.IsTableMode)
+                _activeCellEdit?.Exit();
         };
 
         var redactPickerFlyout = FlyoutBase.GetAttachedFlyout(RedactPickerAnchor)!;
@@ -756,14 +785,16 @@ public partial class MainWindow : Window
                 if (data is not DocumentRow)
                     return new TextBlock();
 
+                var bindingRequest = new IndexCellBinding(fieldName, isBatchField);
+
                 var text = new TextBlock
                 {
                     FontFamily = monoFont,
                     FontSize = 12,
                     Margin = new Thickness(10, 0),
-                    VerticalAlignment = VerticalAlignment.Center
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Cursor = new Cursor(StandardCursorType.Hand)
                 };
-                var bindingRequest = new IndexCellBinding(fieldName, isBatchField);
                 text.Bind(TextBlock.TextProperty, new Binding
                 {
                     Path = nameof(DocumentRow.IndexCellSource),
@@ -776,11 +807,33 @@ public partial class MainWindow : Window
                     Converter = IndexCellForegroundConverter.Instance,
                     ConverterParameter = bindingRequest
                 });
+                text.Bind(Visual.IsVisibleProperty, new Binding
+                {
+                    Path = nameof(DocumentRow.EditingField),
+                    Converter = IndexCellIsEditingConverter.NotEditing,
+                    ConverterParameter = bindingRequest
+                });
 
-                // Batch values already propagate within their batch. The copy affordance is only for
+                var editorHost = BuildIndexCellEditor(fieldName, isBatchField, bindingRequest);
+                editorHost.Bind(Visual.IsVisibleProperty, new Binding
+                {
+                    Path = nameof(DocumentRow.EditingField),
+                    Converter = IndexCellIsEditingConverter.Editing,
+                    ConverterParameter = bindingRequest
+                });
+
+                text.Tapped += (_, _) => OnIndexCellTapped(text, bindingRequest);
+
+                // Batch values already propagate within their batch — the copy affordance is only for
                 // document fields, matching Preview mode, and reserves no visible space until hover.
+                // Editing itself, unlike copy, applies to both batch and document field cells.
                 if (isBatchField)
-                    return text;
+                {
+                    var batchCell = new Panel();
+                    batchCell.Children.Add(text);
+                    batchCell.Children.Add(editorHost);
+                    return batchCell;
+                }
 
                 var copyIcon = new Avalonia.Controls.Shapes.Path
                 {
@@ -802,6 +855,10 @@ public partial class MainWindow : Window
                     Margin = new Thickness(0, 0, 4, 0),
                     Opacity = 0,
                     IsHitTestVisible = false,
+                    // Otherwise Tab (e.g. tabbing out of this cell's new inline editor) lands keyboard
+                    // focus here — Opacity=0 hides its own content, but not the theme's focus-adorner
+                    // rectangle, which then renders as a stray black-outlined box floating in the cell.
+                    Focusable = false,
                     VerticalAlignment = VerticalAlignment.Center,
                     Tag = bindingRequest
                 };
@@ -816,6 +873,8 @@ public partial class MainWindow : Window
                     Background = Brushes.Transparent
                 };
                 cell.Children.Add(text);
+                cell.Children.Add(editorHost);
+                Grid.SetColumnSpan(editorHost, 2);
                 Grid.SetColumn(copy, 1);
                 cell.Children.Add(copy);
                 cell.PointerEntered += (_, _) =>
@@ -839,6 +898,222 @@ public partial class MainWindow : Window
             })
         };
     }
+
+    /// <summary>Builds the (initially hidden) inline editor for one Table mode field cell — a TextBox/
+    /// ComboBox/TextBox trio (the second TextBox is for date-kind fields; see its own comment for why
+    /// this doesn't use CalendarDatePicker like Preview mode's IndexFieldTemplate does) selected by
+    /// IsTextEntry/IsLookupEditorVisible/IsDateEditorVisible, all three always present so the same
+    /// host works for whichever kind the field turns out to be once <see cref="OnIndexCellTapped"/>
+    /// actually resolves it — <see cref="DocumentRow.ActiveFieldEditor"/> starts null and is only
+    /// assigned a real <see cref="IndexValueRow"/> at that point, not eagerly for every cell of every
+    /// row.</summary>
+    private Grid BuildIndexCellEditor(string fieldName, bool isBatchField, IndexCellBinding bindingRequest)
+    {
+        // Bound via the "ActiveFieldEditor.X" nested path off this cell's own DataContext (the row's
+        // DocumentRow) rather than pointing DataContext itself at an IndexValueRow — see
+        // DocumentRow.ActiveFieldEditor's doc comment. DataContext is never overridden here, so these
+        // bindings keep resolving correctly however often DataGrid recycles this container for a
+        // different row (which it does on every edit commit, not just on scroll: committing a value
+        // rebuilds DisplayRows, and the grid regenerates its containers against the new list).
+        const string editorPath = nameof(DocumentRow.ActiveFieldEditor) + ".";
+
+        // Mode is explicit TwoWay on every editable property — the nested "ActiveFieldEditor.X" path
+        // still resolves its default BindingMode from each property's own metadata same as a plain
+        // path would, but CalendarDatePicker.SelectedDate's default isn't TwoWay, so a picked date
+        // never wrote back to the view model (silently looked like nothing happened on selection).
+        var textBox = new TextBox { Margin = new Thickness(2, 0), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Tag = "text" };
+        textBox.Bind(TextBox.TextProperty, new Binding(editorPath + nameof(IndexValueRow.Text)) { Mode = BindingMode.TwoWay });
+        textBox.Bind(TextBox.PasswordCharProperty, new Binding(editorPath + nameof(IndexValueRow.PasswordChar)));
+        textBox.Bind(TextBox.RevealPasswordProperty, new Binding(editorPath + nameof(IndexValueRow.RevealSensitiveValue)));
+        textBox.Bind(Visual.IsVisibleProperty, new Binding(editorPath + nameof(IndexValueRow.IsTextEntry)));
+
+        var comboBox = new ComboBox { Margin = new Thickness(2, 0), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
+        comboBox.Bind(ItemsControl.ItemsSourceProperty, new Binding(editorPath + nameof(IndexValueRow.LookupChoices)));
+        comboBox.Bind(SelectingItemsControl.SelectedItemProperty, new Binding(editorPath + nameof(IndexValueRow.SelectedLookup)) { Mode = BindingMode.TwoWay });
+        comboBox.Bind(Visual.IsVisibleProperty, new Binding(editorPath + nameof(IndexValueRow.IsLookupEditorVisible)));
+        comboBox.ItemTemplate = new FuncDataTemplate<LookupChoice>((choice, _) => new TextBlock { Text = choice?.Display });
+
+        // Deliberately a plain TextBox, not the CalendarDatePicker Preview mode uses — its calendar
+        // popup is anchored to a control living inside a recycled DataGrid cell, and live testing
+        // showed the popup's own click/keyboard day-selection simply didn't reach the calendar (stuck
+        // showing whatever day was already selected, however it was clicked). Typed text round-trips
+        // through the exact same Text/Commit path already proven to work for every other field kind —
+        // Value.Format still validates it the same way regardless of which control produced the text.
+        var dateBox = new TextBox { Margin = new Thickness(2, 0), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Tag = "date" };
+        dateBox.Bind(TextBox.TextProperty, new Binding(editorPath + nameof(IndexValueRow.Text)) { Mode = BindingMode.TwoWay });
+        dateBox.Bind(Visual.IsVisibleProperty, new Binding(editorPath + nameof(IndexValueRow.IsDateEditorVisible)));
+
+        var host = new Grid { IsVisible = false };
+        host.Children.Add(textBox);
+        host.Children.Add(comboBox);
+        host.Children.Add(dateBox);
+
+        void ExitEditMode()
+        {
+            // host.DataContext is the row's own DocumentRow — never overridden, see above — so this is
+            // always whichever row is actually showing this container right now, recycled or not.
+            if (host.DataContext is not DocumentRow owner)
+                return;
+            if (owner.ActiveFieldEditor is { } editing)
+                editing.Changed = null;
+            owner.ActiveFieldEditor = null;
+            owner.EditingField = null;
+            if (_activeCellEdit is { } active && active.Row == owner && active.Field == bindingRequest)
+                _activeCellEdit = null;
+        }
+
+        // A tuple, not just the Action — Tab/Shift+Tab (below) needs to find THIS specific cell's host
+        // by (row, field) when moving away from a different cell, since it has no control reference to
+        // start from the way a click does.
+        host.Tag = (Exit: (Action)ExitEditMode, Field: bindingRequest);
+
+        foreach (Control control in new Control[] { textBox, comboBox, dateBox })
+        {
+            control.LostFocus += (_, _) => ExitEditMode();
+            control.KeyDown += (_, e) =>
+            {
+                if (e.Key is Key.Enter or Key.Escape)
+                {
+                    e.Handled = true;
+                    ExitEditMode();
+                }
+                else if (e.Key == Key.Tab && host.DataContext is DocumentRow row)
+                {
+                    e.Handled = true;
+                    ExitEditMode();
+                    MoveToAdjacentIndexCell(host, row, bindingRequest, forward: (e.KeyModifiers & KeyModifiers.Shift) == 0);
+                }
+            };
+        }
+
+        return host;
+    }
+
+    /// <summary>Single click on a Table mode field cell — arms a short delay before actually entering
+    /// edit mode (see <see cref="_pendingCellEditTimer"/>'s doc comment for why: a genuine double-click
+    /// must still reach <see cref="OnGroupTableDoubleTapped"/> and open Preview, unchanged). If a second
+    /// Tapped anywhere in a group grid arrives before the delay elapses, that's treated as the second
+    /// half of a double-click and this edit-entry is cancelled instead of firing.</summary>
+    private void OnIndexCellTapped(TextBlock text, IndexCellBinding bindingRequest)
+    {
+        if (_pendingCellEditTimer is not null)
+        {
+            _pendingCellEditTimer.Stop();
+            _pendingCellEditTimer = null;
+            return;
+        }
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(280) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _pendingCellEditTimer = null;
+            EnterIndexCellEditMode(text, bindingRequest);
+        };
+        _pendingCellEditTimer = timer;
+        timer.Start();
+    }
+
+    private void EnterIndexCellEditMode(TextBlock text, IndexCellBinding bindingRequest)
+    {
+        if (text.DataContext is not DocumentRow row)
+            return;
+        if (text.Parent is not Panel cell)
+            return;
+
+        var editorHost = cell.Children.OfType<Grid>().FirstOrDefault();
+        if (editorHost is null)
+            return;
+
+        // Only one Table mode cell is ever live-editable at a time. Its own LostFocus won't fire here —
+        // clicking a plain read-only TextBlock doesn't move OS focus away from a still-focused editor —
+        // so close it explicitly rather than leaving two cells showing editors at once.
+        _activeCellEdit?.Exit();
+        ActivateCellEditor(editorHost, row, bindingRequest);
+    }
+
+    /// <summary>Shared by a click (<see cref="EnterIndexCellEditMode"/>) and Tab/Shift+Tab
+    /// (<see cref="MoveToAdjacentIndexCell"/>) — builds the row's editor for this field, shows it, and
+    /// focuses the right control inside it. Returns false (leaving the cell as read-only text) when the
+    /// field isn't actually editable — read-only, Button/Script kind, or an unrevealed masked value —
+    /// which Tab navigation uses to skip past it to the next cell instead of landing there.</summary>
+    private bool ActivateCellEditor(Grid editorHost, DocumentRow row, IndexCellBinding field)
+    {
+        if (DataContext is not MainViewModel viewModel)
+            return false;
+
+        var editorRow = viewModel.CreateTableFieldEditor(row, field.FieldName, field.IsBatchField);
+        if (editorRow is null)
+            return false;
+
+        row.ActiveFieldEditor = editorRow;
+        row.EditingField = field;
+        if (editorHost.Tag is (Action exit, IndexCellBinding))
+            _activeCellEdit = (row, field, exit);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            // Both the text-kind and date-kind editors are plain TextBox instances (see
+            // BuildIndexCellEditor's comment on why date editing doesn't use CalendarDatePicker here),
+            // distinguished by their own Tag rather than by type.
+            Control? target = editorRow switch
+            {
+                { IsTextEntry: true } => editorHost.Children.OfType<TextBox>().FirstOrDefault(c => Equals(c.Tag, "text")),
+                { IsLookupEditorVisible: true } => editorHost.Children.OfType<ComboBox>().FirstOrDefault(),
+                { IsDateEditorVisible: true } => editorHost.Children.OfType<TextBox>().FirstOrDefault(c => Equals(c.Tag, "date")),
+                _ => null
+            };
+            target?.Focus();
+            if (target is TextBox targetTextBox)
+                targetTextBox.SelectAll();
+        }, DispatcherPriority.Loaded);
+        return true;
+    }
+
+    /// <summary>Tab/Shift+Tab out of a Table mode cell editor — moves to the next (or previous) field
+    /// column in the same row, wrapping to the first (or last) field of the next (or previous) row when
+    /// at the end of this one, skipping any field that turns out not to be editable
+    /// (<see cref="ActivateCellEditor"/> returns false for those) rather than landing on it. Silently
+    /// does nothing past the first/last cell of the grid — the caller already exited the cell being
+    /// left, so that's just an ordinary Tab-out with no cell picked up next, same as leaving any other
+    /// control.</summary>
+    private void MoveToAdjacentIndexCell(Grid fromHost, DocumentRow fromRow, IndexCellBinding fromField, bool forward)
+    {
+        if (fromHost.FindAncestorOfType<DataGrid>() is not { } grid || grid.DataContext is not DocumentGroupViewModel group)
+            return;
+        if (grid.ItemsSource is not IEnumerable<object> items)
+            return;
+
+        var fields = group.BatchFieldNames.Select(name => new IndexCellBinding(name, true))
+            .Concat(group.DocumentFieldNames.Select(name => new IndexCellBinding(name, false)))
+            .ToList();
+        var rows = items.OfType<DocumentRow>().ToList();
+
+        var cells = rows.SelectMany(row => fields.Select(field => (Row: row, Field: field))).ToList();
+        var currentIndex = cells.FindIndex(c => ReferenceEquals(c.Row, fromRow) && c.Field == fromField);
+        if (currentIndex < 0)
+            return;
+
+        var step = forward ? 1 : -1;
+        for (var i = currentIndex + step; i >= 0 && i < cells.Count; i += step)
+        {
+            var (targetRow, targetField) = cells[i];
+            var editorHost = FindIndexCellEditorHost(grid, targetRow, targetField);
+            if (editorHost is null)
+                continue; // Not realized (virtualized out) — treat like an unreachable/non-editable cell.
+            if (ActivateCellEditor(editorHost, targetRow, targetField))
+                return;
+        }
+    }
+
+    /// <summary>Locates a specific (row, field) cell's editor host, previously stashed via its own Tag
+    /// when built (see <see cref="BuildIndexCellEditor"/>) — used by <see cref="MoveToAdjacentIndexCell"/>,
+    /// which has no click-originated control reference to start from the way <see cref="EnterIndexCellEditMode"/>
+    /// does.</summary>
+    private static Grid? FindIndexCellEditorHost(Visual root, DocumentRow row, IndexCellBinding field) =>
+        root.GetVisualDescendants()
+            .OfType<Grid>()
+            .FirstOrDefault(g => ReferenceEquals(g.DataContext, row) && g.Tag is (Action, IndexCellBinding tag) && tag == field);
 
     private async void OnTableIndexCopyClick(object? sender, RoutedEventArgs e)
     {
@@ -926,6 +1201,13 @@ public partial class MainWindow : Window
 
     private void OnGroupTableDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // Defense in depth alongside OnIndexCellTapped's own cancel-on-second-tap: this covers a
+        // double-click whose second tap lands outside any index cell (e.g. the File/Status column, or
+        // empty row space) — that tap never reaches OnIndexCellTapped, so without this the pending
+        // single-click edit-entry from the first tap could still fire ~280ms later.
+        _pendingCellEditTimer?.Stop();
+        _pendingCellEditTimer = null;
+
         if (sender is not DataGrid || DataContext is not MainViewModel viewModel)
             return;
         if (viewModel.SelectedDocument is { } row)
