@@ -297,6 +297,10 @@ public partial class MainViewModel
         }
         catch (Exception ex)
         {
+            // Unlike the post-index-step catch below, this one used to swallow the exception's detail
+            // entirely — StatusText only ever showed the short message (e.g. "AI extract failed (401)"),
+            // with no Trace.TraceError call, so even a Debug Mode session had nothing to show for it.
+            Trace.TraceError($"Import failed: {ex}");
             StatusText = ex.Message;
             StatusIsError = true;
             foreach (var path in paths) MoveWatchFile(path, watchRoot, watchFolderEntry, success: false);

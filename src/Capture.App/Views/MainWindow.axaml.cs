@@ -21,9 +21,9 @@ public partial class MainWindow : Window
     private const string DocumentDragFormat = "capture.document";
     private const string PageDragFormat = "capture.page";
 
-    // Rail, File, Pages, Status, Issues — the columns each Table-mode group DataGrid declares in XAML,
-    // before per-profile index-field columns are appended in code-behind.
-    private const int TableModeStaticColumnCount = 5;
+    // Rail, File, Pages, Status, Issues, spacer — the columns each Table-mode group DataGrid declares in
+    // XAML, before per-profile index-field columns are appended in code-behind.
+    private const int TableModeStaticColumnCount = 6;
 
     private readonly List<DataGrid> _groupGrids = [];
 
@@ -750,6 +750,10 @@ public partial class MainWindow : Window
             {
                 Header = string.Empty,
                 Width = new DataGridLength(1),
+                // MinWidth matches Width explicitly — DataGrid otherwise enforces its own default
+                // minimum column width regardless of CanUserResize, which silently widened this
+                // spacer back out past the 1px it was actually set to.
+                MinWidth = 1,
                 CanUserResize = false,
                 CanUserSort = false,
                 // FuncDataTemplate<object> (not <DocumentRow>) deliberately — with compiled bindings on

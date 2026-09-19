@@ -119,7 +119,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Width="18" Height="90" HorizontalAlignment="Center" ToolTip.Tip="{Binding Label}">
+                                    <Border Width="18" Height="90" HorizontalAlignment="Center" ToolTip.Tip="{Binding TooltipText}">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />
@@ -150,7 +150,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Width="18" Height="90" HorizontalAlignment="Center" ToolTip.Tip="{Binding Label}">
+                                    <Border Width="18" Height="90" HorizontalAlignment="Center" ToolTip.Tip="{Binding TooltipText}">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="{Binding Fraction, Converter={x:Static conv:FractionToStarConverter.Empty}}" />

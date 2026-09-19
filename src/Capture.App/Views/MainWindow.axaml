@@ -550,7 +550,10 @@
                             </Style>
                         </DataGrid.Styles>
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Width="4" CanUserResize="False" CanUserSort="False">
+                            <!-- MinWidth matches Width explicitly — DataGrid otherwise enforces its own
+                                 default minimum column width regardless of CanUserResize, which silently
+                                 widened this bar back out past the 4px it was actually set to. -->
+                            <DataGridTemplateColumn Width="4" MinWidth="4" CanUserResize="False" CanUserSort="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <ContentControl Content="{Binding}"
@@ -1154,7 +1157,10 @@
                                                 </Style>
                                             </DataGrid.Styles>
                                             <DataGrid.Columns>
-                                                <DataGridTemplateColumn Width="4" CanUserResize="False">
+                                                <!-- MinWidth matches Width explicitly — DataGrid otherwise enforces its own
+                                                     default minimum column width regardless of CanUserResize, which silently
+                                                     widened this bar back out past the 4px it was actually set to. -->
+                                                <DataGridTemplateColumn Width="4" MinWidth="4" CanUserResize="False">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <ContentControl Content="{Binding}"
@@ -1314,6 +1320,17 @@
                                                                     </DataTemplate>
                                                                 </ContentControl.DataTemplates>
                                                             </ContentControl>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <!-- Separates the static columns above from the dynamic index-field
+                                                     columns appended in code-behind (see MainWindow.axaml.cs's
+                                                     OnGroupTableLoaded and TableModeStaticColumnCount) — same
+                                                     treatment as the spacer between batch and document fields. -->
+                                                <DataGridTemplateColumn Width="1" MinWidth="1" CanUserResize="False" CanUserSort="False">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="{DynamicResource BorderBrush1}" />
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>

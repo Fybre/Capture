@@ -11,6 +11,12 @@ namespace Capture.App.ViewModels;
 public sealed record StatBar(string Label, int Count, double Fraction)
 {
     public string CountDisplay => Count.ToString("N0");
+
+    /// <summary>What the daily bar charts show on hover — the bars are only 18px wide, with no room to
+    /// print a count next to each one the way the status-breakdown and top-document-type bars do, so
+    /// this is the only place the actual number is visible at all. See StatisticsWindow.axaml's
+    /// "Captured/Exported per day" DataTemplates.</summary>
+    public string TooltipText => $"{Label} — {CountDisplay} document{(Count == 1 ? "" : "s")}";
 }
 
 /// <summary>Aggregate counts across every document this installation has ever captured — active,

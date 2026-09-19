@@ -9,6 +9,20 @@ namespace Capture.Tests;
 
 public class StatisticsViewModelTests
 {
+    // The "Captured/Exported per day" bars are only 18px wide — no room to print a count next to each
+    // one the way the status-breakdown/top-document-type bars do — so TooltipText is the only place the
+    // actual document count is visible at all (see StatisticsWindow.axaml's daily chart DataTemplates).
+    [Theory]
+    [InlineData(0, "Sep 19 — 0 documents")]
+    [InlineData(1, "Sep 19 — 1 document")]
+    [InlineData(4, "Sep 19 — 4 documents")]
+    public void StatBar_TooltipText_reports_the_count_with_correct_pluralization(int count, string expected)
+    {
+        var bar = new StatBar("Sep 19", count, Fraction: 0);
+        Assert.Equal(expected, bar.TooltipText);
+    }
+
+
     [Fact]
     public async Task LoadAsync_aggregates_totals_status_and_document_type_volume()
     {
