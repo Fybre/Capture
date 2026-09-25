@@ -171,6 +171,28 @@ public sealed class ThereforeClient : IThereforeClient
         return new ThereforeCreateDocumentResult(GetInt(result.RootElement, "DocNo"));
     }
 
+    public async Task<bool> DocumentExistsAsync(ThereforeConnectionSettings settings, int docNo, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var result = await PostAsync(settings, "GetDocument", new
+            {
+                DocNo = docNo,
+                IsIndexDataValuesNeeded = false
+            }, cancellationToken).ConfigureAwait(false);
+            return result.RootElement.TryGetProperty("DocNo", out var value)
+                && value.ValueKind == JsonValueKind.Number
+                && value.GetInt32() == docNo;
+        }
+        catch (InvalidOperationException)
+        {
+            // GetDocument itself fails (e.g. 500 "no such document") when the DocNo genuinely doesn't
+            // exist — that's a real "no", not a fault worth propagating to a caller only asking a yes/no
+            // question.
+            return false;
+        }
+    }
+
     private async Task<JsonDocument> PostAsync(ThereforeConnectionSettings settings, string operation, object body, CancellationToken cancellationToken)
     {
         var baseUrl = BuildBaseUrl(settings.TenantName, settings.BaseUrl);

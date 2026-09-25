@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
 using Capture.Core.Watch;
@@ -20,9 +21,16 @@ public sealed class ThereforeExportWriter : IExportWriter
 
     public ExportType Type => ExportType.Therefore;
 
+    // Matches the DocNo Therefore's own error text names when CreateDocument's follow-up step can't
+    // load the document it just (or thought it just) saved — see the catch block below.
+    private static readonly Regex FailedToLoadDocNoPattern = new(@"for DocNo:\s*(\d+)", RegexOptions.Compiled);
+
     public async Task<ExportResult> ExportAsync(
         ExportDefinition definition, ExportDocumentContext context, CancellationToken cancellationToken = default)
     {
+        // Declared outside the try so the catch block below can still reach it — CreateDocumentAsync
+        // needs it to double-check a failure before giving up (see that catch block's comment).
+        ThereforeConnectionSettings? connection = null;
         try
         {
             var settings = await _watchSettings.LoadAsync(cancellationToken).ConfigureAwait(false);
@@ -31,7 +39,7 @@ public sealed class ThereforeExportWriter : IExportWriter
             if (definition.ThereforeCategoryNo is not { } categoryNo)
                 return new ExportResult(false, $"\"{definition.Name}\": no Therefore category selected.");
 
-            var connection = new ThereforeConnectionSettings
+            connection = new ThereforeConnectionSettings
             {
                 BaseUrl = settings.ThereforeBaseUrl ?? string.Empty,
                 TenantName = settings.ThereforeTenantName,
@@ -70,6 +78,23 @@ public sealed class ThereforeExportWriter : IExportWriter
         }
         catch (Exception ex)
         {
+            // CreateDocument's own follow-up step can fail with "Failed to load index data for DocNo: X"
+            // when a Therefore workflow triggered by the save (e.g. one that moves the document to a
+            // different category) wins a race against that follow-up — the document was genuinely
+            // created and saved, just no longer where CreateDocument expects to find it a moment later.
+            // Confirmed live against a real tenant: the named DocNo existed, fully saved, under a
+            // different category than requested. Treat that specific case as a success instead of
+            // leaving a document that's actually already in Therefore stuck failed in the inbox, where
+            // retrying would create a duplicate.
+            if (connection is not null
+                && FailedToLoadDocNoPattern.Match(ex.Message) is { Success: true } match
+                && int.TryParse(match.Groups[1].Value, out var docNo)
+                && await _client.DocumentExistsAsync(connection, docNo, cancellationToken).ConfigureAwait(false))
+            {
+                return new ExportResult(true,
+                    $"\"{definition.Name}\": created Therefore document #{docNo} (confirmed after a save/workflow-timing conflict)");
+            }
+
             return new ExportResult(false, $"\"{definition.Name}\": {ex.Message}");
         }
     }

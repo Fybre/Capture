@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
+using Capture.Core.Watch;
 using Capture.Export;
 using Capture.Therefore;
 
@@ -8,6 +9,85 @@ namespace Capture.Tests;
 
 public class ThereforeExportWriterTests
 {
+    private sealed class FakeWatchSettingsStore : IWatchSettingsStore
+    {
+        public Task<WatchSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WatchSettings
+            {
+                ThereforeBaseUrl = "https://example.thereforeonline.com",
+                ThereforeUsername = "user",
+                ThereforePassword = "pass"
+            });
+
+        public Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class NullAttachmentProcessor : IExportAttachmentProcessor
+    {
+        public Task<string> ResolveAsync(ExportDefinition definition, CaptureDocument document, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("Not needed — tests use ExportFileMode.None.");
+
+        public Task CleanupAsync(Guid documentId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    // Reproduces the exact race condition confirmed live against a real tenant: a Therefore workflow
+    // triggered by the save moves the document to a different category before CreateDocument's own
+    // internal follow-up can read the index data back, so Therefore's error names a DocNo that was, in
+    // fact, genuinely saved.
+    private sealed class RaceConditionThereforeClient(bool documentActuallyExists) : IThereforeClient
+    {
+        public Task<bool> TestConnectionAsync(ThereforeConnectionSettings settings, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<ThereforeTreeNode>> GetCategoriesTreeAsync(ThereforeConnectionSettings settings, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ThereforeCategoryInfo> GetCategoryInfoAsync(ThereforeConnectionSettings settings, int categoryNo, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ThereforeCreateDocumentResult> CreateDocumentAsync(ThereforeConnectionSettings settings, ThereforeCreateDocumentRequest request, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException(
+                "CreateDocument failed (500): {\"WSError\":{\"ErrorMessage\":\"The server reported an error.\\n" +
+                "Additional information:\\r\\n\\tFailed to load index data for DocNo: 27911. Possible reason: " +
+                "Passed in ctgry definition does not match actual saved category. Passed in CtgryNo: 360\\r\\n\\r\\n\"}}");
+
+        public Task<bool> DocumentExistsAsync(ThereforeConnectionSettings settings, int docNo, CancellationToken cancellationToken = default)
+        {
+            Assert.Equal(27911, docNo);
+            return Task.FromResult(documentActuallyExists);
+        }
+    }
+
+    private static ExportDocumentContext Context() => new(
+        new CaptureDocument { OriginalFileName = "doc.pdf", StoredPath = "doc.pdf" },
+        ProfileFields: [],
+        IndexValues: []);
+
+    [Fact]
+    public async Task A_failed_CreateDocument_naming_a_DocNo_that_actually_exists_is_reported_as_success()
+    {
+        var writer = new ThereforeExportWriter(new RaceConditionThereforeClient(documentActuallyExists: true), new FakeWatchSettingsStore(), new NullAttachmentProcessor());
+        var definition = new ExportDefinition { Name = "Therefore", ThereforeCategoryNo = 360 };
+
+        var result = await writer.ExportAsync(definition, Context());
+
+        Assert.True(result.Success);
+        Assert.Contains("27911", result.Message);
+    }
+
+    [Fact]
+    public async Task A_failed_CreateDocument_naming_a_DocNo_that_does_not_exist_is_reported_as_failure()
+    {
+        var writer = new ThereforeExportWriter(new RaceConditionThereforeClient(documentActuallyExists: false), new FakeWatchSettingsStore(), new NullAttachmentProcessor());
+        var definition = new ExportDefinition { Name = "Therefore", ThereforeCategoryNo = 360 };
+
+        var result = await writer.ExportAsync(definition, Context());
+
+        Assert.False(result.Success);
+        Assert.Contains("Failed to load index data", result.Message);
+    }
+
     [Fact]
     public void Redacted_source_resolution_fails_closed_until_redaction_is_applied()
     {
