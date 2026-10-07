@@ -6,11 +6,60 @@ using Capture.Core.Models;
 using Capture.Core.Profiles;
 using Capture.Core.Redaction;
 using Capture.Core.Scripting;
+using Capture.Therefore;
 
 namespace Capture.Tests;
 
 public sealed class CaptureProfileDesignerUxTests
 {
+    private static ThereforeCategoryField CategoryField(int fieldNo, string caption, string name) =>
+        new(fieldNo, caption, name, ThereforeFieldType.String, Mandatory: false, IsSingleKeyword: false, IsMultipleKeyword: false);
+
+    [Fact]
+    public void Repointing_an_export_to_a_differently_numbered_category_keeps_mappings_by_field_name()
+    {
+        // A profile imported from another Therefore system: same category design, different numbers.
+        var invoiceNoId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var previous = new List<ThereforeFieldMapping>
+        {
+            new() { FieldNo = 101, Caption = "Invoice No", IndexDataFieldName = "Invoice_No", IndexFieldId = invoiceNoId },
+            new() { FieldNo = 102, Caption = "Supplier", IndexDataFieldName = "Old_Supplier", IndexFieldId = supplierId },
+            new() { FieldNo = 103, Caption = "Notes", IndexDataFieldName = "Notes", IndexFieldId = null }
+        };
+        var selection = new ThereforeCategorySelection(512, "Invoices",
+        [
+            CategoryField(901, "Invoice Number", "invoice_no"),   // matched by IndexDataFieldName (case-insensitive)
+            CategoryField(902, "Supplier", "Supplier_Name"),      // matched by Caption fallback
+            CategoryField(903, "Notes", "Notes"),                 // previously unmapped stays unmapped
+            CategoryField(904, "Amount", "Amount")                // new field, unmapped
+        ]);
+
+        var rebuilt = CaptureProfileDesignerViewModel.RebuildThereforeFieldMappings(360, previous, selection);
+
+        Assert.Equal([901, 902, 903, 904], rebuilt.Select(m => m.FieldNo));
+        Assert.Equal(invoiceNoId, rebuilt[0].IndexFieldId);
+        Assert.Equal(supplierId, rebuilt[1].IndexFieldId);
+        Assert.Null(rebuilt[2].IndexFieldId);
+        Assert.Null(rebuilt[3].IndexFieldId);
+    }
+
+    [Fact]
+    public void Repicking_the_same_category_keeps_mappings_by_field_number()
+    {
+        var id = Guid.NewGuid();
+        var previous = new List<ThereforeFieldMapping>
+        {
+            new() { FieldNo = 101, Caption = "Invoice No", IndexDataFieldName = "Invoice_No", IndexFieldId = id }
+        };
+        // Field renamed on the server since the mapping was made — FieldNo still identifies it.
+        var selection = new ThereforeCategorySelection(360, "Invoices", [CategoryField(101, "Invoice #", "Invoice_Number")]);
+
+        var rebuilt = CaptureProfileDesignerViewModel.RebuildThereforeFieldMappings(360, previous, selection);
+
+        Assert.Equal(id, Assert.Single(rebuilt).IndexFieldId);
+    }
+
     [Fact]
     public async Task Disabled_incomplete_profile_saves_as_a_draft_but_cannot_save_when_enabled()
     {

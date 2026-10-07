@@ -918,17 +918,42 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         var selection = await _thereforeCategoryPicker.ShowAsync(host);
         if (selection is null) return;
 
-        var existingMappings = row.Definition.ThereforeCategoryNo == selection.CategoryNo
-            ? row.Definition.ThereforeFieldMappings
-                .GroupBy(mapping => mapping.FieldNo)
-                .ToDictionary(group => group.Key, group => group.First())
-            : new Dictionary<int, ThereforeFieldMapping>();
-
+        row.Definition.ThereforeFieldMappings = RebuildThereforeFieldMappings(
+            row.Definition.ThereforeCategoryNo, row.Definition.ThereforeFieldMappings, selection);
         row.Definition.ThereforeCategoryNo = selection.CategoryNo;
         row.Definition.ThereforeCategoryName = selection.CategoryName;
-        row.Definition.ThereforeFieldMappings = selection.Fields.Select(field =>
+        row.RefreshThereforeMappings();
+        RefreshEnablementIssues();
+    }
+
+    /// <summary>Builds the mapping list for a newly picked category, carrying each existing mapping's
+    /// index field over. Re-picking the same category matches by FieldNo. Picking a different category
+    /// number matches by IndexDataFieldName, then Caption — this is what lets a profile imported from
+    /// another Therefore system (same category design, different numbering) be repointed without
+    /// remapping every field by hand. Unmatched fields come through unmapped.</summary>
+    internal static List<ThereforeFieldMapping> RebuildThereforeFieldMappings(
+        int? previousCategoryNo, IReadOnlyList<ThereforeFieldMapping> previousMappings, ThereforeCategorySelection selection)
+    {
+        var mapped = previousMappings.Where(mapping => mapping.IndexFieldId is not null).ToList();
+        var sameCategory = previousCategoryNo == selection.CategoryNo;
+        var byFieldNo = mapped.GroupBy(m => m.FieldNo).ToDictionary(g => g.Key, g => g.First());
+        var byName = mapped.Where(m => !string.IsNullOrWhiteSpace(m.IndexDataFieldName))
+            .GroupBy(m => m.IndexDataFieldName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var byCaption = mapped.Where(m => !string.IsNullOrWhiteSpace(m.Caption))
+            .GroupBy(m => m.Caption, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        return selection.Fields.Select(field =>
         {
-            existingMappings.TryGetValue(field.FieldNo, out var existing);
+            ThereforeFieldMapping? existing = null;
+            if (sameCategory)
+                byFieldNo.TryGetValue(field.FieldNo, out existing);
+            else if (string.IsNullOrWhiteSpace(field.IndexDataFieldName)
+                     || !byName.TryGetValue(field.IndexDataFieldName, out existing))
+                if (!string.IsNullOrWhiteSpace(field.Caption))
+                    byCaption.TryGetValue(field.Caption, out existing);
+
             return new ThereforeFieldMapping
             {
                 FieldNo = field.FieldNo,
@@ -939,8 +964,6 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
                 IndexFieldId = existing?.IndexFieldId
             };
         }).ToList();
-        row.RefreshThereforeMappings();
-        RefreshEnablementIssues();
     }
 
     public IReadOnlyList<string> Validate()
