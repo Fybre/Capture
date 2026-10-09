@@ -11,6 +11,7 @@ public partial class AboutWindow : Window
 {
     private readonly IUpdateCheckService? _updateCheck;
     private readonly IToastService? _toasts;
+    private readonly string _version;
 
     /// <summary>Parameterless overload kept for the XAML previewer — AboutDialogService always uses
     /// the other constructor, which is the only one wired to real services.</summary>
@@ -28,11 +29,11 @@ public partial class AboutWindow : Window
         var informationalVersion = assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;
-        var version = informationalVersion?.Split('+', 2)[0]
+        _version = informationalVersion?.Split('+', 2)[0]
             ?? assembly.GetName().Version?.ToString(3)
             ?? "Development build";
 
-        VersionText.Text = $"Version {version}";
+        VersionText.Text = $"Version {_version}";
         RuntimeText.Text = $"{RuntimeInformation.FrameworkDescription}  •  {GetPlatformName()}";
         CopyrightText.Text = $"© {DateTime.Now.Year} Capture contributors";
     }
@@ -49,6 +50,9 @@ public partial class AboutWindow : Window
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    private async void OnVersionHistoryClick(object? sender, RoutedEventArgs e) =>
+        await new VersionHistoryWindow(_version).ShowDialog(this);
 
     private void OnLinkClick(object? sender, RoutedEventArgs e)
     {

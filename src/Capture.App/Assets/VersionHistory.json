@@ -1,0 +1,149 @@
+[
+  {
+    "version": "0.8.13",
+    "date": "2026-10-09",
+    "changes": [
+      "New \"Capture separator sheet\" rule for batches and documents — print a ready-made Document or Batch separator sheet from More ▸ Separator sheets and use it to split scans without designing or configuring a barcode.",
+      "Yes/No index fields (Boolean format) now edit as a checkbox in the review panel and Table mode. A blank value stays unanswered, so a mandatory Yes/No field is still flagged until someone answers it.",
+      "Yes/No values are read the same way everywhere (yes/no, true/false, 1/0), including when exporting to a Therefore logical field.",
+      "About now includes this version history."
+    ]
+  },
+  {
+    "version": "0.8.12",
+    "date": "2026-10-07",
+    "changes": [
+      "Re-picking a Therefore category with a different number keeps field mappings by matching field names — useful after importing a configuration from another Therefore system."
+    ]
+  },
+  {
+    "version": "0.8.11",
+    "date": "2026-09-25",
+    "changes": [
+      "A Therefore export no longer reports failure when a workflow moves the new document to another category straight after it's saved."
+    ]
+  },
+  {
+    "version": "0.8.10",
+    "date": "2026-09-19",
+    "changes": [
+      "Fixed Statistics tooltips and Table/Preview column widths.",
+      "An import failure that was previously silent is now logged."
+    ]
+  },
+  {
+    "version": "0.8.9",
+    "date": "2026-09-17",
+    "changes": [
+      "Edit index fields directly in Table mode, moving between cells with Tab and Shift+Tab."
+    ]
+  },
+  {
+    "version": "0.8.8",
+    "date": "2026-09-16",
+    "changes": [
+      "Displayed batch numbers restart each session.",
+      "Manual batches show status indicators instead of status text."
+    ]
+  },
+  {
+    "version": "0.8.7",
+    "date": "2026-09-16",
+    "changes": [
+      "A first-run setup wizard helps configure Capture the first time it starts.",
+      "Fixed document status when no capture profile is applied.",
+      "Aligned the Statistics chart."
+    ]
+  },
+  {
+    "version": "0.8.6",
+    "date": "2026-09-13",
+    "changes": [
+      "Remove blank pages automatically on ingestion.",
+      "Rotate pages from the page strip.",
+      "New REST export, and PDF/A output.",
+      "Fixed the capture profile picker."
+    ]
+  },
+  {
+    "version": "0.8.5",
+    "date": "2026-09-13",
+    "changes": [
+      "New Statistics window.",
+      "Records when each document was last exported.",
+      "Undo for page delete, split and reorder.",
+      "Drag to reorder rules and exports, and copy an export to another document type."
+    ]
+  },
+  {
+    "version": "0.8.4",
+    "date": "2026-09-12",
+    "changes": [
+      "Batch-aware scanning and importing, and Trash management.",
+      "Drag pages to reorder them, including to the last position.",
+      "Drag to reorder document types; removing one now asks for confirmation.",
+      "A None entry in the capture profile picker.",
+      "Hidden index fields are grouped at the bottom of the field list.",
+      "Fixed oversized pages from scanned or imported documents, and a crash with single-page scans or non-PDF imports.",
+      "Removed the Therefore export's Fixed/Constant value mapping option.",
+      "Updated in-app Help, with more detail on scripting."
+    ]
+  },
+  {
+    "version": "0.8.3",
+    "date": "2026-09-11",
+    "changes": [
+      "Fixed scripting in the packaged macOS app."
+    ]
+  },
+  {
+    "version": "0.8.2",
+    "date": "2026-09-11",
+    "changes": [
+      "Script errors now show the underlying cause instead of a generic initialisation failure."
+    ]
+  },
+  {
+    "version": "0.8.1",
+    "date": "2026-09-11",
+    "changes": [
+      "Empty fields are left out of Therefore exports so Therefore's own field defaults apply."
+    ]
+  },
+  {
+    "version": "0.8.0",
+    "date": "2026-09-11",
+    "changes": [
+      "Grab field values straight from the document image in Preview mode.",
+      "\"Apply profile\" reclassifies selected documents under another capture profile.",
+      "\"Export selected to PDF\" for ad hoc exports.",
+      "Scan or import with no capture profile selected (Unsorted).",
+      "AI-extracted values are located and highlighted on the page where possible.",
+      "Table view fixes for selection, scrolling and column widths."
+    ]
+  },
+  {
+    "version": "0.7.2",
+    "date": "2026-09-10",
+    "changes": [
+      "The field editor is split into General, Extraction and Scripting tabs, and the field list can be resized.",
+      "Fixed Therefore export failing with a date/time error.",
+      "Fixed input field text alignment and control heights."
+    ]
+  },
+  {
+    "version": "0.7.1",
+    "date": "2026-09-10",
+    "changes": [
+      "Faster processing: OCR runs in parallel and reloads do less work."
+    ]
+  },
+  {
+    "version": "0.7.0",
+    "date": "2026-09-10",
+    "changes": [
+      "Capture configuration rebuilt around unified Capture Profiles.",
+      "Search added to in-app Help, plus app-wide UI fixes."
+    ]
+  }
+]

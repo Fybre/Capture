@@ -56,6 +56,9 @@
                     <Button Classes="license-link" Tag="https://github.com/Fybre/Capture" Click="OnLinkClick">
                         <TextBlock Text="View on GitHub" FontSize="12.5" />
                     </Button>
+                    <Button Classes="license-link" Click="OnVersionHistoryClick">
+                        <TextBlock Text="Version history" FontSize="12.5" />
+                    </Button>
                     <Button x:Name="CheckForUpdatesButton"
                             Classes="license-link"
                             Click="OnCheckForUpdatesClick">

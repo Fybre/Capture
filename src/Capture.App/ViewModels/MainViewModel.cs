@@ -20,6 +20,7 @@ using Capture.Core.Scripting;
 using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.Export;
+using Capture.Pdf;
 using Capture.Scanner;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -397,6 +398,37 @@ public partial class MainViewModel : ViewModelBase
             return;
         await _statistics.ShowAsync(host);
         _dialogs.Host = host;
+    }
+
+    [RelayCommand]
+    private Task SaveDocumentSeparatorSheetAsync() => SaveSeparatorSheetAsync(CaptureSeparatorKind.Document);
+
+    [RelayCommand]
+    private Task SaveBatchSeparatorSheetAsync() => SaveSeparatorSheetAsync(CaptureSeparatorKind.Batch);
+
+    /// <summary>Saves a printable Capture separator sheet — pair it with a "Capture separator sheet" rule
+    /// in a capture profile instead of designing and configuring a barcode by hand.</summary>
+    private async Task SaveSeparatorSheetAsync(CaptureSeparatorKind kind)
+    {
+        var title = CaptureSeparatorSheet.TitleFor(kind);
+        var path = await _dialogs.PickSaveFilePdfAsync($"Save {title.ToLowerInvariant()} sheet",
+            $"Capture {title.ToLowerInvariant()}.pdf");
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                using var stream = File.Create(path);
+                CaptureSeparatorSheetWriter.Write(stream, kind);
+            });
+            _toasts.ShowSuccess($"Saved {title.ToLowerInvariant()} sheet to {path}");
+        }
+        catch (Exception ex)
+        {
+            _toasts.ShowError($"Couldn't save the {title.ToLowerInvariant()} sheet: {ex.Message}");
+        }
     }
 
     [RelayCommand]

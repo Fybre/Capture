@@ -26,7 +26,7 @@ public static class IndexFormat
             FieldFormat.DateTime => DateTime.TryParse(value, culture, DateTimeStyles.AllowWhiteSpaces, out _)
                 ? null
                 : "Not a date/time",
-            FieldFormat.Boolean => IsBoolean(value)
+            FieldFormat.Boolean => TryParseBoolean(value, out _)
                 ? null
                 : "Not yes/no",
             _ => null
@@ -67,13 +67,22 @@ public static class IndexFormat
         }
     }
 
-    private static bool IsBoolean(string value)
+    /// <summary>The one place a Boolean-format value's text is interpreted: true/false, yes/no, 1/0
+    /// (case-insensitive, surrounding whitespace ignored). Anything else, including blank, is not a
+    /// yes/no value.</summary>
+    public static bool TryParseBoolean(string? value, out bool result)
     {
-        return value.Equals("true", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("false", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("no", StringComparison.OrdinalIgnoreCase)
-            || value == "1"
-            || value == "0";
+        switch (value?.Trim().ToLowerInvariant())
+        {
+            case "true" or "yes" or "1":
+                result = true;
+                return true;
+            case "false" or "no" or "0":
+                result = false;
+                return true;
+            default:
+                result = false;
+                return false;
+        }
     }
 }

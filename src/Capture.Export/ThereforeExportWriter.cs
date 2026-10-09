@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Capture.Core.Indexing;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
 using Capture.Core.Watch;
@@ -127,8 +128,5 @@ public sealed class ThereforeExportWriter : IExportWriter
             ? valuesByField.GetValueOrDefault(fieldId, string.Empty)
             : string.Empty;
 
-    private static bool IsTruthy(string value) =>
-        value.Equals("true", StringComparison.OrdinalIgnoreCase)
-        || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
-        || value == "1";
+    private static bool IsTruthy(string value) => IndexFormat.TryParseBoolean(value, out var result) && result;
 }

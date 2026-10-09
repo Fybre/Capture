@@ -283,7 +283,7 @@ public partial class MainViewModel
             return null;
 
         var row = CreateReviewRow(document, value, isBatchField);
-        return row.IsTextEntry || row.IsLookupEditorVisible || row.IsDateEditorVisible ? row : null;
+        return row.IsTextEntry || row.IsLookupEditorVisible || row.IsDateEditorVisible || row.IsBooleanEditorVisible ? row : null;
     }
 
     private async Task ApplyDocumentFieldToSelectionAsync(DocumentRow source, IndexValue sourceValue)

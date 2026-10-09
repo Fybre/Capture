@@ -284,6 +284,14 @@ public sealed class CaptureWorkflowService(
                             analyzedBarcodes.Add(new(barcode.Text, barcode.Format, barcode.Confidence, rule.Id));
                     }
 
+                    // Separator-sheet rules always scan the whole page, so one decode serves all of them;
+                    // the planner matches the decoded value against each rule's sheet kind. Tagged per rule
+                    // (not left untagged) so an ordinary Barcode rule never also fires on a separator sheet.
+                    var sheetRules = allRules.Where(rule => rule.Type == SeparationStrategyType.CaptureSeparator).ToList();
+                    if (sheetRules.Count > 0 && barcodes.Decode(raster.ImagePath, null) is { } sheetBarcode)
+                        foreach (var rule in sheetRules)
+                            analyzedBarcodes.Add(new(sheetBarcode.Text, sheetBarcode.Format, sheetBarcode.Confidence, rule.Id));
+
                     var zoneTexts = allRules
                         .Where(rule => rule.Type == SeparationStrategyType.OcrZone && rule.Zone is not null)
                         .ToDictionary(rule => rule.Id, rule => ZonalExtractor.Extract(lattice, rule.Zone!).Text);

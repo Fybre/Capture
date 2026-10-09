@@ -155,6 +155,7 @@ public sealed class CapturePlanner
                 SeparationStrategyType.Regex => RegexMatch(rule, page.Text),
                 SeparationStrategyType.OcrZone => ZoneTextMatch(rule, page.RuleTexts is not null && page.RuleTexts.TryGetValue(rule.Id, out var zoneText) ? zoneText : page.Text),
                 SeparationStrategyType.Barcode => BarcodeMatch(rule, page.Barcodes),
+                SeparationStrategyType.CaptureSeparator => SeparatorSheetMatch(rule, page.Barcodes),
                 SeparationStrategyType.BlankPage when page.PreMatchedRuleIds?.Contains(rule.Id) == true || (page.PreMatchedRuleIds is null && page.IsBlank) => new RuleMatch(rule.Id, null, 100),
                 SeparationStrategyType.EveryNPages when rule.PageCount > 0 && page.PageNumber % rule.PageCount == 0 => new RuleMatch(rule.Id, null, 100),
                 _ => null
@@ -199,6 +200,13 @@ public sealed class CapturePlanner
             catch (RegexMatchTimeoutException) { }
         }
         return null;
+    }
+
+    private static RuleMatch? SeparatorSheetMatch(SeparationStrategy rule, IReadOnlyList<AnalyzedBarcode> barcodes)
+    {
+        var barcode = barcodes.FirstOrDefault(item =>
+            (item.RuleId is null || item.RuleId == rule.Id) && CaptureSeparatorSheet.Matches(rule.SeparatorKind, item.Value));
+        return barcode is null ? null : new RuleMatch(rule.Id, null, barcode.Confidence ?? 100);
     }
 
     private static string? Captured(Match match, bool fallbackToWholeMatch)

@@ -8,6 +8,7 @@ namespace Capture.App.ViewModels;
 
 public sealed record StrategyTypeChoice(SeparationStrategyType Value, string Label);
 public sealed record MatchModeChoice(SeparationMatchMode Value, string Label);
+public sealed record SeparatorKindChoice(CaptureSeparatorKind Value, string Label);
 
 /// <summary>
 /// Reusable editor state for one ordered set of separation rules. Scope-specific designers retain
@@ -16,6 +17,7 @@ public sealed record MatchModeChoice(SeparationMatchMode Value, string Label);
 public partial class RuleSetEditorViewModel : ViewModelBase
 {
     private readonly SeparationStrategyType _defaultStrategyType;
+    private readonly CaptureSeparatorKind _defaultSeparatorKind;
 
     public RuleSetEditorViewModel(
         IEnumerable<SeparationStrategy> strategies,
@@ -24,8 +26,10 @@ public partial class RuleSetEditorViewModel : ViewModelBase
         IReadOnlyList<SeparationStrategyType> strategyTypeOptions,
         string decisionTitle,
         SeparationStrategyType defaultStrategyType = SeparationStrategyType.EveryNPages,
-        bool allowNone = false)
+        bool allowNone = false,
+        CaptureSeparatorKind defaultSeparatorKind = CaptureSeparatorKind.Document)
     {
+        _defaultSeparatorKind = defaultSeparatorKind;
         DecisionTitle = decisionTitle;
         StrategyTypeOptions = strategyTypeOptions;
         _defaultStrategyType = defaultStrategyType;
@@ -61,15 +65,7 @@ public partial class RuleSetEditorViewModel : ViewModelBase
     public IReadOnlyList<SeparationStrategyType> StrategyTypeOptions { get; }
 
     public IReadOnlyList<StrategyTypeChoice> StrategyTypeChoices => StrategyTypeOptions
-        .Select(type => new StrategyTypeChoice(type, type switch
-        {
-            SeparationStrategyType.EveryNPages => "Every N pages",
-            SeparationStrategyType.BlankPage => "Blank page",
-            SeparationStrategyType.Barcode => "Barcode",
-            SeparationStrategyType.Regex => "Page text",
-            SeparationStrategyType.OcrZone => "Text in an area",
-            _ => type.ToString()
-        })).ToList();
+        .Select(type => new StrategyTypeChoice(type, SeparationStrategyRow.TypeLabel(type))).ToList();
 
     public IReadOnlyList<string> BarcodeFormatOptions => BarcodePatterns.KnownFormats;
 
@@ -107,7 +103,8 @@ public partial class RuleSetEditorViewModel : ViewModelBase
         var row = new SeparationStrategyRow(new SeparationStrategy
         {
             Id = Guid.NewGuid(),
-            Type = _defaultStrategyType
+            Type = _defaultStrategyType,
+            SeparatorKind = _defaultSeparatorKind
         });
         Watch(row);
         Strategies.Add(row);
@@ -165,6 +162,7 @@ public sealed partial class SeparationStrategyRow : ObservableObject
         _barcodeFormat = strategy.BarcodeFormat;
         _barcodeValuePattern = strategy.BarcodeValuePattern;
         _textPattern = strategy.TextPattern;
+        _separatorKind = strategy.SeparatorKind;
     }
 
     public Guid Id { get; }
@@ -175,6 +173,7 @@ public sealed partial class SeparationStrategyRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsEveryNPages))]
     [NotifyPropertyChangedFor(nameof(IsRegex))]
     [NotifyPropertyChangedFor(nameof(IsOcrZone))]
+    [NotifyPropertyChangedFor(nameof(IsCaptureSeparator))]
     [NotifyPropertyChangedFor(nameof(NeedsZone))]
     [NotifyPropertyChangedFor(nameof(DisplayLabel))]
     private SeparationStrategyType _type;
@@ -223,21 +222,34 @@ public sealed partial class SeparationStrategyRow : ObservableObject
     [ObservableProperty]
     private string? _testResult;
 
+    [ObservableProperty]
+    private CaptureSeparatorKind _separatorKind;
+
+    public IReadOnlyList<SeparatorKindChoice> SeparatorKindOptions { get; } =
+    [
+        new(CaptureSeparatorKind.Document, CaptureSeparatorSheet.TitleFor(CaptureSeparatorKind.Document)),
+        new(CaptureSeparatorKind.Batch, CaptureSeparatorSheet.TitleFor(CaptureSeparatorKind.Batch))
+    ];
+
     public bool IsBarcode => Type == SeparationStrategyType.Barcode;
     public bool IsBlankPage => Type == SeparationStrategyType.BlankPage;
     public bool IsEveryNPages => Type == SeparationStrategyType.EveryNPages;
     public bool IsRegex => Type == SeparationStrategyType.Regex;
     public bool IsOcrZone => Type == SeparationStrategyType.OcrZone;
+    public bool IsCaptureSeparator => Type == SeparationStrategyType.CaptureSeparator;
     public bool NeedsZone => IsBarcode || IsOcrZone;
-    public string DisplayLabel => string.IsNullOrWhiteSpace(Name) ? Type switch
+    public string DisplayLabel => string.IsNullOrWhiteSpace(Name) ? TypeLabel(Type) : Name!;
+
+    public static string TypeLabel(SeparationStrategyType type) => type switch
     {
         SeparationStrategyType.EveryNPages => "Every N pages",
         SeparationStrategyType.BlankPage => "Blank page",
         SeparationStrategyType.Barcode => "Barcode",
         SeparationStrategyType.Regex => "Page text",
         SeparationStrategyType.OcrZone => "Text in an area",
-        _ => Type.ToString()
-    } : Name!;
+        SeparationStrategyType.CaptureSeparator => "Capture separator sheet",
+        _ => type.ToString()
+    };
 
     public SeparationStrategy ToModel() => new()
     {
@@ -250,7 +262,8 @@ public sealed partial class SeparationStrategyRow : ObservableObject
         ZonePageNumber = ZonePageNumber,
         BarcodeFormat = string.IsNullOrWhiteSpace(BarcodeFormat) ? null : BarcodeFormat,
         BarcodeValuePattern = string.IsNullOrWhiteSpace(BarcodeValuePattern) ? null : BarcodeValuePattern,
-        TextPattern = string.IsNullOrWhiteSpace(TextPattern) ? null : TextPattern
+        TextPattern = string.IsNullOrWhiteSpace(TextPattern) ? null : TextPattern,
+        SeparatorKind = SeparatorKind
     };
 
     public void SetZone(ZoneRect? zone)

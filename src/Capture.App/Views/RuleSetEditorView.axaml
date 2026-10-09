@@ -109,6 +109,18 @@
                     <TextBox Text="{Binding BarcodeValuePattern}" Watermark="e.g. ^STUDENT:(.+)$" />
                 </StackPanel>
 
+                <StackPanel Spacing="5" IsVisible="{Binding IsCaptureSeparator}">
+                    <TextBlock Text="Separator sheet" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding SeparatorKindOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding SeparatorKind}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="Matches Capture's own printed separator sheet — no barcode setup needed. Print one from More ▸ Separator sheets."
+                               Classes="hint" TextWrapping="Wrap" />
+                </StackPanel>
+
                 <StackPanel Spacing="5" IsVisible="{Binding IsRegex}">
                     <TextBlock Text="Page must contain (regular expression)" Classes="field-label" />
                     <TextBox Text="{Binding TextPattern}" Watermark="e.g. (?i)ACADEMIC\s+TRANSCRIPT" />

@@ -133,7 +133,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         _ai = ai;
         _help = help;
         foreach (var set in BuiltInRedactionSets.All) RedactionSets.Add(set);
-        BatchRules = Editor(profile.Batch.StartRules, "Starts a new batch", allowNone: true);
+        BatchRules = Editor(profile.Batch.StartRules, "Starts a new batch", allowNone: true, defaultSeparatorKind: CaptureSeparatorKind.Batch);
         BatchFields = CreateFieldEditor(
             profile.Batch.Fields,
             BatchRules.Strategies,
@@ -571,6 +571,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         SeparationStrategyType.Regex => MatchText(string.Join(" ", _sampleLattice!.Words.Select(word => word.Text)), rule.TextPattern),
         SeparationStrategyType.OcrZone => MatchText(rule.Zone is null ? string.Empty : ZonalExtractor.Extract(_sampleLattice!, rule.Zone).Text, rule.TextPattern),
         SeparationStrategyType.Barcode => MatchBarcode(page.ImagePath, rule),
+        SeparationStrategyType.CaptureSeparator => MatchSeparatorSheet(page.ImagePath, rule),
         SeparationStrategyType.BlankPage => (_blanks?.IsBlank(page.ImagePath, rule.BlankInkPercent) == true, $"blank threshold {rule.BlankInkPercent}%"),
         _ => (false, "unsupported rule type")
     };
@@ -1413,6 +1414,15 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         return (formatMatches && valueMatches, $"{decoded.Format}: {decoded.Text}");
     }
 
+    private (bool Matched, string Detail) MatchSeparatorSheet(string imagePath, SeparationStrategyRow rule)
+    {
+        var decoded = _barcodes?.Decode(imagePath, null);
+        if (decoded is null) return (false, "no separator sheet found");
+        return CaptureSeparatorSheet.Matches(rule.SeparatorKind, decoded.Text)
+            ? (true, CaptureSeparatorSheet.TitleFor(rule.SeparatorKind).ToLowerInvariant() + " sheet")
+            : (false, $"{decoded.Format}: {decoded.Text}");
+    }
+
     private void RefreshSampleHighlights()
     {
         SampleHighlights.Clear();
@@ -1450,8 +1460,9 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         }
     }
 
-    private static RuleSetEditorViewModel Editor(RuleSet rules, string title, bool allowNone = false) =>
-        new(rules.Rules, rules.MatchMode, rules.MatchMinimum, RuleTypes, title, allowNone: allowNone);
+    private static RuleSetEditorViewModel Editor(RuleSet rules, string title, bool allowNone = false,
+        CaptureSeparatorKind defaultSeparatorKind = CaptureSeparatorKind.Document) =>
+        new(rules.Rules, rules.MatchMode, rules.MatchMinimum, RuleTypes, title, allowNone: allowNone, defaultSeparatorKind: defaultSeparatorKind);
 
     private FieldCollectionEditorViewModel CreateFieldEditor(
         IEnumerable<IndexField> fields,

@@ -24,7 +24,11 @@ public enum SeparationStrategyType
     BlankPage = 1,
     EveryNPages = 2,
     Regex = 3,
-    OcrZone = 4
+    OcrZone = 4,
+
+    /// <summary>Hits a page carrying one of Capture's own printed separator sheets — see
+    /// <see cref="CaptureSeparatorSheet"/>. Which sheet is set by <see cref="SeparationStrategy.SeparatorKind"/>.</summary>
+    CaptureSeparator = 5
 }
 
 /// <summary>
@@ -74,4 +78,7 @@ public sealed class SeparationStrategy
     /// an empty <see cref="BarcodeValuePattern"/> already means "matches any value").</summary>
     public string? TextPattern { get; set; }
 
+    /// <summary>Only meaningful for <see cref="SeparationStrategyType.CaptureSeparator"/> — which printed
+    /// sheet (document or batch) this rule responds to.</summary>
+    public CaptureSeparatorKind SeparatorKind { get; set; }
 }

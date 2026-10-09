@@ -904,9 +904,9 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Builds the (initially hidden) inline editor for one Table mode field cell — a TextBox/
-    /// ComboBox/TextBox trio (the second TextBox is for date-kind fields; see its own comment for why
-    /// this doesn't use CalendarDatePicker like Preview mode's IndexFieldTemplate does) selected by
-    /// IsTextEntry/IsLookupEditorVisible/IsDateEditorVisible, all three always present so the same
+    /// ComboBox/TextBox/CheckBox set (the second TextBox is for date-kind fields; see its own comment for
+    /// why this doesn't use CalendarDatePicker like Preview mode's IndexFieldTemplate does) selected by
+    /// IsTextEntry/IsLookupEditorVisible/IsDateEditorVisible/IsBooleanEditorVisible, all always present so the same
     /// host works for whichever kind the field turns out to be once <see cref="OnIndexCellTapped"/>
     /// actually resolves it — <see cref="DocumentRow.ActiveFieldEditor"/> starts null and is only
     /// assigned a real <see cref="IndexValueRow"/> at that point, not eagerly for every cell of every
@@ -947,10 +947,18 @@ public partial class MainWindow : Window
         dateBox.Bind(TextBox.TextProperty, new Binding(editorPath + nameof(IndexValueRow.Text)) { Mode = BindingMode.TwoWay });
         dateBox.Bind(Visual.IsVisibleProperty, new Binding(editorPath + nameof(IndexValueRow.IsDateEditorVisible)));
 
+        // Two-state on click (Avalonia's CheckBox only cycles back to null when IsThreeState is set);
+        // a blank value still shows as indeterminate until it's first answered. Space toggles it.
+        var checkBox = new CheckBox { Margin = new Thickness(4, 0), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        checkBox.Bind(ToggleButton.IsCheckedProperty, new Binding(editorPath + nameof(IndexValueRow.SelectedBoolean)) { Mode = BindingMode.TwoWay });
+        checkBox.Bind(ContentControl.ContentProperty, new Binding(editorPath + nameof(IndexValueRow.BooleanDisplay)));
+        checkBox.Bind(Visual.IsVisibleProperty, new Binding(editorPath + nameof(IndexValueRow.IsBooleanEditorVisible)));
+
         var host = new Grid { IsVisible = false };
         host.Children.Add(textBox);
         host.Children.Add(comboBox);
         host.Children.Add(dateBox);
+        host.Children.Add(checkBox);
 
         void ExitEditMode()
         {
@@ -971,7 +979,7 @@ public partial class MainWindow : Window
         // start from the way a click does.
         host.Tag = (Exit: (Action)ExitEditMode, Field: bindingRequest);
 
-        foreach (Control control in new Control[] { textBox, comboBox, dateBox })
+        foreach (Control control in new Control[] { textBox, comboBox, dateBox, checkBox })
         {
             control.LostFocus += (_, _) => ExitEditMode();
             control.KeyDown += (_, e) =>
@@ -1065,6 +1073,7 @@ public partial class MainWindow : Window
                 { IsTextEntry: true } => editorHost.Children.OfType<TextBox>().FirstOrDefault(c => Equals(c.Tag, "text")),
                 { IsLookupEditorVisible: true } => editorHost.Children.OfType<ComboBox>().FirstOrDefault(),
                 { IsDateEditorVisible: true } => editorHost.Children.OfType<TextBox>().FirstOrDefault(c => Equals(c.Tag, "date")),
+                { IsBooleanEditorVisible: true } => editorHost.Children.OfType<CheckBox>().FirstOrDefault(),
                 _ => null
             };
             target?.Focus();

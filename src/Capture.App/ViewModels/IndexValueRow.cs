@@ -26,6 +26,7 @@ public sealed partial class IndexValueRow : ObservableObject
         _selectedLookup = LookupChoices.FirstOrDefault(option =>
             string.Equals(option.Value, value.Value, StringComparison.Ordinal));
         _selectedDate = ParseDate(value.Value);
+        _selectedBoolean = ParseBoolean(value.Value);
     }
 
     public IndexValue Value { get; }
@@ -51,6 +52,7 @@ public sealed partial class IndexValueRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSensitiveBatchMasked))]
     [NotifyPropertyChangedFor(nameof(IsDateEditorVisible))]
     [NotifyPropertyChangedFor(nameof(IsLookupEditorVisible))]
+    [NotifyPropertyChangedFor(nameof(IsBooleanEditorVisible))]
     [NotifyPropertyChangedFor(nameof(IsMaskedNonTextValueVisible))]
     [NotifyPropertyChangedFor(nameof(ButtonStatus))]
     private bool _revealSensitiveValue;
@@ -62,6 +64,8 @@ public sealed partial class IndexValueRow : ObservableObject
     public bool IsDateEditorVisible => IsDate && !IsSensitiveBatchMasked;
 
     public bool IsLookupEditorVisible => IsLookup && !IsSensitiveBatchMasked;
+
+    public bool IsBooleanEditorVisible => IsBoolean && !IsSensitiveBatchMasked;
 
     public bool IsMaskedNonTextValueVisible => IsSensitiveBatchMasked && !IsTextEntry;
 
@@ -82,7 +86,12 @@ public sealed partial class IndexValueRow : ObservableObject
 
     public bool IsButton => Value.Kind == FieldKind.Button;
 
-    public bool IsTextEntry => !IsLookup && !IsDate && !IsButton;
+    /// <summary>A Boolean-format field edits as a Yes/No checkbox. Blank (not yet decided) shows as the
+    /// checkbox's indeterminate state, so a Mandatory yes/no field still flags as Missing until someone
+    /// actually answers it rather than silently defaulting to No.</summary>
+    public bool IsBoolean => !IsLookup && !IsButton && Value.Format == FieldFormat.Boolean;
+
+    public bool IsTextEntry => !IsLookup && !IsDate && !IsButton && !IsBoolean;
 
     public string ButtonLabel => string.IsNullOrEmpty(Value.ButtonLabel) ? Value.FieldName : Value.ButtonLabel;
 
@@ -133,6 +142,18 @@ public sealed partial class IndexValueRow : ObservableObject
     [ObservableProperty]
     private DateTime? _selectedDate;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BooleanDisplay))]
+    private bool? _selectedBoolean;
+
+    public string BooleanDisplay => SelectedBoolean switch
+    {
+        true => "Yes",
+        false => "No",
+        // Blank shows as "Not set"; unrecognized extracted text shows as-is next to its format flag.
+        null => string.IsNullOrWhiteSpace(Value.Value) ? "Not set" : Value.Value
+    };
+
     public string Flag
     {
         get
@@ -181,6 +202,14 @@ public sealed partial class IndexValueRow : ObservableObject
         SetTextAndCommit(value?.ToString("d", Culture()) ?? string.Empty);
     }
 
+    partial void OnSelectedBooleanChanged(bool? value)
+    {
+        if (_suppress)
+            return;
+
+        SetTextAndCommit(value switch { true => "Yes", false => "No", null => string.Empty });
+    }
+
     private void SetTextAndCommit(string value)
     {
         _suppress = true;
@@ -212,7 +241,9 @@ public sealed partial class IndexValueRow : ObservableObject
         Text = Value.Value;
         SelectedLookup = LookupChoices.FirstOrDefault(option => string.Equals(option.Value, Value.Value, StringComparison.Ordinal));
         SelectedDate = ParseDate(Value.Value);
+        SelectedBoolean = ParseBoolean(Value.Value);
         _suppress = false;
+        OnPropertyChanged(nameof(BooleanDisplay));
         OnPropertyChanged(nameof(Flag));
         OnPropertyChanged(nameof(HasFlag));
         OnPropertyChanged(nameof(HasFormatError));
@@ -220,6 +251,9 @@ public sealed partial class IndexValueRow : ObservableObject
         OnPropertyChanged(nameof(ConfidenceValue));
         OnPropertyChanged(nameof(ButtonStatus));
     }
+
+    private static bool? ParseBoolean(string value) =>
+        IndexFormat.TryParseBoolean(value, out var parsed) ? parsed : null;
 
     private DateTime? ParseDate(string value) =>
         DateTime.TryParse(value, Culture(), DateTimeStyles.AllowWhiteSpaces, out var parsed)
