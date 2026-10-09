@@ -19,9 +19,10 @@ TILES = [
     ("Wide310x150Logo", 310, 150, 0.66),
     ("StoreLogo", 50, 50, 1.0),
 ]
-SCALES = [100, 200, 400]
-# Unplated taskbar/Start icons: Windows picks these exact pixel sizes when present.
-TARGET_SIZES = [16, 24, 32, 48, 256]
+# One plain file per logo, at 200% of its base size. Windows only chooses between .scale-N/.targetsize-N
+# variants when the package carries a resources.pri index, which build-msix.ps1 doesn't generate, so
+# plain names are what the manifest can reference. Windows scales these as needed.
+SCALE = 200
 
 
 def tile(icon, width, height, fill):
@@ -35,14 +36,11 @@ def tile(icon, width, height, fill):
 def main():
     icon = Image.open(MASTER).convert("RGBA")
     OUT.mkdir(parents=True, exist_ok=True)
+    for old in OUT.glob("*.png"):
+        old.unlink()
     for name, width, height, fill in TILES:
-        for scale in SCALES:
-            w, h = round(width * scale / 100), round(height * scale / 100)
-            tile(icon, w, h, fill).save(OUT / f"{name}.scale-{scale}.png")
-    for size in TARGET_SIZES:
-        img = icon.resize((size, size), Image.LANCZOS)
-        img.save(OUT / f"Square44x44Logo.targetsize-{size}.png")
-        img.save(OUT / f"Square44x44Logo.targetsize-{size}_altform-unplated.png")
+        w, h = round(width * SCALE / 100), round(height * SCALE / 100)
+        tile(icon, w, h, fill).save(OUT / f"{name}.png")
 
 
 if __name__ == "__main__":
