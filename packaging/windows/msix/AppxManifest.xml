@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Template for the Microsoft Store (MSIX) package. build-msix.ps1 fills the __TOKENS__:
-     __IDENTITY_NAME__, __PUBLISHER__ and __PUBLISHER_DISPLAY_NAME__ must match the values Partner Center
-     shows under Product identity exactly, or the Store rejects the upload. -->
+<!-- Template for the Microsoft Store (MSIX) package. build-msix.ps1 fills in the placeholders. The
+     identity name, publisher and publisher display name come from the MSIX_* repository variables and
+     must match Partner Center's Product identity exactly, or the Store rejects the upload. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
