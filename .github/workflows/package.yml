@@ -118,6 +118,24 @@ jobs:
           name: Capture-windows
           path: packaging/windows/out/*.exe
           if-no-files-found: error
+      # Microsoft Store package. Unsigned on purpose — Partner Center signs it after certification, so it
+      # is uploaded to the Store by hand and not attached to the GitHub release (an unsigned MSIX can't
+      # be installed directly). Set the MSIX_* repository variables to the Product identity values from
+      # Partner Center; the fallbacks only let the package build before that exists.
+      - name: Build Store package (MSIX)
+        shell: pwsh
+        run: >-
+          packaging/windows/msix/build-msix.ps1
+          -Version "${{ needs.determine-version.outputs.version }}"
+          -PublishDir "${{ github.workspace }}\publish"
+          -IdentityName "${{ vars.MSIX_IDENTITY_NAME || 'Fybre.Capture' }}"
+          -Publisher "${{ vars.MSIX_PUBLISHER || 'CN=Fybre' }}"
+          -PublisherDisplayName "${{ vars.MSIX_PUBLISHER_DISPLAY_NAME || 'Fybre' }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Capture-windows-store
+          path: packaging/windows/msix/out/*.msix
+          if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

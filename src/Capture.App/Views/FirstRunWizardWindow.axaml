@@ -43,7 +43,7 @@
                                Classes="hint" />
                 </StackPanel>
 
-                <StackPanel Spacing="8">
+                <StackPanel Spacing="8" IsVisible="{Binding IsUpdateCheckAvailable}">
                     <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}" />
                     <TextBlock Text="Checks GitHub for a newer release each time Capture starts. Only a version number is requested — no document or usage data is sent."
                                TextWrapping="Wrap"

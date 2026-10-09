@@ -23,3 +23,4 @@ native/CaptureScanHelperMac/CaptureScanHelperMac.app/
 packaging/macos/.build/
 packaging/macos/out/
 packaging/windows/out/
+packaging/windows/msix/out/

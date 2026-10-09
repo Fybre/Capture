@@ -115,7 +115,13 @@ public sealed class AppPaths : IAppPaths
     }
 
     private static string DefaultBaseDirectory =>
-        OperatingSystem.IsMacOS()
-            ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-            : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        PackageIdentity.FamilyName is { } familyName
+            // The Store (MSIX) build keeps its data in the package's own LocalState folder rather than
+            // letting Windows silently redirect writes to %LocalAppData%\Capture into a private copy —
+            // that way the Settings "open folder" buttons, and anything a user drops into the models
+            // folder from Explorer, see the same files the app does.
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages", familyName, "LocalState")
+            : OperatingSystem.IsMacOS()
+                ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+                : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 }

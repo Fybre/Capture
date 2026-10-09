@@ -34,6 +34,7 @@ public partial class AboutWindow : Window
             ?? "Development build";
 
         VersionText.Text = $"Version {_version}";
+        CheckForUpdatesButton.IsVisible = GitHubUpdateCheckService.IsAvailable;
         RuntimeText.Text = $"{RuntimeInformation.FrameworkDescription}  •  {GetPlatformName()}";
         CopyrightText.Text = $"© {DateTime.Now.Year} Capture contributors";
     }

@@ -330,7 +330,7 @@ public partial class MainViewModel : ViewModelBase
 
             // Fire-and-forget: a slow/offline/rate-limited GitHub check must never delay startup or
             // the document list appearing. IUpdateCheckService swallows its own failures.
-            if (_watchSettings.CheckForUpdatesOnStartup)
+            if (_watchSettings.CheckForUpdatesOnStartup && GitHubUpdateCheckService.IsAvailable)
                 _ = CheckForUpdatesAsync();
         }
         catch (Exception ex)

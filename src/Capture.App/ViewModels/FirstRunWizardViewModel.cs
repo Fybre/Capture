@@ -30,6 +30,8 @@ public partial class FirstRunWizardViewModel : ViewModelBase
     [ObservableProperty]
     private bool _checkForUpdatesOnStartup;
 
+    public bool IsUpdateCheckAvailable => Capture.App.Services.GitHubUpdateCheckService.IsAvailable;
+
     [ObservableProperty]
     private bool _allowFieldScripts;
 

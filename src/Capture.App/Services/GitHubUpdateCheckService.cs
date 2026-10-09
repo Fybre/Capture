@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using Capture.Core.Paths;
 
 namespace Capture.App.Services;
 
@@ -18,8 +19,15 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
         _http = http;
     }
 
+    /// <summary>False in the Microsoft Store (MSIX) build — the Store delivers updates itself, and Store
+    /// policy doesn't allow an app to point users at another update channel.</summary>
+    public static bool IsAvailable => !PackageIdentity.IsPackaged;
+
     public async Task<UpdateCheckResult> CheckForUpdateAsync(CancellationToken cancellationToken = default)
     {
+        if (!IsAvailable)
+            return NoUpdate;
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, LatestReleaseApiUrl);
