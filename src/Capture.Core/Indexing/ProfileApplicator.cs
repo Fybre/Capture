@@ -85,6 +85,58 @@ public sealed class ProfileApplicator : IProfileApplicator
         return results;
     }
 
+    /// <summary>True when a field's value is worked out from other fields, so <see cref="RecalculateAsync"/>
+    /// has something to redo for it.</summary>
+    public static bool IsComputed(IndexField field) =>
+        (field.Kind == FieldKind.Script && !string.IsNullOrEmpty(field.ScriptExpression))
+        || (field.Kind == FieldKind.Text && !string.IsNullOrEmpty(field.DefaultValueTemplate))
+        || (field.Kind == FieldKind.Lookup && !string.IsNullOrEmpty(field.LookupKeyTemplate));
+
+    public async Task<bool> RecalculateAsync(
+        IReadOnlyList<IndexField> fields,
+        string sharedScriptSource,
+        IReadOnlyList<IndexValue> values,
+        IReadOnlyList<PageLattice> lattices,
+        string? profileName = null,
+        string? locale = null,
+        DefaultValueContext? context = null,
+        CaptureDocument? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Same objects, so the steps below update the caller's values in place.
+        var results = values.ToList();
+        var computed = fields
+            .Where(field => IsComputed(field)
+                && results.FirstOrDefault(item => item.FieldId == field.Id) is { IsManual: false })
+            .ToList();
+        if (computed.Count == 0)
+            return false;
+
+        var before = results.ToDictionary(item => item, item => (item.Value, item.Confidence, item.ValidationError));
+
+        // Templates only fill a blank value, so reset each templated field to what extraction gives it.
+        foreach (var field in computed.Where(field => field.Kind is FieldKind.Text or FieldKind.Lookup))
+        {
+            var value = results.First(item => item.FieldId == field.Id);
+            var start = field.Kind == FieldKind.Lookup
+                && field.LookupDefaultValue is { } defaultValue
+                && field.LookupOptions.Any(option => string.Equals(option.Value, defaultValue, StringComparison.Ordinal))
+                    ? defaultValue
+                    : string.Empty;
+            value.Value = start;
+            value.Confidence = start.Length > 0 ? 100 : 0;
+            value.ValidationError = null;
+        }
+
+        await FillFieldScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+        ApplyDefaults(fields, profileName, locale, results, context, existingValues: null, Math.Max(1, document?.PageCount ?? lattices.Count));
+        await ApplyPostProcessScriptsAsync(
+            computed.Where(field => field.Kind != FieldKind.Script).ToList(),
+            sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+
+        return results.Any(item => before[item] != (item.Value, item.Confidence, item.ValidationError));
+    }
+
     private static void ApplyBoundaryValues(
         IReadOnlyList<IndexField> fields,
         List<IndexValue> results,

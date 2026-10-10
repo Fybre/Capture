@@ -50,7 +50,17 @@
                     ToolTip.Tip="Click to highlight this field's zone in the preview">
                 <StackPanel Spacing="5">
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" />
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                            <Border IsVisible="{Binding HasDescription}"
+                                    Background="Transparent"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="{Binding Description}"
+                                    ToolTip.ShowDelay="150">
+                                <Path Data="{StaticResource IconInfo}" Stretch="Uniform" Width="12" Height="12"
+                                      Stroke="{DynamicResource AccentBrush1}" StrokeThickness="1.4" />
+                            </Border>
+                        </StackPanel>
                         <Panel Grid.Column="1" IsVisible="{Binding CanCopyToSelection}">
                             <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ApplyFieldToSelectionCommand}"
                                     CommandParameter="{Binding}"

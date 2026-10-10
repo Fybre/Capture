@@ -134,12 +134,126 @@ public partial class MainViewModel
     {
         var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale, _scripts?.IsAvailable ?? false, isBatch)
         {
-            Changed = () => _ = PersistReviewAsync(document),
+            Changed = () =>
+            {
+                _ = PersistReviewAsync(document);
+                _ = RecalculateAfterEditAsync(document, isBatch);
+            },
+            Description = FieldDescription(document.Document.ProfileId, value.FieldId, value.FieldName, isBatch),
             OptionsFor = name => document.Indexes
                 .FirstOrDefault(item => string.Equals(item.FieldName, name, StringComparison.OrdinalIgnoreCase))?.LookupOptions ?? []
         };
         row.Selected = () => SelectedIndex = row;
         return row;
+    }
+
+    private readonly Dictionary<Guid, CancellationTokenSource> _recalculateDelays = [];
+
+    /// <summary>Re-works out Script fields and templated Text/Lookup fields once editing pauses, so a
+    /// field computed from the one just changed follows it. A batch field edit also updates the other
+    /// documents in the batch.</summary>
+    private async Task RecalculateAfterEditAsync(DocumentRow document, bool batchFieldEdited)
+    {
+        if (_recalculateDelays.Remove(document.Id, out var previous))
+            previous.Cancel();
+        var delay = new CancellationTokenSource();
+        _recalculateDelays[document.Id] = delay;
+        try
+        {
+            await Task.Delay(300, delay.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            if (_recalculateDelays.TryGetValue(document.Id, out var current) && current == delay)
+                _recalculateDelays.Remove(document.Id);
+        }
+
+        try
+        {
+            if (await RecalculateComputedFieldsAsync(document, includeBatchFields: batchFieldEdited).ConfigureAwait(true))
+                await PersistReviewAsync(document).ConfigureAwait(true);
+
+            if (!batchFieldEdited || document.Document.BatchId is not { } batchId)
+                return;
+
+            foreach (var other in Documents.Where(item => item.Document.BatchId == batchId && item.Id != document.Id).ToList())
+            {
+                if (!await RecalculateComputedFieldsAsync(other, includeBatchFields: false).ConfigureAwait(true))
+                    continue;
+                other.RecalcStatus();
+                await _indexes.SaveAsync(other.Id, other.DocumentIndexes).ConfigureAwait(true);
+                await _store.UpdateAsync(other.Document).ConfigureAwait(true);
+                other.NotifyIndexes();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            StatusIsError = true;
+        }
+    }
+
+    private async Task<bool> RecalculateComputedFieldsAsync(DocumentRow row, bool includeBatchFields)
+    {
+        var document = row.Document;
+        var type = FindDocumentType(document.ProfileId);
+        var captureProfile = FindCaptureProfileForDocumentType(document.ProfileId);
+        var batchFields = includeBatchFields ? captureProfile?.Batch.Fields ?? [] : [];
+        var documentFields = type?.Fields ?? [];
+        var recalculated = batchFields.Concat(documentFields).Where(ProfileApplicator.IsComputed).ToList();
+        if (recalculated.Count == 0)
+            return false;
+
+        // Only scripts read the document's text, so skip loading it for templates alone.
+        IReadOnlyList<PageLattice> lattices = recalculated.Any(field => field.Kind == FieldKind.Script || !string.IsNullOrEmpty(field.PostProcessScript))
+            ? await LoadAllLatticesAsync(document).ConfigureAwait(true)
+            : [];
+        int? batchNumber = null, documentNumber = null;
+        if (document.BatchId is { } batchId)
+        {
+            batchNumber = await _store.GetBatchNumberAsync(batchId).ConfigureAwait(true);
+            documentNumber = await _store.GetDocumentNumberInBatchAsync(batchId, document.Id).ConfigureAwait(true);
+        }
+
+        var changed = false;
+        if (captureProfile is not null && batchFields.Any(ProfileApplicator.IsComputed))
+        {
+            changed |= await _profileApplicator.RecalculateAsync(
+                batchFields, captureProfile.Batch.SharedScriptSource, row.BatchIndexes, lattices, captureProfile.Name,
+                context: new DefaultValueContext { BatchNumber = batchNumber ?? 1, ScriptScope = ScriptScopeKind.Batch }).ConfigureAwait(true);
+        }
+
+        if (type is not null && documentFields.Any(ProfileApplicator.IsComputed))
+        {
+            changed |= await _profileApplicator.RecalculateAsync(
+                documentFields, type.SharedScriptSource, row.DocumentIndexes, lattices, type.Name, type.Locale,
+                new DefaultValueContext
+                {
+                    BatchNumber = batchNumber ?? 1,
+                    DocumentNumber = documentNumber ?? 1,
+                    ScriptScope = ScriptScopeKind.Document,
+                    DocumentType = type.Name,
+                    BatchValues = row.BatchIndexes
+                },
+                document).ConfigureAwait(true);
+        }
+
+        return changed;
+    }
+
+    /// <summary>The current profile's description for a field, matched by id and then by name.</summary>
+    private string? FieldDescription(Guid? documentTypeId, Guid fieldId, string fieldName, bool isBatch)
+    {
+        var fields = isBatch
+            ? FindCaptureProfileForDocumentType(documentTypeId)?.Batch.Fields
+            : FindDocumentType(documentTypeId)?.Fields;
+        var field = fields?.FirstOrDefault(item => item.Id == fieldId)
+            ?? fields?.FirstOrDefault(item => string.Equals(item.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+        return string.IsNullOrWhiteSpace(field?.Description) ? null : field.Description;
     }
 
     /// <summary>Runs a Button field's attached script — the review panel's on-demand counterpart to

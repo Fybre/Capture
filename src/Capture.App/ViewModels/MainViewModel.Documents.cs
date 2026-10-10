@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Capture.App.Services;
 using Capture.Core.Diagnostics;
 using Capture.Core.Import;
+using Capture.Core.Profiles;
 using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Models;
@@ -661,6 +662,18 @@ public partial class MainViewModel
         }
     }
 
+    private static Dictionary<string, string> DescriptionsByName(IEnumerable<IndexField>? fields)
+    {
+        var descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in fields ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(field.Description))
+                descriptions.TryAdd(field.Name, field.Description);
+        }
+
+        return descriptions;
+    }
+
     private void RefreshDocumentGroups()
     {
         var groups = new List<DocumentGroupViewModel>();
@@ -701,6 +714,8 @@ public partial class MainViewModel
                 IsUnassigned = false,
                 BatchFieldNames = batchFieldNames,
                 DocumentFieldNames = documentFieldNames,
+                BatchFieldDescriptions = DescriptionsByName(FindCaptureProfileForDocumentType(byProfile.Key)?.Batch.Fields),
+                DocumentFieldDescriptions = DescriptionsByName(profile?.Fields),
                 Documents = documents,
                 DisplayRows = BuildDisplayRows(documents)
             });

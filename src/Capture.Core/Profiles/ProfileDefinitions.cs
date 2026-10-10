@@ -114,6 +114,11 @@ public sealed class IndexField
     /// <summary>Optional boundary rule whose captured value populates this field, even when its trigger page is consumed.</summary>
     public Guid? BoundaryRuleId { get; set; }
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>Optional guidance for whoever indexes the document, such as what the field means or where
+    /// to find it. Shown as an info tip beside the field in review and on its Table column header.</summary>
+    public string? Description { get; set; }
+
     public FieldKind Kind { get; set; } = FieldKind.Zonal;
     public FieldFormat Format { get; set; } = FieldFormat.String;
     public bool Mandatory { get; set; }

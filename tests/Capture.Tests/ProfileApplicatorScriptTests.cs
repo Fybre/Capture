@@ -492,6 +492,85 @@ public class ProfileApplicatorScriptTests
         Assert.Equal(95, value.Confidence);
     }
 
+    // ── Recalculating after a review edit ─────────────────────────────────────────────────────────
+
+    private static readonly IndexField Kind = new()
+    {
+        Name = "Document Kind",
+        Kind = FieldKind.Lookup,
+        LookupOptions = [new LookupOption { Key = "Invoice", Value = "INV" }, new LookupOption { Key = "Credit Note", Value = "CRN" }]
+    };
+
+    private static IndexValue Chosen(string value) =>
+        new() { FieldId = Kind.Id, FieldName = Kind.Name, Kind = FieldKind.Lookup, Value = value, IsManual = true, Confidence = 100 };
+
+    [Fact]
+    public async Task Script_field_follows_a_changed_lookup()
+    {
+        var department = new IndexField { Name = "Department", Kind = FieldKind.Script, ScriptExpression = "dept" };
+        var runner = new FakeScriptRunner
+        {
+            OnFieldExpression = (_, _, ctx) => ScriptRunResult.Ok(
+                ctx.Values.Single(value => value.FieldName == "Document Kind").Value == "CRN" ? "Credit Control" : "Accounts Payable",
+                TimeSpan.Zero)
+        };
+        var applicator = new ProfileApplicator(scripts: runner);
+        var values = await applicator.ApplyAsync([Kind, department], [], string.Empty, [], existingValues: null);
+        var kind = values[0];
+        Assert.Equal("Accounts Payable", values[1].Value);
+
+        kind.Value = "CRN";
+        kind.IsManual = true;
+        Assert.True(await applicator.RecalculateAsync([Kind, department], string.Empty, values, []));
+        Assert.Equal("Credit Control", values[1].Value);
+
+        kind.Value = "INV";
+        Assert.True(await applicator.RecalculateAsync([Kind, department], string.Empty, values, []));
+        Assert.Equal("Accounts Payable", values[1].Value);
+
+        Assert.False(await applicator.RecalculateAsync([Kind, department], string.Empty, values, []));
+    }
+
+    [Fact]
+    public async Task Templated_text_and_lookup_fields_follow_a_changed_lookup()
+    {
+        var label = new IndexField { Name = "Label", Kind = FieldKind.Text, DefaultValueTemplate = "Type {Document Kind}" };
+        var team = new IndexField
+        {
+            Name = "Team",
+            Kind = FieldKind.Lookup,
+            LookupKeyTemplate = "{Document Kind}",
+            LookupOptions = [new LookupOption { Key = "INV", Value = "AP" }, new LookupOption { Key = "CRN", Value = "CC" }]
+        };
+        IndexField[] fields = [Kind, label, team];
+        var values = new List<IndexValue>
+        {
+            Chosen("CRN"),
+            new() { FieldId = label.Id, FieldName = label.Name, Kind = FieldKind.Text, Value = "Type INV", Confidence = 100 },
+            new() { FieldId = team.Id, FieldName = team.Name, Kind = FieldKind.Lookup, Value = "AP", Confidence = 100 }
+        };
+
+        Assert.True(await new ProfileApplicator().RecalculateAsync(fields, string.Empty, values, []));
+
+        Assert.Equal("Type CRN", values[1].Value);
+        Assert.Equal("CC", values[2].Value);
+    }
+
+    [Fact]
+    public async Task Recalculating_leaves_hand_edited_fields_alone()
+    {
+        var department = new IndexField { Name = "Department", Kind = FieldKind.Script, ScriptExpression = "dept" };
+        var runner = new FakeScriptRunner { OnFieldExpression = (_, _, _) => ScriptRunResult.Ok("From script", TimeSpan.Zero) };
+        var values = new List<IndexValue>
+        {
+            Chosen("CRN"),
+            new() { FieldId = department.Id, FieldName = department.Name, Kind = FieldKind.Script, Value = "Typed in", IsManual = true, Confidence = 100 }
+        };
+
+        Assert.False(await new ProfileApplicator(scripts: runner).RecalculateAsync([Kind, department], string.Empty, values, []));
+        Assert.Equal("Typed in", values[1].Value);
+    }
+
     private sealed class FakeScriptRunner : IFieldScriptRunner
     {
         public bool IsAvailable { get; set; } = true;

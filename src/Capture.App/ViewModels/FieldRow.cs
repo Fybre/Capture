@@ -28,6 +28,7 @@ public sealed partial class FieldRow : ObservableObject
         _scriptExpression = field.ScriptExpression ?? string.Empty;
         _postProcessScript = field.PostProcessScript ?? string.Empty;
         _buttonLabel = field.ButtonLabel ?? string.Empty;
+        _description = field.Description ?? string.Empty;
         _buttonScriptSource = field.ButtonScriptSource;
         _buttonTimeoutSeconds = field.ButtonTimeoutSeconds;
         _keyPattern = field.KeyPattern ?? string.Empty;
@@ -231,6 +232,10 @@ public sealed partial class FieldRow : ObservableObject
     [ObservableProperty]
     private string _postProcessScript;
 
+    /// <summary>See <see cref="IndexField.Description"/>.</summary>
+    [ObservableProperty]
+    private string _description;
+
     /// <summary>Only meaningful when <see cref="IsButton"/> — see <see cref="IndexField.ButtonLabel"/>.</summary>
     [ObservableProperty]
     private string _buttonLabel;
@@ -365,6 +370,9 @@ public sealed partial class FieldRow : ObservableObject
 
     partial void OnPostProcessScriptChanged(string value) =>
         Field.PostProcessScript = string.IsNullOrWhiteSpace(value) ? null : value;
+
+    partial void OnDescriptionChanged(string value) =>
+        Field.Description = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     partial void OnButtonLabelChanged(string value) =>
         Field.ButtonLabel = string.IsNullOrWhiteSpace(value) ? null : value;

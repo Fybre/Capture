@@ -750,7 +750,7 @@ public partial class MainWindow : Window
 
         var monoFont = ResolveMonoFont();
         foreach (var fieldName in group.BatchFieldNames)
-            grid.Columns.Add(BuildIndexColumn(fieldName, monoFont, isBatchField: true));
+            grid.Columns.Add(BuildIndexColumn(fieldName, group.BatchFieldDescriptions.GetValueOrDefault(fieldName), monoFont, isBatchField: true));
 
         if (group.HasBatchFields && group.DocumentFieldNames.Count > 0)
         {
@@ -775,20 +775,27 @@ public partial class MainWindow : Window
         }
 
         foreach (var fieldName in group.DocumentFieldNames)
-            grid.Columns.Add(BuildIndexColumn(fieldName, monoFont, isBatchField: false));
+            grid.Columns.Add(BuildIndexColumn(fieldName, group.DocumentFieldDescriptions.GetValueOrDefault(fieldName), monoFont, isBatchField: false));
     }
 
-    private DataGridTemplateColumn BuildIndexColumn(string fieldName, FontFamily monoFont, bool isBatchField)
+    private DataGridTemplateColumn BuildIndexColumn(string fieldName, string? description, FontFamily monoFont, bool isBatchField)
     {
+        var header = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(description) ? fieldName : fieldName + "  ⓘ",
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = IndexCellLookup.ResolveBrush(isBatchField ? "AccentBrush1" : "MutedBrush")
+        };
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            ToolTip.SetTip(header, description);
+            ToolTip.SetShowDelay(header, 150);
+        }
+
         return new DataGridTemplateColumn
         {
-            Header = new TextBlock
-            {
-                Text = fieldName,
-                FontSize = 11,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = IndexCellLookup.ResolveBrush(isBatchField ? "AccentBrush1" : "MutedBrush")
-            },
+            Header = header,
             Width = new DataGridLength(150),
             // FuncDataTemplate<object>, not <DocumentRow> — see the identical comment on the spacer
             // column above for why a BatchDividerRow reaching a <DocumentRow>-typed template throws.

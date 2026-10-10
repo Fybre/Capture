@@ -33,6 +33,12 @@ public sealed partial class IndexValueRow : ObservableObject
 
     public string Name => Value.FieldName;
 
+    /// <summary>The field definition's <c>IndexField.Description</c>, looked up from the current profile
+    /// when the row is built so edited descriptions show without re-applying the profile.</summary>
+    public string? Description { get; init; }
+
+    public bool HasDescription => !string.IsNullOrWhiteSpace(Description);
+
     /// <summary>Set explicitly by the caller from which store the value came from
     /// (<c>IIndexValueStore.GetBatchAsync</c> vs <c>GetAsync</c>/document-level extraction) — no longer
     /// derived from a per-value <c>Level</c> flag, since <c>IndexField</c>/<c>IndexValue</c> no longer

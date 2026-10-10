@@ -95,6 +95,12 @@
                   <StackPanel Spacing="4"><TextBlock Text="Name" Classes="field-label"/><TextBox Text="{Binding Name}"/></StackPanel>
                   <StackPanel Grid.Column="1" Width="92" Spacing="4"><TextBlock Text="Format" Classes="field-label"/><ComboBox ItemsSource="{Binding Formats}" SelectedItem="{Binding Format}"/></StackPanel>
                 </Grid>
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Description (optional)" Classes="field-label"/>
+                  <TextBox Classes="multiline" Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44"
+                           Watermark="Help for whoever indexes, e.g. the PO number from the top right of the invoice"/>
+                  <TextBlock Text="Shown as an ⓘ tip beside the field when indexing." Classes="hint" TextWrapping="Wrap"/>
+                </StackPanel>
                 <WrapPanel>
                   <CheckBox Content="Required" IsChecked="{Binding Mandatory}" Margin="0,0,12,0"/>
                   <CheckBox Content="Read only" IsChecked="{Binding IsReadOnly}" Margin="0,0,12,0"/>

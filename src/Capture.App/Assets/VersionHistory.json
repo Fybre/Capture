@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.8.17",
+    "date": "2026-10-10",
+    "changes": [
+      "Fields can have a description, set on the field's General tab in the profile designer. While indexing, it shows as an ⓘ tip beside the field and on its Table column header.",
+      "Script fields, and Text or Lookup fields with a template, now update as soon as a field they use is changed in review — for example a Department script that follows a Document Kind dropdown. Values typed in by hand are left alone."
+    ]
+  },
+  {
     "version": "0.8.16",
     "date": "2026-10-10",
     "changes": [
