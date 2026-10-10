@@ -35,6 +35,7 @@ $sdkBin = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Director
   Select-Object -First 1
 if (-not $sdkBin) { throw 'makeappx.exe not found — install the Windows 10/11 SDK.' }
 $makeAppx = Join-Path $sdkBin.FullName 'x64\makeappx.exe'
+$makePri = Join-Path $sdkBin.FullName 'x64\makepri.exe'
 
 $staging = Join-Path ([IO.Path]::GetTempPath()) "capture-msix-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $staging | Out-Null
@@ -50,6 +51,21 @@ try {
     Replace('__VERSION__', $packageVersion)
   if ($manifest -match '__[A-Z_]+__') { throw "Unreplaced manifest token: $($Matches[0])" }
   Set-Content -Path (Join-Path $staging 'AppxManifest.xml') -Value $manifest -Encoding utf8
+
+  # Index only the logos (not the whole publish output) into resources.pri, so Windows can pick the
+  # right scale and the unplated taskbar/Start icons. Without it the logos get an accent-colour backing.
+  $priRoot = Join-Path ([IO.Path]::GetTempPath()) "capture-pri-$([guid]::NewGuid().ToString('N'))"
+  New-Item -ItemType Directory -Path $priRoot | Out-Null
+  try {
+    Copy-Item -Path (Join-Path $PSScriptRoot 'Assets') -Destination (Join-Path $priRoot 'Assets') -Recurse
+    Copy-Item -Path (Join-Path $staging 'AppxManifest.xml') -Destination $priRoot
+    & $makePri new /pr $priRoot /cf (Join-Path $PSScriptRoot 'priconfig.xml') `
+      /mn (Join-Path $priRoot 'AppxManifest.xml') /of (Join-Path $staging 'resources.pri') /o
+    if ($LASTEXITCODE -ne 0) { throw "makepri failed with exit code $LASTEXITCODE" }
+  }
+  finally {
+    Remove-Item -Path $priRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }
 
   New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
   $output = Join-Path $OutputDir "Capture-$packageVersion-x64.msix"
