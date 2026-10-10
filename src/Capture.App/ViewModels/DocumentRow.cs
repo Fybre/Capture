@@ -156,7 +156,7 @@ public sealed partial class DocumentRow : ObservableObject
     {
         get
         {
-            var visible = Indexes.Where(index => !index.HideFromIndexing).ToList();
+            var visible = Indexes.Where(index => !index.HideFromIndexing && !index.IsConditionInactive).ToList();
             if (visible.Count == 0)
                 return string.Empty;
             var sensitiveBatchFieldIds = BatchIndexes
@@ -174,7 +174,7 @@ public sealed partial class DocumentRow : ObservableObject
     {
         get
         {
-            var visible = Indexes.Where(index => !index.HideFromIndexing).ToList();
+            var visible = Indexes.Where(index => !index.HideFromIndexing && !index.IsConditionInactive).ToList();
             var missing = visible.Count(index => index.IsMissing);
             var invalid = visible.Count(index => index.ValidationError is not null);
             var low = visible.Count(index => index.IsLowConfidence(ConfidenceThreshold));
@@ -203,8 +203,19 @@ public sealed partial class DocumentRow : ObservableObject
         RecalcStatus();
     }
 
+    /// <summary>Re-evaluates every field's conditional rules against the current values — batch fields
+    /// among themselves, document fields against both. Returns true when a field switched on or off or
+    /// was cleared.</summary>
+    public bool ApplyConditions()
+    {
+        var changed = FieldConditions.Apply(BatchIndexes);
+        changed |= FieldConditions.Apply(DocumentIndexes, BatchIndexes);
+        return changed;
+    }
+
     public void RecalcStatus()
     {
+        ApplyConditions();
         if (Document.Status != DocumentStatus.Error && Indexes.Count > 0)
             Document.Status = IndexFormat.StatusFor(Indexes, ConfidenceThreshold);
         NotifyIndexes();

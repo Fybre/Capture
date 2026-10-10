@@ -25,8 +25,18 @@ public sealed class IndexValue
     /// without a separate profile lookup.</summary>
     public string? ButtonLabel { get; set; }
 
-    public bool IsMissing => Mandatory && string.IsNullOrWhiteSpace(Value);
+    /// <summary>Copied from <c>IndexField.Condition</c> at extraction time, like <see cref="LookupOptions"/>,
+    /// so conditions can be re-evaluated as values are edited without looking up the profile.</summary>
+    public FieldCondition? Condition { get; set; }
+
+    /// <summary>Set by <c>FieldConditions.Apply</c>: true while <see cref="Condition"/> doesn't match. An
+    /// inactive field isn't required, isn't flagged, and isn't exported.</summary>
+    public bool IsConditionInactive { get; set; }
+
+    public bool IsConditionHidden => IsConditionInactive && Condition?.WhenInactive == InactiveFieldBehavior.Hide;
+
+    public bool IsMissing => Mandatory && !IsConditionInactive && string.IsNullOrWhiteSpace(Value);
 
     public bool IsLowConfidence(int threshold) =>
-        !IsManual && !IsMissing && !string.IsNullOrWhiteSpace(Value) && Confidence < threshold;
+        !IsManual && !IsConditionInactive && !IsMissing && !string.IsNullOrWhiteSpace(Value) && Confidence < threshold;
 }

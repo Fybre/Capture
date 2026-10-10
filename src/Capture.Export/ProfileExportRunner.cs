@@ -103,7 +103,8 @@ public sealed class ProfileExportRunner
         FieldName = source.FieldName,
         Format = source.Format,
         Mandatory = source.Mandatory,
-        Value = source.Value,
+        // A field switched off by its condition isn't part of this document, whatever value it kept.
+        Value = source.IsConditionInactive ? string.Empty : source.Value,
         Confidence = source.Confidence,
         IsManual = source.IsManual,
         PageNumber = source.PageNumber,
@@ -113,6 +114,8 @@ public sealed class ProfileExportRunner
         IsReadOnly = source.IsReadOnly,
         Sensitive = source.Sensitive,
         Kind = source.Kind,
-        LookupOptions = source.LookupOptions
+        LookupOptions = source.LookupOptions,
+        Condition = source.Condition,
+        IsConditionInactive = source.IsConditionInactive
     };
 }

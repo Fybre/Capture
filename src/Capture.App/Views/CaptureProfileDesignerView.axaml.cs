@@ -31,6 +31,14 @@ public partial class CaptureProfileDesignerView : UserControl
         WireExportDragDrop(ExportsList);
     }
 
+    private ColumnExpander? _rightPanel;
+
+    private void OnDesignerExpandClick(object? sender, RoutedEventArgs e)
+    {
+        _rightPanel ??= new ColumnExpander(DesignerGrid, 4);
+        ColumnExpander.UpdateButton(DesignerExpandButton, _rightPanel.Toggle());
+    }
+
     // The "Copy to..." flyout needs both the clicked target document type AND the export row the button
     // was opened from — a combination that doesn't bind cleanly through ExportsList's shared item
     // template (MenuItem.CommandParameter can't reach back to an ancestor outside the Flyout's own visual

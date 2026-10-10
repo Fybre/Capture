@@ -9,7 +9,7 @@
     </Style>
     <Style Selector="TabControl.field-tabs TabItem">
       <Setter Property="Padding" Value="2,6"/>
-      <Setter Property="Margin" Value="0,0,16,0"/>
+      <Setter Property="Margin" Value="0,0,12,0"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="MinHeight" Value="0"/>
     </Style>
@@ -193,6 +193,60 @@
                   <Button Content="Extract all AI fields from sample" HorizontalAlignment="Left"
                           Command="{Binding $parent[UserControl].DataContext.ExtractAiSampleCommand}"/>
                 </StackPanel>
+              </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Conditional">
+              <StackPanel Spacing="8" Margin="0,8,0,0">
+                <CheckBox Content="Only use this field in some cases" IsChecked="{Binding IsConditional}"/>
+                <StackPanel Spacing="8" IsVisible="{Binding IsConditional}">
+                  <WrapPanel>
+                    <TextBlock Text="Use this field when" VerticalAlignment="Center" Margin="0,0,6,4"/>
+                    <ComboBox ItemsSource="{Binding ConditionMatches}" SelectedItem="{Binding SelectedConditionMatch}" MinWidth="70" Margin="0,0,6,4">
+                      <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="of these rules match:" VerticalAlignment="Center" Margin="0,0,0,4"/>
+                  </WrapPanel>
+                  <ItemsControl ItemsSource="{Binding ConditionRules}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Background="{DynamicResource Surface2Brush}" BorderBrush="{DynamicResource BorderBrush1}"
+                                BorderThickness="1" CornerRadius="5" Padding="8" Margin="0,0,0,6">
+                          <StackPanel Spacing="6">
+                            <ComboBox ItemsSource="{Binding FieldChoices}" SelectedItem="{Binding FieldName}"
+                                      PlaceholderText="Choose a field" HorizontalAlignment="Stretch"/>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                              <ComboBox ItemsSource="{Binding Operators}" SelectedItem="{Binding SelectedOperator}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                              </ComboBox>
+                              <Button Grid.Column="1" Content="Remove" Classes="ghost" Padding="8,3" Command="{Binding RemoveCommand}"/>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding ValueChoices}" IsVisible="{Binding HasValueChoices}">
+                              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate><CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" Margin="0,0,12,0"/></DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBox Classes="multiline" Text="{Binding ValuesText}" AcceptsReturn="True" MinHeight="48"
+                                     Watermark="One value per line" IsVisible="{Binding IsFreeText}"/>
+                            <TextBlock Text="{Binding ValueHint}" Classes="hint" TextWrapping="Wrap" IsVisible="{Binding NeedsValues}"/>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button Content="Add rule" HorizontalAlignment="Left" Command="{Binding AddConditionRuleCommand}"/>
+                  <TextBlock Text="When the rules don't match" Classes="field-label" Margin="0,4,0,0"/>
+                  <ComboBox ItemsSource="{Binding InactiveBehaviors}" SelectedItem="{Binding SelectedInactiveBehavior}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <CheckBox Content="Clear its value" IsChecked="{Binding ClearWhenInactive}"/>
+                  <TextBlock Classes="hint" TextWrapping="Wrap"
+                             Text="While the rules don't match, the field isn't required and its value isn't exported. Without Clear its value, whatever it holds is kept, so nothing is lost if the field comes back."/>
+                </StackPanel>
+                <Border Background="{DynamicResource AccentWashBrush}" CornerRadius="5" Padding="8">
+                  <TextBlock Text="{Binding ConditionSummary}" TextWrapping="Wrap"/>
+                </Border>
               </StackPanel>
             </TabItem>
 

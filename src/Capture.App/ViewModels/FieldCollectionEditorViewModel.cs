@@ -193,6 +193,7 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
 
     partial void OnSelectedFieldChanged(FieldRow? value)
     {
+        value?.RefreshConditionChoices();
         RefreshValueSourceOptions();
         NotifyCommands();
         SelectionChanged?.Invoke();
@@ -322,7 +323,35 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
         }
     }
 
-    private void Watch(FieldRow row) => row.PropertyChanged += (_, args) =>
+    /// <summary>Raised when one of this collection's fields is renamed (old name, new name). The designer
+    /// uses it to update document fields' conditions that test a renamed batch field.</summary>
+    public Action<string, string>? FieldRenamed { get; set; }
+
+    /// <summary>Fields a condition rule can test: this collection's own, then any extra source fields
+    /// (the batch fields, for a document type) that a local field doesn't shadow.</summary>
+    private IEnumerable<FieldRow> ConditionSourceFields() =>
+        Fields.Concat(_additionalSourceFields.Where(extra =>
+            Fields.All(local => !string.Equals(local.Name, extra.Name, StringComparison.OrdinalIgnoreCase))));
+
+    /// <summary>Points every condition that tests <paramref name="oldName"/> at <paramref name="newName"/>.</summary>
+    public void RenameConditionReferences(string oldName, string newName)
+    {
+        foreach (var field in Fields)
+            field.RenameConditionReferences(oldName, newName);
+    }
+
+    private void Watch(FieldRow row)
+    {
+        row.ConditionFieldSource = ConditionSourceFields;
+        row.Renamed = (_, oldName, newName) =>
+        {
+            RenameConditionReferences(oldName, newName);
+            FieldRenamed?.Invoke(oldName, newName);
+        };
+        WatchProperties(row);
+    }
+
+    private void WatchProperties(FieldRow row) => row.PropertyChanged += (_, args) =>
     {
         if (!_syncingValueSource && row == SelectedField &&
             args.PropertyName == nameof(FieldRow.DefaultValueTemplate) && row.BoundaryRuleId is not null)

@@ -56,6 +56,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         var results = ExtractAll(fields, locale, lattices, pages, batchSeparatorValue);
         ApplyBoundaryValues(fields, results, existingValues, locale);
         ApplyDefaults(fields, profileName, locale, results, context, existingValues, pages?.Count ?? lattices.Count);
+        FieldConditions.Apply(results, context?.BatchValues);
         return results;
     }
 
@@ -80,6 +81,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         await RunProfileScriptsAsync(fields, scripts, sharedScriptSource, profileName, locale, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
         ApplyDefaults(fields, profileName, locale, results, context, existingValues, pages?.Count ?? lattices.Count);
         await ApplyPostProcessScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+        FieldConditions.Apply(results, context?.BatchValues);
         return results;
     }
 
@@ -521,6 +523,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             Kind = field.Kind,
             LookupOptions = field.LookupOptions.Select(CloneLookupOption).ToList(),
             ButtonLabel = field.ButtonLabel,
+            Condition = field.Condition,
             PageNumber = field.PageNumber
         };
 

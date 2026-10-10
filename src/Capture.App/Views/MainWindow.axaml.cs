@@ -54,6 +54,14 @@ public partial class MainWindow : Window
     private Point _pressPagePoint;
     private bool _pageDragging;
 
+    private ColumnExpander? _indexesPanel;
+
+    private void OnIndexesExpandClick(object? sender, RoutedEventArgs e)
+    {
+        _indexesPanel ??= new ColumnExpander(PreviewGrid, 4);
+        ColumnExpander.UpdateButton(IndexesExpandButton, _indexesPanel.Toggle());
+    }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -889,7 +897,7 @@ public partial class MainWindow : Window
                         && viewModel.SelectedDocuments.Contains(source)
                         && source.DocumentIndexes.FirstOrDefault(item =>
                             !item.HideFromIndexing
-                            && string.Equals(item.FieldName, fieldName, StringComparison.OrdinalIgnoreCase)) is { IsReadOnly: false };
+                            && string.Equals(item.FieldName, fieldName, StringComparison.OrdinalIgnoreCase)) is { IsReadOnly: false, IsConditionInactive: false };
                     copy.Opacity = canCopy ? 1 : 0;
                     copy.IsHitTestVisible = canCopy;
                 };

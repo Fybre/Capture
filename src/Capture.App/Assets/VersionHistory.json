@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.8.15",
+    "date": "2026-10-10",
+    "changes": [
+      "Conditional fields: a field's new Conditional tab sets when it's used — for example when Document Kind is Invoice or Credit Note. Rules can test several values, a Yes/No answer, or whether a field is filled in, and can be combined with all/any. While its rules don't match, the field is disabled or hidden, isn't required, and isn't exported.",
+      "An arrow on the divider next to the Indexes panel, and next to the profile designer's settings panel, widens that panel to double its width; click it again to restore it.",
+      "Yes/No fields with a default such as 1 now show as Yes or No in Table mode."
+    ]
+  },
+  {
     "version": "0.8.14",
     "date": "2026-10-10",
     "changes": [

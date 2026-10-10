@@ -61,6 +61,8 @@ public sealed class IndexCellTextConverter : IValueConverter
             return "—";
 
         var match = IndexCellLookup.Find(row, request);
+        if (match is { IsConditionHidden: true })
+            return string.Empty;
         if (match is null || string.IsNullOrWhiteSpace(match.Value))
             return "—";
         if (request.IsBatchField && match.Sensitive)
@@ -87,7 +89,7 @@ public sealed class IndexCellForegroundConverter : IValueConverter
             return IndexCellLookup.ResolveBrush("InkSoftBrush");
 
         var match = IndexCellLookup.Find(row, request);
-        var key = match is null || string.IsNullOrWhiteSpace(match.Value)
+        var key = match is null || match.IsConditionInactive || string.IsNullOrWhiteSpace(match.Value)
             ? "FaintBrush"
             : match.IsMissing || match.ValidationError is not null || match.IsLowConfidence(row.ConfidenceThreshold)
                 ? "WarnBrush"

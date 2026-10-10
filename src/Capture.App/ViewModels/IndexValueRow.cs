@@ -79,8 +79,27 @@ public sealed partial class IndexValueRow : ObservableObject
 
     public bool IsReadOnly => Value.IsReadOnly;
 
+    /// <summary>Finds another field's lookup options by name, so <see cref="ConditionHint"/> can show
+    /// option labels rather than stored values. Set by the review panel.</summary>
+    public Func<string, IReadOnlyList<LookupOption>>? OptionsFor { get; set; }
+
+    /// <summary>False while the field's conditional rules don't match and it's set to hide.</summary>
+    public bool IsShown => !Value.IsConditionHidden;
+
+    /// <summary>True while the field's conditional rules don't match and it's set to disable: shown
+    /// greyed out with <see cref="ConditionHint"/>, and not editable.</summary>
+    public bool IsConditionDisabled => Value.IsConditionInactive && !Value.IsConditionHidden;
+
+    public bool IsEditable => !IsReadOnly && !Value.IsConditionInactive;
+
+    public double RowOpacity => IsConditionDisabled ? 0.55 : 1.0;
+
+    public string ConditionHint => IsConditionDisabled
+        ? $"Used when {FieldConditions.Describe(Value.Condition, OptionsFor)}"
+        : string.Empty;
+
     /// <summary>Copy-to-selection is a manual edit, so read-only fields must not expose it.</summary>
-    public bool CanCopyToSelection => !IsBatch && !IsReadOnly;
+    public bool CanCopyToSelection => !IsBatch && IsEditable;
 
     public bool IsDate => !IsLookup && Value.Format == FieldFormat.Date;
 
@@ -158,6 +177,8 @@ public sealed partial class IndexValueRow : ObservableObject
     {
         get
         {
+            if (Value.IsConditionInactive)
+                return string.Empty;
             if (Value.IsMissing)
                 return "Missing";
             if (Value.ValidationError is not null)
@@ -250,6 +271,19 @@ public sealed partial class IndexValueRow : ObservableObject
         OnPropertyChanged(nameof(ConfidenceDisplay));
         OnPropertyChanged(nameof(ConfidenceValue));
         OnPropertyChanged(nameof(ButtonStatus));
+    }
+
+    /// <summary>Called after the document's conditions are re-evaluated (any field edit can switch this
+    /// one on or off, or clear it).</summary>
+    public void RefreshCondition()
+    {
+        Refresh();
+        OnPropertyChanged(nameof(IsShown));
+        OnPropertyChanged(nameof(IsConditionDisabled));
+        OnPropertyChanged(nameof(IsEditable));
+        OnPropertyChanged(nameof(RowOpacity));
+        OnPropertyChanged(nameof(ConditionHint));
+        OnPropertyChanged(nameof(CanCopyToSelection));
     }
 
     private static bool? ParseBoolean(string value) =>

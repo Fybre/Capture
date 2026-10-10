@@ -134,7 +134,9 @@ public partial class MainViewModel
     {
         var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale, _scripts?.IsAvailable ?? false, isBatch)
         {
-            Changed = () => _ = PersistReviewAsync(document)
+            Changed = () => _ = PersistReviewAsync(document),
+            OptionsFor = name => document.Indexes
+                .FirstOrDefault(item => string.Equals(item.FieldName, name, StringComparison.OrdinalIgnoreCase))?.LookupOptions ?? []
         };
         row.Selected = () => SelectedIndex = row;
         return row;
@@ -259,7 +261,7 @@ public partial class MainViewModel
     {
         var value = source.DocumentIndexes.FirstOrDefault(item =>
             !item.HideFromIndexing && string.Equals(item.FieldName, fieldName, StringComparison.OrdinalIgnoreCase));
-        if (value is null || value.IsReadOnly)
+        if (value is null || value.IsReadOnly || value.IsConditionInactive)
             return;
 
         await ApplyDocumentFieldToSelectionAsync(source, value).ConfigureAwait(true);
@@ -279,7 +281,7 @@ public partial class MainViewModel
     {
         var value = (isBatchField ? document.BatchIndexes : document.DocumentIndexes).FirstOrDefault(item =>
             !item.HideFromIndexing && string.Equals(item.FieldName, fieldName, StringComparison.OrdinalIgnoreCase));
-        if (value is null || value.IsReadOnly || value.Kind is FieldKind.Button or FieldKind.Script)
+        if (value is null || value.IsReadOnly || value.IsConditionInactive || value.Kind is FieldKind.Button or FieldKind.Script)
             return null;
 
         var row = CreateReviewRow(document, value, isBatchField);
@@ -344,6 +346,9 @@ public partial class MainViewModel
     {
         try
         {
+            // Conditions first: an edit can switch other fields on or off, or clear them, and those
+            // changes must be part of what's saved.
+            row.RecalcStatus();
             await _indexes.SaveAsync(row.Id, row.DocumentIndexes).ConfigureAwait(true);
             if (row.Document.BatchId is { } batchId)
             {
@@ -351,13 +356,19 @@ public partial class MainViewModel
                 foreach (var other in Documents.Where(item => item.Document.BatchId == batchId && item.Id != row.Id))
                 {
                     other.SetBatchIndexes(row.BatchIndexes);
+                    // A batch field can be a condition for this document's own fields.
+                    await _indexes.SaveAsync(other.Id, other.DocumentIndexes).ConfigureAwait(true);
                     await _store.UpdateAsync(other.Document).ConfigureAwait(true);
                 }
             }
 
-            row.RecalcStatus();
             await _store.UpdateAsync(row.Document).ConfigureAwait(true);
             row.NotifyIndexes();
+            if (row == SelectedDocument)
+            {
+                foreach (var reviewRow in ReviewBatchIndexes.Concat(ReviewDocumentIndexes))
+                    reviewRow.RefreshCondition();
+            }
             RefreshIndexHighlights();
             MarkReadyCommand.NotifyCanExecuteChanged();
         }
@@ -373,7 +384,7 @@ public partial class MainViewModel
         // Batch field bounds refer to the batch extraction source (often a removed separator), not
         // to this document's page coordinate system. Only document fields can be highlighted here.
         var indexHighlights = ReviewDocumentIndexes
-            .Where(item => item.Value.Bounds is not null && item.Value.PageNumber == CurrentPageNumber)
+            .Where(item => item.Value.Bounds is not null && item.Value.PageNumber == CurrentPageNumber && item.IsShown)
             .Select(item => new IndexHighlight
             {
                 FieldId = item.Value.FieldId,

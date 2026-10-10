@@ -142,6 +142,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         BatchRules.SelectionChanged = () => SelectRuleForDrawing(SampleZoneTarget.BatchRule, BatchRules);
         BatchRules.StrategyChanged = OnRuleChanged;
         BatchFields.SelectionChanged = () => SelectFieldForDrawing(BatchFields);
+        BatchFields.FieldRenamed = RenameBatchFieldInConditions;
         BatchFields.Fields.CollectionChanged += (_, _) =>
         {
             foreach (var export in DocumentExports)
@@ -1064,6 +1065,27 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         type.Scripts = DocumentScripts.ToModels();
         type.SharedScriptSource = DocumentScripts.SharedSource;
         type.Exports = DocumentExports.Select(row => row.Definition).ToList();
+    }
+
+    /// <summary>Document fields' conditions can test batch fields by name, so follow a batch field's
+    /// rename into every document type — except one with its own field of that name, whose rules mean
+    /// that local field.</summary>
+    private void RenameBatchFieldInConditions(string oldName, string newName)
+    {
+        static bool HasField(IEnumerable<string> names, string name) =>
+            names.Any(item => string.Equals(item, name, StringComparison.OrdinalIgnoreCase));
+
+        if (DocumentFields is { } loaded && !HasField(loaded.Fields.Select(field => field.Name), oldName))
+            loaded.RenameConditionReferences(oldName, newName);
+
+        foreach (var type in Profile.DocumentTypes.Where(type => !HasField(type.Fields.Select(field => field.Name), oldName)))
+        {
+            foreach (var rule in type.Fields.SelectMany(field => field.Condition?.Rules ?? []))
+            {
+                if (string.Equals(rule.FieldName, oldName, StringComparison.OrdinalIgnoreCase))
+                    rule.FieldName = newName;
+            }
+        }
     }
 
     private void LoadDocument(DocumentTypeDefinition type)

@@ -16,6 +16,27 @@
         Height="800"
         MinWidth="720"
         MinHeight="600">
+    <Window.Styles>
+        <Style Selector="Button.panel-expand">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="0,-2,0,0" />
+            <Setter Property="Margin" Value="-5,10,-5,0" />
+            <Setter Property="ZIndex" Value="1" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </Window.Styles>
+
     <Window.Resources>
         <!-- Icon glyphs live in Styles/Theme.axaml and resolve globally via StaticResource. -->
 
@@ -23,6 +44,8 @@
             <Button Classes="review-row"
                     Classes.selected="{Binding IsSelected}"
                     Command="{Binding SelectCommand}"
+                    IsVisible="{Binding IsShown}"
+                    Opacity="{Binding RowOpacity}"
                     Margin="0,0,0,8"
                     ToolTip.Tip="Click to highlight this field's zone in the preview">
                 <StackPanel Spacing="5">
@@ -57,7 +80,7 @@
                     </Grid>
                     <TextBox Text="{Binding Text}"
                              IsVisible="{Binding IsTextEntry}"
-                             IsEnabled="{Binding !IsReadOnly}"
+                             IsEnabled="{Binding IsEditable}"
                              PasswordChar="{Binding PasswordChar}"
                              RevealPassword="{Binding RevealSensitiveValue}"
                              Classes.invalid="{Binding HasFormatError}"
@@ -72,20 +95,20 @@
                                   ToolTip.Tip="Sensitive batch values are masked by default" />
                     <CalendarDatePicker SelectedDate="{Binding SelectedDate}"
                                         IsVisible="{Binding IsDateEditorVisible}"
-                                        IsEnabled="{Binding !IsReadOnly}"
+                                        IsEnabled="{Binding IsEditable}"
                                         HorizontalAlignment="Stretch"
                                         KeyDown="OnFieldKeyDown"
                                         GotFocus="OnFieldGotFocus" />
                     <CheckBox IsChecked="{Binding SelectedBoolean}"
                               Content="{Binding BooleanDisplay}"
                               IsVisible="{Binding IsBooleanEditorVisible}"
-                              IsEnabled="{Binding !IsReadOnly}"
+                              IsEnabled="{Binding IsEditable}"
                               KeyDown="OnFieldKeyDown"
                               GotFocus="OnFieldGotFocus" />
                     <ComboBox ItemsSource="{Binding LookupChoices}"
                               SelectedItem="{Binding SelectedLookup}"
                               IsVisible="{Binding IsLookupEditorVisible}"
-                              IsEnabled="{Binding !IsReadOnly}"
+                              IsEnabled="{Binding IsEditable}"
                               PlaceholderText="Choose a value"
                               HorizontalAlignment="Stretch"
                               KeyDown="OnFieldKeyDown"
@@ -115,6 +138,10 @@
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                     </StackPanel>
+                    <TextBlock Text="{Binding ConditionHint}"
+                               IsVisible="{Binding IsConditionDisabled}"
+                               TextWrapping="Wrap"
+                               Classes="hint" />
                     <ProgressBar Value="{Binding ConfidenceValue}"
                                  Maximum="100"
                                  Height="3"
@@ -542,7 +569,7 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="1" Background="{DynamicResource GroundBrush}" IsVisible="{Binding IsPreviewMode}">
+        <Grid x:Name="PreviewGrid" Grid.Row="1" Background="{DynamicResource GroundBrush}" IsVisible="{Binding IsPreviewMode}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="300" MinWidth="180" MaxWidth="560" />
                 <ColumnDefinition Width="9" />
@@ -983,6 +1010,13 @@
                     HorizontalAlignment="Center"
                     Background="{DynamicResource BorderBrush1}"
                     IsHitTestVisible="False" />
+
+            <Button x:Name="IndexesExpandButton"
+                    Grid.Column="3"
+                    Classes="panel-expand"
+                    Content="‹"
+                    ToolTip.Tip="Widen this panel"
+                    Click="OnIndexesExpandClick" />
 
             <!-- Indexes -->
             <Grid Grid.Column="4" RowDefinitions="Auto,*,Auto">

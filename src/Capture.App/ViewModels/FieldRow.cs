@@ -47,6 +47,13 @@ public sealed partial class FieldRow : ObservableObject
             LookupOptions.Add(WrapLookupOption(option));
         _selectedDefaultLookupOption = LookupOptions.FirstOrDefault(option =>
             string.Equals(option.Value, field.LookupDefaultValue, StringComparison.Ordinal));
+        var condition = field.Condition;
+        _isConditional = condition is { Enabled: true };
+        _selectedConditionMatch = ConditionMatchChoices.First(choice => choice.Value == (condition?.Match ?? ConditionMatch.All));
+        _selectedInactiveBehavior = InactiveBehaviorChoices.First(choice => choice.Value == (condition?.WhenInactive ?? InactiveFieldBehavior.Disable));
+        _clearWhenInactive = condition?.ClearWhenInactive ?? false;
+        foreach (var rule in condition?.Rules ?? [])
+            ConditionRules.Add(new ConditionRuleRow(rule, this));
     }
 
     public IndexField Field { get; }
@@ -319,6 +326,15 @@ public sealed partial class FieldRow : ObservableObject
 
     partial void OnNameChanged(string value) => Field.Name = value;
 
+    /// <summary>Raised with the old and new name, so conditions that test this field can follow it.</summary>
+    public Action<FieldRow, string, string>? Renamed { get; set; }
+
+    partial void OnNameChanged(string? oldValue, string newValue)
+    {
+        if (!string.IsNullOrWhiteSpace(oldValue) && !string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            Renamed?.Invoke(this, oldValue, newValue);
+    }
+
     partial void OnFormatChanged(FieldFormat value) => Field.Format = value;
 
     partial void OnMandatoryChanged(bool value) => Field.Mandatory = value;
@@ -472,6 +488,130 @@ public sealed partial class FieldRow : ObservableObject
 
     [RelayCommand]
     private void ClearLookupDefault() => SelectedDefaultLookupOption = null;
+
+    // ── Conditional tab ────────────────────────────────────────────────────────────────────────────
+
+    // Instance accessors: the field editor uses reflection bindings, which don't see statics.
+    public IReadOnlyList<ConditionMatchChoice> ConditionMatches => ConditionMatchChoices;
+
+    public IReadOnlyList<InactiveBehaviorChoice> InactiveBehaviors => InactiveBehaviorChoices;
+
+    public static IReadOnlyList<ConditionMatchChoice> ConditionMatchChoices { get; } =
+    [
+        new(ConditionMatch.All, "all"),
+        new(ConditionMatch.Any, "any")
+    ];
+
+    public static IReadOnlyList<InactiveBehaviorChoice> InactiveBehaviorChoices { get; } =
+    [
+        new(InactiveFieldBehavior.Disable, "Disable the field (shown greyed out)"),
+        new(InactiveFieldBehavior.Hide, "Hide the field")
+    ];
+
+    /// <summary>The fields a condition rule can test, supplied by the owning collection editor (its own
+    /// fields plus, for document fields, the batch fields).</summary>
+    public Func<IEnumerable<FieldRow>>? ConditionFieldSource { get; set; }
+
+    public ObservableCollection<ConditionRuleRow> ConditionRules { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConditionSummary))]
+    private bool _isConditional;
+
+    [ObservableProperty]
+    private ConditionMatchChoice _selectedConditionMatch;
+
+    [ObservableProperty]
+    private InactiveBehaviorChoice _selectedInactiveBehavior;
+
+    [ObservableProperty]
+    private bool _clearWhenInactive;
+
+    public string ConditionSummary
+    {
+        get
+        {
+            if (!IsConditional)
+                return "This field is always used.";
+            var description = FieldConditions.Describe(Field.Condition, name => FindConditionField(name)?.Field.LookupOptions ?? []);
+            return description.Length == 0
+                ? "Add a rule to choose when this field is used. Until then it's always used."
+                : $"Used when {description}.";
+        }
+    }
+
+    [RelayCommand]
+    private void AddConditionRule()
+    {
+        var rule = new FieldConditionRule { FieldName = ConditionFieldNames().FirstOrDefault() ?? string.Empty };
+        ConditionRules.Add(new ConditionRuleRow(rule, this));
+        IsConditional = true;
+        SyncCondition();
+    }
+
+    public void RemoveConditionRule(ConditionRuleRow row)
+    {
+        ConditionRules.Remove(row);
+        SyncCondition();
+    }
+
+    public IEnumerable<string> ConditionFieldNames() =>
+        (ConditionFieldSource?.Invoke() ?? [])
+            .Where(field => !ReferenceEquals(field, this) && !field.IsButton && !string.IsNullOrWhiteSpace(field.Name))
+            .Select(field => field.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    public FieldRow? FindConditionField(string? name) =>
+        string.IsNullOrWhiteSpace(name)
+            ? null
+            : (ConditionFieldSource?.Invoke() ?? []).FirstOrDefault(field =>
+                !ReferenceEquals(field, this) && string.Equals(field.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    public void RefreshConditionChoices()
+    {
+        foreach (var rule in ConditionRules)
+            rule.RefreshChoices();
+        OnPropertyChanged(nameof(ConditionSummary));
+    }
+
+    public void RenameConditionReferences(string oldName, string newName)
+    {
+        foreach (var rule in ConditionRules)
+            rule.RenameField(oldName, newName);
+        if (ConditionRules.Count > 0)
+            SyncCondition();
+    }
+
+    partial void OnIsConditionalChanged(bool value) => SyncCondition();
+
+    partial void OnSelectedConditionMatchChanged(ConditionMatchChoice value) => SyncCondition();
+
+    partial void OnSelectedInactiveBehaviorChanged(InactiveBehaviorChoice value) => SyncCondition();
+
+    partial void OnClearWhenInactiveChanged(bool value) => SyncCondition();
+
+    /// <summary>Writes the Conditional tab's state to <see cref="IndexField.Condition"/>. Switching the
+    /// condition off keeps its rules (Enabled = false), so switching it back on restores them.</summary>
+    public void SyncCondition()
+    {
+        if (!IsConditional && ConditionRules.Count == 0)
+        {
+            Field.Condition = null;
+        }
+        else
+        {
+            Field.Condition = new FieldCondition
+            {
+                Enabled = IsConditional,
+                Match = SelectedConditionMatch?.Value ?? ConditionMatch.All,
+                WhenInactive = SelectedInactiveBehavior?.Value ?? InactiveFieldBehavior.Disable,
+                ClearWhenInactive = ClearWhenInactive,
+                Rules = ConditionRules.Select(row => row.Rule).ToList()
+            };
+        }
+
+        OnPropertyChanged(nameof(ConditionSummary));
+    }
 }
 
 public sealed partial class LookupOptionRow : ObservableObject

@@ -37,7 +37,7 @@ public static class IndexFormat
     {
         foreach (var value in values)
         {
-            if (value.HideFromIndexing)
+            if (value.HideFromIndexing || value.IsConditionInactive)
                 continue;
             // A read-only value cannot be corrected in the review editor, but a format/configuration
             // error must still surface as NeedsReview instead of silently marking the document Ready.

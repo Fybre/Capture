@@ -192,6 +192,57 @@ public sealed class IndexField
     /// only source of the field's value. Skipped for a field the reviewer has manually edited, same as
     /// every other automatic pipeline step. Requires <c>WatchSettings.AllowFieldScripts</c>.</summary>
     public string? PostProcessScript { get; set; }
+
+    /// <summary>Rules deciding when this field is used, evaluated against the other fields' current
+    /// values (see <c>FieldConditions</c>). Null, switched off, or without rules means always used.</summary>
+    public FieldCondition? Condition { get; set; }
+}
+
+public enum ConditionMatch
+{
+    All = 0,
+    Any = 1
+}
+
+public enum ConditionOperator
+{
+    IsOneOf = 0,
+    IsNotOneOf = 1,
+    IsFilledIn = 2,
+    IsEmpty = 3
+}
+
+/// <summary>What the review panel and Table mode do with a field whose condition doesn't match.</summary>
+public enum InactiveFieldBehavior
+{
+    Disable = 0,
+    Hide = 1
+}
+
+/// <summary>When a field is used. While its rules don't match, the field is disabled or hidden, isn't
+/// required, and its value isn't exported (or is cleared, with <see cref="ClearWhenInactive"/>).</summary>
+public sealed class FieldCondition
+{
+    /// <summary>Lets the designer switch rules off without losing them.</summary>
+    public bool Enabled { get; set; } = true;
+    public ConditionMatch Match { get; set; } = ConditionMatch.All;
+    public List<FieldConditionRule> Rules { get; set; } = [];
+    public InactiveFieldBehavior WhenInactive { get; set; } = InactiveFieldBehavior.Disable;
+    public bool ClearWhenInactive { get; set; }
+
+    public bool HasRules => Enabled && Rules.Any(rule => !string.IsNullOrWhiteSpace(rule.FieldName));
+}
+
+public sealed class FieldConditionRule
+{
+    /// <summary>The field this rule tests, by name (case-insensitive), the same way value templates
+    /// refer to other fields. A document field may also test a batch field.</summary>
+    public string FieldName { get; set; } = string.Empty;
+    public ConditionOperator Operator { get; set; } = ConditionOperator.IsOneOf;
+
+    /// <summary>For <see cref="ConditionOperator.IsOneOf"/>/<see cref="ConditionOperator.IsNotOneOf"/>:
+    /// the values to compare against. Lookup fields store option values; Yes/No fields "Yes"/"No".</summary>
+    public List<string> Values { get; set; } = [];
 }
 
 /// <summary>Profile-level redaction configuration — PII detected by the bundled Presidio sidecar and/or
