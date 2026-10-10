@@ -217,6 +217,25 @@ public class SharedDesignerComponentTests
         Assert.DoesNotContain("batch-secret", document.IndexesSummary);
     }
 
+    [Theory]
+    [InlineData("1", "Yes")]
+    [InlineData("true", "Yes")]
+    [InlineData("0", "No")]
+    [InlineData("no", "No")]
+    [InlineData("maybe", "maybe")]
+    public void Table_cells_show_yes_no_fields_as_yes_or_no(string stored, string expected)
+    {
+        var document = new DocumentRow(new CaptureDocument
+        {
+            OriginalFileName = "sample.pdf",
+            StoredPath = "/tmp/sample.pdf"
+        });
+        document.SetBatchIndexes([new IndexValue { FieldName = "Approved", Value = stored, Format = FieldFormat.Boolean }]);
+
+        Assert.Equal(expected, IndexCellTextConverter.Instance.Convert(
+            document, typeof(string), new IndexCellBinding("Approved", true), CultureInfo.InvariantCulture));
+    }
+
     [Fact]
     public void Editing_an_index_notifies_dynamic_table_cells_to_refresh()
     {

@@ -4,7 +4,9 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Capture.App.ViewModels;
+using Capture.Core.Indexing;
 using Capture.Core.Models;
+using Capture.Core.Profiles;
 
 namespace Capture.App.Converters;
 
@@ -59,9 +61,15 @@ public sealed class IndexCellTextConverter : IValueConverter
             return "—";
 
         var match = IndexCellLookup.Find(row, request);
-        return match is null || string.IsNullOrWhiteSpace(match.Value)
-            ? "—"
-            : request.IsBatchField && match.Sensitive ? "••••••" : match.Value;
+        if (match is null || string.IsNullOrWhiteSpace(match.Value))
+            return "—";
+        if (request.IsBatchField && match.Sensitive)
+            return "••••••";
+        // A Yes/No field can hold any accepted spelling (a default of "1", "true", ...) until it's edited;
+        // show it the way the review panel's checkbox does.
+        if (match.Format == FieldFormat.Boolean && IndexFormat.TryParseBoolean(match.Value, out var flag))
+            return flag ? "Yes" : "No";
+        return match.Value;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
