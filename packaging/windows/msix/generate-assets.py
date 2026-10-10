@@ -19,14 +19,10 @@ TILES = [
     ("Wide310x150Logo", 310, 150, 0.66),
     ("StoreLogo", 50, 50, 1.0),
 ]
-SCALES = [100, 125, 150, 200, 400]
-# The app-list/taskbar icon also comes in exact pixel sizes. The "unplated" forms tell Windows to draw
-# the icon as-is; without them it fills the transparent corners with the accent colour, so the rounded
-# icon sits in a coloured square (in the taskbar, Start and the App Installer dialog).
-TARGET_SIZES = [16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256]
-TARGET_FORMS = ["", "_altform-unplated", "_altform-lightunplated"]
-# Windows only picks between these qualified files through the package's resources.pri index, which
-# build-msix.ps1 generates with makepri. The manifest still references the plain names (Assets\StoreLogo.png).
+# One plain file per logo, at 200% of its base size. Windows only chooses between .scale-N/.targetsize-N
+# variants when the package carries a resources.pri index, which build-msix.ps1 doesn't generate, so
+# plain names are what the manifest can reference. Windows scales these as needed.
+SCALE = 200
 
 
 def tile(icon, width, height, fill):
@@ -43,13 +39,8 @@ def main():
     for old in OUT.glob("*.png"):
         old.unlink()
     for name, width, height, fill in TILES:
-        for scale in SCALES:
-            w, h = round(width * scale / 100), round(height * scale / 100)
-            tile(icon, w, h, fill).save(OUT / f"{name}.scale-{scale}.png")
-    for size in TARGET_SIZES:
-        image = tile(icon, size, size, 1.0)
-        for form in TARGET_FORMS:
-            image.save(OUT / f"Square44x44Logo.targetsize-{size}{form}.png")
+        w, h = round(width * SCALE / 100), round(height * SCALE / 100)
+        tile(icon, w, h, fill).save(OUT / f"{name}.png")
 
 
 if __name__ == "__main__":
