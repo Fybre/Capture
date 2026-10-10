@@ -15,7 +15,7 @@
     ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>Capture</DisplayName>
+    <DisplayName>__DISPLAY_NAME__</DisplayName>
     <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -31,7 +31,7 @@
   <Applications>
     <Application Id="Capture" Executable="Capture.App.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="Capture"
+        DisplayName="__DISPLAY_NAME__"
         Description="Document capture, indexing, review and export."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"

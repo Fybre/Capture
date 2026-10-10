@@ -131,6 +131,7 @@ jobs:
           -IdentityName "${{ vars.MSIX_IDENTITY_NAME || 'Fybre.Capture' }}"
           -Publisher "${{ vars.MSIX_PUBLISHER || 'CN=Fybre' }}"
           -PublisherDisplayName "${{ vars.MSIX_PUBLISHER_DISPLAY_NAME || 'Fybre' }}"
+          -DisplayName "${{ vars.MSIX_DISPLAY_NAME || 'Capture - Scan and Index' }}"
       - uses: actions/upload-artifact@v7
         with:
           name: Capture-windows-store

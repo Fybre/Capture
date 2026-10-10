@@ -17,6 +17,8 @@ param(
   [Parameter(Mandatory)] [string] $IdentityName,
   [Parameter(Mandatory)] [string] $Publisher,
   [Parameter(Mandatory)] [string] $PublisherDisplayName,
+  # Must be a name reserved for the app in Partner Center, or the Store rejects the upload.
+  [string] $DisplayName = 'Capture - Scan and Index',
   [string] $OutputDir = (Join-Path $PSScriptRoot 'out')
 )
 
@@ -45,6 +47,7 @@ try {
   $escape = { param($value) [Security.SecurityElement]::Escape($value) }
   $manifest = Get-Content (Join-Path $PSScriptRoot 'AppxManifest.xml') -Raw
   $manifest = $manifest.Replace('__IDENTITY_NAME__', (& $escape $IdentityName)).
+    Replace('__DISPLAY_NAME__', (& $escape $DisplayName)).
     Replace('__PUBLISHER_DISPLAY_NAME__', (& $escape $PublisherDisplayName)).
     Replace('__PUBLISHER__', (& $escape $Publisher)).
     Replace('__VERSION__', $packageVersion)

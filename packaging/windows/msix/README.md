@@ -13,6 +13,8 @@ the Store certifies it.
    - `MSIX_IDENTITY_NAME`: *Package/Identity/Name*
    - `MSIX_PUBLISHER`: *Package/Identity/Publisher* (starts with `CN=`)
    - `MSIX_PUBLISHER_DISPLAY_NAME`: *Package/Properties/PublisherDisplayName*
+   - `MSIX_DISPLAY_NAME` (optional): the app name reserved in Partner Center, used for
+     *Package/Properties/DisplayName* and the Start menu name. Defaults to `Capture - Scan and Index`.
 
    Until these are set, the package builds with placeholder values, which the Store will reject.
 
