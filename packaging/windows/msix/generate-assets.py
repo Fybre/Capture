@@ -11,13 +11,10 @@ HERE = Path(__file__).resolve().parent
 MASTER = HERE.parents[2] / "src" / "Capture.App" / "Assets" / "Brand" / "capture-icon-master.png"
 OUT = HERE / "Assets"
 
-# The icon's own teal. AppxManifest.xml's BackgroundColor must be the same value: Windows draws the tile
-# and store logos on a plate of that colour (App Installer shows the logo small on a large plate), and
-# "transparent" there means the user's accent colour, which boxes the icon in blue.
-PLATE = "#0C6B6C"
-
 # (asset name, base width, base height, full bleed)
-# Full-bleed tiles are filled edge to edge with PLATE so they blend into the plate Windows puts behind them.
+# Full-bleed tiles are filled edge to edge with the icon's own teal background. Windows draws logos on the
+# accent colour wherever they're transparent, and the App Installer dialog and Store listing have no
+# unplated form, so a transparent margin or rounded corner shows up as a coloured box.
 TILES = [
     ("Square44x44Logo", 44, 44, False),
     ("Square71x71Logo", 71, 71, True),
@@ -35,9 +32,23 @@ TARGET_FORMS = ["", "_altform-unplated", "_altform-lightunplated"]
 # build-msix.ps1 generates with makepri. The manifest still references the plain names (Assets\StoreLogo.png).
 
 # How much of the icon's edge (rounded rim and drop shadow) a full-bleed tile trims, and how far in from
-# the trimmed edge it fades into PLATE, as fractions of the icon's width.
+# the trimmed edge it fades into the background gradient, as fractions of the icon's width.
 BLEED_INSET = 0.06
 BLEED_FEATHER = 0.1
+
+
+def background_rows(icon):
+    """The icon's background colour for each row, sampled from its plain left and right margins."""
+    width, height = icon.size
+    pixels = icon.load()
+    bands = ((0.03, 0.11), (0.89, 0.97), (0.45, 0.55))
+    columns = [x for lo, hi in bands for x in range(int(width * lo), int(width * hi))]
+    rows = []
+    for y in range(height):
+        samples = [pixels[x, y][:3] for x in columns if pixels[x, y][3] > 240 and sum(pixels[x, y][:3]) < 400]
+        rows.append(tuple(sorted(c[i] for c in samples)[len(samples) // 2] for i in range(3)) if samples else None)
+    known = [i for i, row in enumerate(rows) if row]
+    return [rows[i] or rows[min(known, key=lambda k: abs(k - i))] for i in range(height)]
 
 
 def bleed_icon(icon):
@@ -56,7 +67,12 @@ def bleed_icon(icon):
 
 
 def tile(icon, width, height, background=None):
-    canvas = Image.new("RGBA", (width, height), background or (0, 0, 0, 0))
+    if background:
+        strip = Image.new("RGB", (1, len(background)))
+        strip.putdata(background)
+        canvas = strip.resize((width, height), Image.BILINEAR).convert("RGBA")
+    else:
+        canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     scaled = icon.resize((height, height), Image.LANCZOS)
     canvas.alpha_composite(scaled, ((width - height) // 2, 0))
     return canvas
@@ -65,13 +81,14 @@ def tile(icon, width, height, background=None):
 def main():
     icon = Image.open(MASTER).convert("RGBA")
     bled = bleed_icon(icon)
+    background = background_rows(icon)
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("*.png"):
         old.unlink()
     for name, width, height, full_bleed in TILES:
         for scale in SCALES:
             w, h = round(width * scale / 100), round(height * scale / 100)
-            image = tile(bled, w, h, PLATE) if full_bleed else tile(icon, w, h)
+            image = tile(bled, w, h, background) if full_bleed else tile(icon, w, h)
             image.save(OUT / f"{name}.scale-{scale}.png")
     for size in TARGET_SIZES:
         image = tile(icon, size, size)
