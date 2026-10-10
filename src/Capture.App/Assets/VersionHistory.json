@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.8.14",
+    "date": "2026-10-10",
+    "changes": [
+      "Capture is now packaged for the Microsoft Store. The Store version installs and updates through the Store, so it doesn't check GitHub for updates.",
+      "Added a privacy policy."
+    ]
+  },
+  {
     "version": "0.8.13",
     "date": "2026-10-09",
     "changes": [
