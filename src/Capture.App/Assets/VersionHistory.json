@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.8.16",
+    "date": "2026-10-10",
+    "changes": [
+      "Settings ▸ Back up… saves your choice of settings, capture profiles (with their sample files), custom redaction sets and the AI field catalog to one .zip, and Restore… puts back whichever parts you pick — handy for a new computer or moving to the Microsoft Store version. These replace Import/Export settings; Restore still accepts settings files saved by Export settings."
+    ]
+  },
+  {
     "version": "0.8.15",
     "date": "2026-10-10",
     "changes": [

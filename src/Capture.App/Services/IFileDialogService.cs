@@ -17,6 +17,12 @@ public interface IFileDialogService
     /// <summary>Opens a save-file picker for a single JSON file (profile/settings export).</summary>
     Task<string?> PickSaveJsonFileAsync(string title, string suggestedFileName);
 
+    /// <summary>Opens a backup picker (.zip, or an older settings .json) for restoring.</summary>
+    Task<string?> PickBackupFileAsync(string title);
+
+    /// <summary>Opens a save-file picker for a .zip file (a full backup).</summary>
+    Task<string?> PickSaveBackupFileAsync(string title, string suggestedFileName);
+
     /// <summary>Opens a save-file picker for a single PDF file (ad hoc "export selected to PDF").</summary>
     Task<string?> PickSaveFilePdfAsync(string title, string suggestedFileName);
 }

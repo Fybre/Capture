@@ -2,7 +2,7 @@ namespace Capture.Core.Watch;
 
 /// <summary>Shared logic for redacting secrets (AI API key, Therefore password/bearer token) out of a
 /// settings export, and correctly re-importing a file that carries that redaction — see
-/// SettingsViewModel.ExportSettingsAsync/ImportSettingsAsync.</summary>
+/// CaptureBackupService's backup and restore.</summary>
 public static class CredentialRedaction
 {
     /// <summary>Written in place of a real secret when it's deliberately not exported — distinguishable

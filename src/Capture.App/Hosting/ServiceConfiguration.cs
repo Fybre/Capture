@@ -55,6 +55,8 @@ public static class ServiceConfiguration
         services.AddSingleton<IPiiDetector, PresidioAnalyzerClient>();
         services.AddSingleton<IRedactionCandidateStore, JsonRedactionCandidateStore>();
         services.AddSingleton<IRedactionEntitySetStore, JsonRedactionEntitySetStore>();
+        services.AddSingleton<CaptureBackupService>();
+        services.AddSingleton<IBackupDialogService, BackupDialogService>();
         services.AddSingleton<IRedactedDocumentWriter, SkiaPdfRedactor>();
         services.AddSingleton<RedactionApplier>();
         // Registered as its own concrete type (not just via IPostIndexStep) so MainViewModel can call

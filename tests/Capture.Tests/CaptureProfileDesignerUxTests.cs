@@ -624,6 +624,8 @@ public sealed class CaptureProfileDesignerUxTests
         public Task<string?> PickJsonFileAsync(string title) => Task.FromResult<string?>(null);
         public Task<string?> PickSaveJsonFileAsync(string title, string suggestedFileName) => Task.FromResult<string?>(null);
         public Task<string?> PickSaveFilePdfAsync(string title, string suggestedFileName) => Task.FromResult<string?>(null);
+        public Task<string?> PickBackupFileAsync(string title) => Task.FromResult<string?>(null);
+        public Task<string?> PickSaveBackupFileAsync(string title, string suggestedFileName) => Task.FromResult<string?>(null);
     }
 
     private sealed class RedactionSetStore(params RedactionEntitySet[] sets) : IRedactionEntitySetStore

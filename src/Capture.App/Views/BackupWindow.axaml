@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Capture.App.Views.BackupWindow"
+        Icon="/Assets/capture.ico"
+        Title="Back up"
+        Width="460"
+        MinWidth="420"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <Grid RowDefinitions="Auto,Auto" Background="{DynamicResource GroundBrush}">
+        <StackPanel Grid.Row="0" Margin="24,22,24,16" Spacing="12">
+            <TextBlock x:Name="HeadingText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock x:Name="SourceText" Classes="hint" TextWrapping="Wrap" IsVisible="False" />
+            <StackPanel Spacing="8">
+                <CheckBox x:Name="SettingsCheckBox" IsChecked="True" IsCheckedChanged="OnPartChanged">
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="Settings" />
+                        <TextBlock Classes="hint" Text="Watch folders, AI and Therefore connections, scanner and preferences" TextWrapping="Wrap" />
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="ProfilesCheckBox" IsChecked="True" IsCheckedChanged="OnPartChanged">
+                    <StackPanel Spacing="1">
+                        <TextBlock x:Name="ProfilesText" Text="Capture profiles" />
+                        <TextBlock Classes="hint" Text="Including the sample files loaded in the designer" TextWrapping="Wrap" />
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="RedactionSetsCheckBox" IsChecked="True" IsCheckedChanged="OnPartChanged">
+                    <TextBlock x:Name="RedactionSetsText" Text="Custom redaction sets" />
+                </CheckBox>
+                <CheckBox x:Name="AiCatalogCheckBox" IsChecked="True" IsCheckedChanged="OnPartChanged">
+                    <TextBlock Text="AI field catalog" />
+                </CheckBox>
+            </StackPanel>
+
+            <Border Height="1" Background="{DynamicResource BorderBrush1}" x:Name="CredentialsDivider" />
+            <CheckBox x:Name="CredentialsCheckBox" Content="Include passwords and API keys" IsCheckedChanged="OnCredentialsChanged" />
+            <TextBlock x:Name="CredentialsWarning" IsVisible="False" TextWrapping="Wrap" Foreground="{DynamicResource WarnBrush}"
+                       Text="Your AI API key, Therefore password or bearer token, and REST export tokens will be saved unencrypted. Anyone who gets the file can use them, so keep it somewhere safe." />
+
+            <TextBlock x:Name="NotesText" Classes="hint" TextWrapping="Wrap" />
+            <TextBlock x:Name="ScriptsWarning" IsVisible="False" TextWrapping="Wrap" Foreground="{DynamicResource WarnBrush}"
+                       Text="Some of these capture profiles contain C# scripts, which run with full access to this computer. Only restore a backup you trust." />
+        </StackPanel>
+        <Border Grid.Row="1"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12"
+                Background="{DynamicResource Surface2Brush}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Cancel" MinWidth="88" IsCancel="True" Click="OnCancelClick" />
+                <Button x:Name="ConfirmButton" MinWidth="88" IsDefault="True" Classes="accent" Click="OnConfirmClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

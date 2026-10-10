@@ -22,6 +22,8 @@ public partial class SettingsViewModel : ViewModelBase
 {
     private readonly IFileDialogService _dialogs;
     private readonly IWatchSettingsStore _store;
+    private readonly CaptureBackupService _backup;
+    private readonly IBackupDialogService _backupDialogs;
     private readonly ICaptureProfileStore _captureProfiles;
     private readonly IAiFieldCatalogStore _catalogStore;
     private readonly IRedactionEntitySetStore _redactionEntitySets;
@@ -50,8 +52,12 @@ public partial class SettingsViewModel : ViewModelBase
         ILocalAiModelDownloader localAiModelDownloader,
         IToastService toasts,
         IConfirmDialogService confirm,
-        IDocumentStore documents)
+        IDocumentStore documents,
+        CaptureBackupService backup,
+        IBackupDialogService backupDialogs)
     {
+        _backup = backup;
+        _backupDialogs = backupDialogs;
         _dialogs = dialogs;
         _store = store;
         _captureProfiles = captureProfiles;
@@ -762,12 +768,6 @@ public partial class SettingsViewModel : ViewModelBase
         return true;
     }
 
-    /// <summary>Off by default — see ExportSettingsAsync. A settings export normally carries
-    /// placeholders instead of the AI API key / Therefore password / Therefore bearer token, so a
-    /// routine backup or "here's my config" share doesn't leak credentials by default.</summary>
-    [ObservableProperty]
-    private bool _includeCredentialsInExport;
-
     /// <summary>See WatchSettings.AutoDeleteExportedDocuments — persisted, so MainViewModel can act on
     /// it at startup/on save, distinct from the one-off "Clean up now" button below.</summary>
     [ObservableProperty]
@@ -823,124 +823,88 @@ public partial class SettingsViewModel : ViewModelBase
         _toasts.ShowSuccess(StatusText);
     }
 
+    /// <summary>Asks what to back up (settings, capture profiles with their sample files, custom
+    /// redaction sets, the AI field catalog), then saves it to one .zip — for moving to another computer
+    /// or keeping a backup. Uses what's saved, so unsaved changes in this window aren't included.</summary>
     [RelayCommand]
-    private async Task ExportSettingsAsync()
+    private async Task BackUpAsync()
     {
-        if (!TryBuildSettings(out var settings))
+        if (_dialogs.Host is not { } host)
+            return;
+        var choice = await _backupDialogs.ChooseBackupAsync(host, await _backup.GetInventoryAsync());
+        if (choice is null)
             return;
 
-        if (IncludeCredentialsInExport)
-        {
-            var confirmed = _dialogs.Host is not { } host
-                || await _confirm.ConfirmAsync(
-                    host,
-                    "Export credentials in plain text?",
-                    "This file will contain your AI API key and/or Therefore password/bearer token, unencrypted. Anyone who gets this file can use them. Only proceed if you're sending it somewhere you trust (e.g. your own backup), not a general config share.",
-                    confirmText: "Include credentials",
-                    cancelText: "Cancel");
-            if (!confirmed)
-                return;
-        }
-        else
-        {
-            settings.AiApiKey = CredentialRedaction.Redact(settings.AiApiKey);
-            settings.ThereforePassword = CredentialRedaction.Redact(settings.ThereforePassword);
-            settings.ThereforeBearerToken = CredentialRedaction.Redact(settings.ThereforeBearerToken);
-        }
-
-        var path = await _dialogs.PickSaveJsonFileAsync("Export settings", "capture-settings.json");
+        var path = await _dialogs.PickSaveBackupFileAsync("Back up", $"capture-backup-{DateTime.Now:yyyy-MM-dd}.zip");
         if (string.IsNullOrWhiteSpace(path))
             return;
 
         try
         {
-            await using var stream = File.Create(path);
-            await JsonSerializer.SerializeAsync(stream, settings, CaptureJsonOptions.Default);
-            StatusText = $"Exported settings to {path}";
+            await _backup.CreateAsync(path, choice.Parts, choice.IncludeCredentials, AppVersion());
+            StatusText = $"Backed up to {path}";
             StatusIsError = false;
-            _toasts.ShowSuccess(StatusText);
+            _toasts.ShowSuccess("Backup saved");
         }
         catch (Exception ex)
         {
-            StatusText = $"Export failed: {ex.Message}";
+            StatusText = $"Backup failed: {ex.Message}";
             StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
     }
 
+    /// <summary>Opens a backup (or a settings file from older versions' Export settings), asks which parts
+    /// to restore, and restores them. Saves immediately, then reloads this window from the restored settings.</summary>
     [RelayCommand]
-    private async Task ImportSettingsAsync()
+    private async Task RestoreAsync()
     {
-        var path = await _dialogs.PickJsonFileAsync("Import settings");
+        if (_dialogs.Host is not { } host)
+            return;
+        var path = await _dialogs.PickBackupFileAsync("Restore");
         if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        CaptureBackup backup;
+        try
+        {
+            backup = await _backup.ReadAsync(path);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            StatusText = ex is InvalidDataException ? ex.Message : $"Couldn't open that file: {ex.Message}";
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+            return;
+        }
+
+        if (await _backupDialogs.ChooseRestoreAsync(host, backup) is not { } parts)
             return;
 
         try
         {
-            await using var stream = File.OpenRead(path);
-            var settings = await JsonSerializer.DeserializeAsync<WatchSettings>(stream, CaptureJsonOptions.Default);
-            if (settings is null)
-            {
-                StatusText = "That file doesn't contain valid settings";
-                StatusIsError = true;
-                _toasts.ShowError(StatusText);
-                return;
-            }
-
-            StartView = settings.StartView;
-            Theme = settings.Theme;
-            InboxOrder = settings.InboxOrder;
-            DuplicateImportBehavior = settings.DuplicateImportBehavior;
-            AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments;
-            CleanupOlderThanDays = settings.AutoDeleteExportedDocumentsAfterDays;
-            RemoveDocumentsAfterExport = settings.RemoveDocumentsAfterExport;
-            TrashRetentionDays = settings.TrashRetentionDays;
-            DebugMode = settings.DebugMode;
-            CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
-            AllowFieldScripts = settings.AllowFieldScripts;
-
-            WatchFolders.Clear();
-            foreach (var entry in settings.WatchFolders)
-                WatchFolders.Add(WrapEntry(entry));
-
-            AiEndpoint = settings.AiEndpoint ?? "https://api.openai.com/v1";
-            AiApiKey = CredentialRedaction.PreserveIfRedacted(settings.AiApiKey, AiApiKey);
-            AiModel = string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel;
-            AiMaxDocumentChars = settings.AiMaxDocumentChars > 0 ? settings.AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars;
-            AiProvider = settings.AiProvider;
-            LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars > 0 ? settings.LocalAiMaxDocumentChars : 12_000;
-
-            ThereforeBaseUrl = settings.ThereforeBaseUrl ?? string.Empty;
-            ThereforeTenantName = settings.ThereforeTenantName ?? string.Empty;
-            ThereforeAuthMethod = settings.ThereforeAuthMethod;
-            ThereforeUsername = settings.ThereforeUsername ?? string.Empty;
-            ThereforePassword = CredentialRedaction.PreserveIfRedacted(settings.ThereforePassword, ThereforePassword);
-            ThereforeBearerToken = CredentialRedaction.PreserveIfRedacted(settings.ThereforeBearerToken, ThereforeBearerToken);
-
-            ScanGrayscale = settings.ScanGrayscale;
-            SelectedScanSource = settings.ScanSource == ScanInputSource.Feeder ? ScanSourceKind.Feeder : ScanSourceKind.Flatbed;
-            ScanDuplex = settings.ScanDuplex;
-            ScanDpi = settings.ScanDpi > 0 ? settings.ScanDpi : 200;
-            SelectedScanDevice = ScanDevices.FirstOrDefault(device => device.Id == settings.ScanPreferredDeviceId)
-                ?? SelectedScanDevice;
-
-            StatusText = "Settings imported — review and click Save to apply";
+            await _backup.RestoreAsync(backup, parts);
+            await InitializeAsync();
+            Saved = true;
+            StatusText = parts.HasFlag(BackupParts.Settings) && backup.Settings?.WatchFolders.Count > 0
+                ? "Restored. Check the watch folders exist on this computer."
+                : "Restored.";
             StatusIsError = false;
-            _toasts.ShowSuccess(StatusText);
-        }
-        catch (JsonException)
-        {
-            StatusText = "That file doesn't contain valid settings";
-            StatusIsError = true;
-            _toasts.ShowError(StatusText);
+            _toasts.ShowSuccess("Backup restored");
         }
         catch (Exception ex)
         {
-            StatusText = $"Import failed: {ex.Message}";
+            StatusText = $"Restore failed: {ex.Message}";
             StatusIsError = true;
             _toasts.ShowError(StatusText);
         }
     }
+
+    private static string? AppVersion() =>
+        System.Reflection.Assembly.GetEntryAssembly()?
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion.Split('+')[0];
 
     [RelayCommand]
     private void OpenCatalogFolder()

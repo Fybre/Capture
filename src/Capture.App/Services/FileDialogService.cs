@@ -104,6 +104,40 @@ public sealed class FileDialogService : IFileDialogService
         return file?.TryGetLocalPath();
     }
 
+    public async Task<string?> PickBackupFileAsync(string title)
+    {
+        var provider = GetStorageProvider();
+        if (provider is null)
+            return null;
+
+        var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            // .json: settings files saved by older versions' Export settings.
+            FileTypeFilter = [new FilePickerFileType("Capture backup") { Patterns = ["*.zip", "*.json"] }]
+        });
+
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> PickSaveBackupFileAsync(string title, string suggestedFileName)
+    {
+        var provider = GetStorageProvider();
+        if (provider is null)
+            return null;
+
+        var file = await provider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "zip",
+            FileTypeChoices = [new FilePickerFileType("Capture backup") { Patterns = ["*.zip"] }]
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
     public async Task<string?> PickSaveFilePdfAsync(string title, string suggestedFileName)
     {
         var provider = GetStorageProvider();

@@ -540,21 +540,16 @@
             <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8">
-                        <Button Content="Import settings…" Command="{Binding ImportSettingsCommand}" />
-                        <Button Content="Export settings…" Command="{Binding ExportSettingsCommand}" />
-                        <CheckBox Content="Include credentials"
-                                  IsChecked="{Binding IncludeCredentialsInExport}"
-                                  VerticalAlignment="Center" />
+                        <Button Content="Back up…" Command="{Binding BackUpCommand}"
+                                ToolTip.Tip="Save settings, capture profiles, redaction sets and the AI field catalog to one file" />
+                        <Button Content="Restore…" Command="{Binding RestoreCommand}"
+                                ToolTip.Tip="Restore settings, capture profiles and more from a backup" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                         <Button Content="Cancel" Command="{Binding CancelCommand}" />
                         <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
                     </StackPanel>
                 </Grid>
-                <TextBlock Text="Include credentials embeds your AI API key and Therefore password/bearer token, unencrypted, in the exported file. Off by default so a routine backup or config share doesn't leak them — only turn this on for something like your own encrypted backup."
-                           TextWrapping="Wrap"
-                           Classes="hint"
-                           IsVisible="{Binding IncludeCredentialsInExport}" />
             </StackPanel>
         </Border>
     </Grid>
