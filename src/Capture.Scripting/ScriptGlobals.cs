@@ -7,8 +7,16 @@ namespace Capture.Scripting;
 /// scripting convention), so a script just writes <c>Fields["InvoiceNo"].Value = "123";</c>.</summary>
 public sealed class ScriptGlobals
 {
-    internal ScriptGlobals(ScriptExecutionContext context, HttpClient http, string scriptName, CancellationToken cancellationToken)
+    private readonly IScriptDialogs? _dialogs;
+    private readonly ScriptTimeout? _timeout;
+    private readonly string _scriptName;
+
+    internal ScriptGlobals(ScriptExecutionContext context, HttpClient http, ScriptConnections connections, string scriptName, CancellationToken cancellationToken, ScriptTimeout? timeout = null)
     {
+        _dialogs = context.Dialogs;
+        _timeout = timeout;
+        _scriptName = scriptName;
+        Connections = connections;
         Fields = new ScriptFieldCollection<ScriptFieldAccessor>(context.Values, v => new ScriptFieldAccessor(v));
         Context = ScriptContextView.Create(context, Fields,
             context.BatchValues is null ? null : new ScriptFieldCollection<ScriptFieldAccessor>(context.BatchValues, v => new ScriptFieldAccessor(v)));
@@ -39,9 +47,38 @@ public sealed class ScriptGlobals
     /// <c>await Http.GetAsync(...)</c> works out of the box, with a sane shared timeout.</summary>
     public HttpClient Http { get; }
 
+    /// <summary>Settings ▸ Connections by name — <c>await Connections["Xero"].GetAsync("...")</c> sends a
+    /// request signed with that connection's stored credentials, which the script never sees.</summary>
+    public ScriptConnections Connections { get; }
+
     public ScriptLog Log { get; }
 
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>Shows a message with an OK button and waits until it's closed. Button field scripts only —
+    /// the title defaults to the button field's name.</summary>
+    public async Task Message(string message, string? title = null)
+    {
+        var dialogs = RequireDialogs(nameof(Message));
+        await Paused(async () =>
+        {
+            await dialogs.MessageAsync(title ?? _scriptName, message).ConfigureAwait(false);
+            return true;
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>Asks a Yes/No question and returns true for Yes. Button field scripts only — the title
+    /// defaults to the button field's name.</summary>
+    public Task<bool> Confirm(string question, string? title = null)
+    {
+        var dialogs = RequireDialogs(nameof(Confirm));
+        return Paused(() => dialogs.ConfirmAsync(title ?? _scriptName, question));
+    }
+
+    private IScriptDialogs RequireDialogs(string name) => _dialogs
+        ?? throw new InvalidOperationException($"{name}() only works in a Button field's script — no one is there to answer it during an import or export.");
+
+    private Task<T> Paused<T>(Func<Task<T>> wait) => _timeout is null ? wait() : _timeout.PausedAsync(wait);
 }
 
 /// <summary>The Roslyn <c>globalsType</c> for a per-field <c>ScriptExpression</c> — read-only over every
@@ -52,8 +89,9 @@ public sealed class ReadOnlyScriptGlobals
 {
     private float? _requestedConfidence;
 
-    internal ReadOnlyScriptGlobals(ScriptExecutionContext context, HttpClient http, string scriptName, string selfValue, CancellationToken cancellationToken)
+    internal ReadOnlyScriptGlobals(ScriptExecutionContext context, HttpClient http, ScriptConnections connections, string scriptName, string selfValue, CancellationToken cancellationToken)
     {
+        Connections = connections;
         Fields = new ScriptFieldCollection<ReadOnlyScriptFieldAccessor>(context.Values, v => new ReadOnlyScriptFieldAccessor(v));
         Context = ReadOnlyScriptContextView.Create(context, Fields,
             context.BatchValues is null ? null : new ScriptFieldCollection<ReadOnlyScriptFieldAccessor>(context.BatchValues, v => new ReadOnlyScriptFieldAccessor(v)));
@@ -100,6 +138,10 @@ public sealed class ReadOnlyScriptGlobals
     public DateTimeOffset Timestamp { get; }
 
     public HttpClient Http { get; }
+
+    /// <summary>Settings ▸ Connections by name — <c>await Connections["Xero"].GetAsync("...")</c> sends a
+    /// request signed with that connection's stored credentials, which the script never sees.</summary>
+    public ScriptConnections Connections { get; }
 
     public ScriptLog Log { get; }
 

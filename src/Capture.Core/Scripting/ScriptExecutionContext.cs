@@ -27,6 +27,19 @@ public sealed class ScriptExecutionContext
     public string? DocumentType { get; init; }
     public IReadOnlyList<ScriptTriggerMatchInfo> TriggerMatches { get; init; } = [];
     public IReadOnlyList<IndexValue>? BatchValues { get; init; }
+
+    /// <summary>Set only when someone is there to answer — a Button field's script run from review or
+    /// the designer's Run test. Null during imports and exports, where <c>Message</c>/<c>Confirm</c> fail
+    /// instead of waiting on a dialog nobody will see.</summary>
+    public IScriptDialogs? Dialogs { get; init; }
+}
+
+/// <summary>Shows a script's <c>Message</c> and <c>Confirm</c> dialogs.</summary>
+public interface IScriptDialogs
+{
+    Task MessageAsync(string title, string message);
+
+    Task<bool> ConfirmAsync(string title, string question);
 }
 
 public enum ScriptScopeKind { Batch, Document }

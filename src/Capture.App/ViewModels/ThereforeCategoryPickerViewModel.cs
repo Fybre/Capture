@@ -96,29 +96,25 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
     [ObservableProperty]
     private string? _selectedCategoryName;
 
+    /// <summary>The export's chosen Therefore connection; null uses the first one.</summary>
+    public Guid? ConnectionId { get; set; }
+
     public async Task InitializeAsync()
     {
         var settings = await _watchSettings.LoadAsync().ConfigureAwait(true);
-        IsConfigured = settings.ThereforeConfigured;
+        var connection = settings.FindConnection(ConnectionId, ConnectionType.Therefore);
+        IsConfigured = connection?.IsConfigured == true;
         if (!IsConfigured)
         {
-            StatusText = "Therefore isn't configured yet — set it up in Settings first.";
+            StatusText = connection is null
+                ? "There's no Therefore connection yet — add one in Settings ▸ Connections first."
+                : $"The Therefore connection \"{connection.Name}\" isn't fully set up — finish it in Settings ▸ Connections first.";
             StatusIsError = true;
             _toasts.ShowError(StatusText);
             return;
         }
 
-        _connection = new ThereforeConnectionSettings
-        {
-            BaseUrl = settings.ThereforeBaseUrl ?? string.Empty,
-            TenantName = settings.ThereforeTenantName,
-            AuthMethod = settings.ThereforeAuthMethod == Core.Watch.ThereforeAuthMethod.Bearer
-                ? global::Capture.Therefore.ThereforeAuthMethod.Bearer
-                : global::Capture.Therefore.ThereforeAuthMethod.Basic,
-            Username = settings.ThereforeUsername,
-            Password = settings.ThereforePassword,
-            BearerToken = settings.ThereforeBearerToken
-        };
+        _connection = ThereforeConnectionSettings.From(connection!);
 
         IsBusy = true;
         try

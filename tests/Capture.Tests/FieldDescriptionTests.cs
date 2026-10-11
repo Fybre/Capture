@@ -38,3 +38,18 @@ public class FieldDescriptionTests
         Assert.True(new IndexValueRow(value, 80, null) { Description = "Top right of the invoice" }.HasDescription);
     }
 }
+
+public class FieldEditorTabTests
+{
+    [Fact]
+    public void A_new_field_opens_on_the_general_tab()
+    {
+        var editor = new FieldCollectionEditorViewModel([new IndexField { Name = "Invoice No" }]);
+        editor.SelectedField = editor.Fields[0];
+        editor.SelectedFieldTab = 1;
+
+        editor.Add(new IndexField { Name = "Total" });
+
+        Assert.Equal(0, editor.SelectedFieldTab);
+    }
+}

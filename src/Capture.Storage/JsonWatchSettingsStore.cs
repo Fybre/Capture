@@ -93,6 +93,15 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             settings.AiApiKey = Unprotect("AiApiKey", settings.AiApiKey);
             settings.ThereforePassword = Unprotect("ThereforePassword", settings.ThereforePassword);
             settings.ThereforeBearerToken = Unprotect("ThereforeBearerToken", settings.ThereforeBearerToken);
+            foreach (var connection in settings.Connections)
+            {
+                connection.Password = Unprotect(SecretAccount(connection, "Password"), connection.Password);
+                connection.Token = Unprotect(SecretAccount(connection, "Token"), connection.Token);
+            }
+
+            // Settings saved before Settings ▸ Connections held one Therefore connection; it's written in
+            // the new form on the next save.
+            settings.MigrateLegacyTherefore();
         }
 
         lock (_cacheLock)
@@ -106,6 +115,9 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
     public async Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default)
     {
         _paths.EnsureCreated();
+        // A caller holding settings in the old form (e.g. restored from an older backup) still saves
+        // its Therefore connection.
+        settings.MigrateLegacyTherefore();
         var toSave = new WatchSettings
         {
             WatchFolders = settings.WatchFolders,
@@ -128,12 +140,19 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
             RemoveDocumentsAfterExport = settings.RemoveDocumentsAfterExport,
             TrashRetentionDays = settings.TrashRetentionDays,
             DuplicateImportBehavior = settings.DuplicateImportBehavior,
-            ThereforeBaseUrl = settings.ThereforeBaseUrl,
-            ThereforeTenantName = settings.ThereforeTenantName,
-            ThereforeAuthMethod = settings.ThereforeAuthMethod,
-            ThereforeUsername = settings.ThereforeUsername,
-            ThereforePassword = Protect("ThereforePassword", settings.ThereforePassword),
-            ThereforeBearerToken = Protect("ThereforeBearerToken", settings.ThereforeBearerToken),
+            Connections = settings.Connections.Select(connection => new ConnectionDefinition
+            {
+                Id = connection.Id,
+                Name = connection.Name,
+                Type = connection.Type,
+                BaseUrl = connection.BaseUrl,
+                TenantName = connection.TenantName,
+                AuthMethod = connection.AuthMethod,
+                Username = connection.Username,
+                Password = Protect(SecretAccount(connection, "Password"), connection.Password),
+                Token = Protect(SecretAccount(connection, "Token"), connection.Token),
+                ApiKeyHeader = connection.ApiKeyHeader
+            }).ToList(),
             ScanDpi = settings.ScanDpi,
             ScanGrayscale = settings.ScanGrayscale,
             ScanSource = settings.ScanSource,
@@ -148,6 +167,9 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         lock (_cacheLock)
             _cached = Clone(settings);
     }
+
+    private static string SecretAccount(ConnectionDefinition connection, string secret) =>
+        $"Connection.{connection.Id:N}.{secret}";
 
     private string? Protect(string account, string? plainText)
     {

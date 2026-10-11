@@ -19,6 +19,12 @@ public partial class ConfirmWindow : Window
         MessageText.Text = message;
         ConfirmButton.Content = confirmText;
         CancelButton.Content = cancelText;
+        if (string.IsNullOrEmpty(cancelText))
+        {
+            // A message with only an OK button: Escape closes it too.
+            CancelButton.IsVisible = false;
+            ConfirmButton.IsCancel = true;
+        }
     }
 
     private void OnConfirmClick(object? sender, RoutedEventArgs e)

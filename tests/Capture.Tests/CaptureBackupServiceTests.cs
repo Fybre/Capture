@@ -72,6 +72,7 @@ public class CaptureBackupServiceTests : IDisposable
             HasCompletedFirstRunSetup = true,
             AiApiKey = "sk-secret",
             AiModel = "gpt-test",
+            Connections = [new ConnectionDefinition { Name = "Main", Type = ConnectionType.Therefore, TenantName = "acme", Username = "user", Password = "conn-secret" }],
             WatchFolders = [new WatchFolderEntry { Folder = "/scans", CaptureProfileId = profile.Id }]
         });
         await File.WriteAllTextAsync(install.Paths.AiFieldCatalogPath, "[{\"id\":\"custom\"}]");
@@ -108,6 +109,7 @@ public class CaptureBackupServiceTests : IDisposable
         var settings = await target.Settings.LoadAsync();
         Assert.Equal("gpt-test", settings.AiModel);
         Assert.Equal("sk-secret", settings.AiApiKey);
+        Assert.Equal("conn-secret", Assert.Single(settings.Connections).Password);
         Assert.Equal(profile.Id, Assert.Single(settings.WatchFolders).CaptureProfileId);
         Assert.Equal("[{\"id\":\"custom\"}]", await File.ReadAllTextAsync(target.Paths.AiFieldCatalogPath));
     }
@@ -130,12 +132,14 @@ public class CaptureBackupServiceTests : IDisposable
                 var text = await reader.ReadToEndAsync();
                 Assert.DoesNotContain("sk-secret", text);
                 Assert.DoesNotContain("rest-secret", text);
+                Assert.DoesNotContain("conn-secret", text);
             }
         }
 
         // Restoring over the same install keeps the credentials it already has.
         await source.Backup.RestoreAsync(await source.Backup.ReadAsync(zip));
         Assert.Equal("sk-secret", (await source.Settings.LoadAsync()).AiApiKey);
+        Assert.Equal("conn-secret", Assert.Single((await source.Settings.LoadAsync()).Connections).Password);
         var profile = Assert.Single(await source.Profiles.GetAllAsync());
         Assert.Equal("rest-secret", profile.DocumentTypes[0].Exports[0].RestBearerToken);
     }
@@ -194,6 +198,25 @@ public class CaptureBackupServiceTests : IDisposable
         var settings = await install.Settings.LoadAsync();
         Assert.Equal("gpt-old", settings.AiModel);
         Assert.Equal("sk-current", settings.AiApiKey);
+    }
+
+    [Fact]
+    public async Task An_older_backup_without_credentials_keeps_the_current_therefore_password()
+    {
+        var file = Path.Combine(TempFolder(), "capture-settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        await File.WriteAllTextAsync(file, "{\"startView\": \"preview\", \"thereforeTenantName\": \"acme\", \"thereforeUsername\": \"user\", \"thereforePassword\": \"(not exported)\", \"watchFolders\": []}");
+
+        var install = new Install(TempFolder());
+        await install.Settings.SaveAsync(new WatchSettings
+        {
+            Connections = [new ConnectionDefinition { Name = "Therefore", Type = ConnectionType.Therefore, TenantName = "acme", Username = "user", Password = "current-secret" }]
+        });
+        await install.Backup.RestoreAsync(await install.Backup.ReadAsync(file));
+
+        var connection = Assert.Single((await install.Settings.LoadAsync()).Connections);
+        Assert.Equal("acme", connection.TenantName);
+        Assert.Equal("current-secret", connection.Password);
     }
 
     [Fact]

@@ -12,7 +12,6 @@ using Capture.Core.Watch;
 using Capture.LocalAi;
 using Capture.Scanner;
 using Capture.Storage;
-using Capture.Therefore;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -29,15 +28,14 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IRedactionEntitySetStore _redactionEntitySets;
     private readonly IScanSource _scanSource;
     private readonly IAppPaths _paths;
-    private readonly IThereforeClient _thereforeClient;
+    private readonly HttpClient _http;
     private readonly ILocalAiModelDownloader _localAiModelDownloader;
     private readonly IToastService _toasts;
     private readonly IConfirmDialogService _confirm;
     private readonly IDocumentStore _documents;
 
-    /// <summary>Exposed so SettingsWindow's code-behind can attach/detach the nested Therefore
-    /// connection dialog as a toast host — that window is opened directly from a Click handler with
-    /// no DI access of its own, and this ViewModel already has the service.</summary>
+    /// <summary>Exposed so SettingsWindow's code-behind can attach/detach the nested connection dialog
+    /// as a toast host — that window is opened from code-behind with no DI access of its own.</summary>
     public IToastService Toasts => _toasts;
 
     public SettingsViewModel(
@@ -48,7 +46,7 @@ public partial class SettingsViewModel : ViewModelBase
         IRedactionEntitySetStore redactionEntitySets,
         IScanSource scanSource,
         IAppPaths paths,
-        IThereforeClient thereforeClient,
+        HttpClient http,
         ILocalAiModelDownloader localAiModelDownloader,
         IToastService toasts,
         IConfirmDialogService confirm,
@@ -65,12 +63,13 @@ public partial class SettingsViewModel : ViewModelBase
         _redactionEntitySets = redactionEntitySets;
         _scanSource = scanSource;
         _paths = paths;
-        _thereforeClient = thereforeClient;
+        _http = http;
         _localAiModelDownloader = localAiModelDownloader;
         _toasts = toasts;
         _confirm = confirm;
         _documents = documents;
         WatchFolders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasWatchFolders));
+        Connections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasConnections));
         RefreshLocalAiModelStatus();
     }
 
@@ -248,93 +247,70 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    // --- Therefore ------------------------------------------------------------------------------
+    // --- Connections ----------------------------------------------------------------------------
 
-    // Tracks whether ThereforeBaseUrl currently holds a value we derived from the tenant name (true)
-    // versus something the user typed themselves (false) — starts true since an empty URL is fair
-    // game to auto-fill. Without this, auto-fill would only ever apply on the tenant field's first
-    // keystroke: that keystroke fills in the URL, which then reads as "already has a value" and blocks
-    // every subsequent keystroke from updating it.
-    private bool _thereforeBaseUrlIsAutoFilled = true;
-    private bool _settingThereforeBaseUrlProgrammatically;
+    public ObservableCollection<ConnectionRow> Connections { get; } = [];
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ThereforeConnectionDisplay))]
-    private string _thereforeBaseUrl = string.Empty;
+    public bool HasConnections => Connections.Count > 0;
 
-    partial void OnThereforeBaseUrlChanged(string value)
-    {
-        if (!_settingThereforeBaseUrlProgrammatically)
-            _thereforeBaseUrlIsAutoFilled = string.IsNullOrWhiteSpace(value);
-    }
-
-    [ObservableProperty]
-    private string _thereforeTenantName = string.Empty;
-
-    partial void OnThereforeTenantNameChanged(string value)
-    {
-        // Prefill convenience only — never clobbers a manually-typed on-prem URL.
-        if (!_thereforeBaseUrlIsAutoFilled || string.IsNullOrWhiteSpace(value))
-            return;
-
-        _settingThereforeBaseUrlProgrammatically = true;
-        ThereforeBaseUrl = $"https://{value.Trim()}.thereforeonline.com";
-        _settingThereforeBaseUrlProgrammatically = false;
-    }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsThereforeBasic))]
-    [NotifyPropertyChangedFor(nameof(IsThereforeBearer))]
-    private Core.Watch.ThereforeAuthMethod _thereforeAuthMethod = Core.Watch.ThereforeAuthMethod.Basic;
-
-    public IReadOnlyList<Core.Watch.ThereforeAuthMethod> ThereforeAuthMethodOptions { get; } = Enum.GetValues<Core.Watch.ThereforeAuthMethod>();
-
-    public bool IsThereforeBasic => ThereforeAuthMethod == Core.Watch.ThereforeAuthMethod.Basic;
-
-    public bool IsThereforeBearer => ThereforeAuthMethod == Core.Watch.ThereforeAuthMethod.Bearer;
-
-    [ObservableProperty]
-    private string _thereforeUsername = string.Empty;
-
-    [ObservableProperty]
-    private string _thereforePassword = string.Empty;
-
-    [ObservableProperty]
-    private string _thereforeBearerToken = string.Empty;
-
-    public string ThereforeConnectionDisplay =>
-        string.IsNullOrWhiteSpace(ThereforeBaseUrl) ? "Not configured" : ThereforeBaseUrl;
+    /// <summary>Shows the add/edit dialog; set by SettingsWindow. Returns once it's closed.</summary>
+    public Func<ConnectionEditorViewModel, Task>? ShowConnectionEditor { get; set; }
 
     [RelayCommand]
-    private async Task TestThereforeConnectionAsync()
-    {
-        var connection = new ThereforeConnectionSettings
-        {
-            BaseUrl = ThereforeBaseUrl,
-            TenantName = string.IsNullOrWhiteSpace(ThereforeTenantName) ? null : ThereforeTenantName.Trim(),
-            AuthMethod = ThereforeAuthMethod == Core.Watch.ThereforeAuthMethod.Bearer
-                ? global::Capture.Therefore.ThereforeAuthMethod.Bearer
-                : global::Capture.Therefore.ThereforeAuthMethod.Basic,
-            Username = ThereforeUsername,
-            Password = ThereforePassword,
-            BearerToken = ThereforeBearerToken
-        };
+    private Task AddThereforeConnectionAsync() => AddConnectionAsync(ConnectionType.Therefore);
 
-        StatusText = "Testing Therefore connection…";
-        StatusIsError = false;
-        try
+    [RelayCommand]
+    private Task AddRestConnectionAsync() => AddConnectionAsync(ConnectionType.Rest);
+
+    private async Task AddConnectionAsync(ConnectionType type)
+    {
+        var baseName = type == ConnectionType.Therefore ? "Therefore" : "REST";
+        var name = baseName;
+        for (var n = 2; Connections.Any(row => string.Equals(row.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)); n++)
+            name = $"{baseName} {n}";
+
+        var row = new ConnectionRow(new ConnectionDefinition
         {
-            var ok = await _thereforeClient.TestConnectionAsync(connection).ConfigureAwait(true);
-            StatusText = ok ? "Therefore connection succeeded" : "Therefore connection failed — no token returned";
-            StatusIsError = !ok;
-            if (ok) _toasts.ShowSuccess(StatusText); else _toasts.ShowError(StatusText);
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Therefore connection failed: {ex.Message}";
-            StatusIsError = true;
-            _toasts.ShowError(StatusText);
-        }
+            Name = name,
+            Type = type,
+            AuthMethod = type == ConnectionType.Therefore ? ConnectionAuthMethod.Basic : ConnectionAuthMethod.None
+        });
+        var editor = new ConnectionEditorViewModel(row, isNew: true, Connections.Select(item => item.Name.Trim()).ToList(), _http);
+        if (ShowConnectionEditor is null)
+            return;
+        await ShowConnectionEditor(editor).ConfigureAwait(true);
+        if (editor.Accepted)
+            Connections.Add(row);
+    }
+
+    [RelayCommand]
+    private async Task EditConnectionAsync(ConnectionRow? row)
+    {
+        if (row is null || ShowConnectionEditor is null)
+            return;
+
+        var copy = new ConnectionRow(row.ToModel());
+        var otherNames = Connections.Where(item => item != row).Select(item => item.Name.Trim()).ToList();
+        var editor = new ConnectionEditorViewModel(copy, isNew: false, otherNames, _http);
+        await ShowConnectionEditor(editor).ConfigureAwait(true);
+        if (editor.Accepted)
+            Connections[Connections.IndexOf(row)] = copy;
+    }
+
+    [RelayCommand]
+    private async Task RemoveConnectionAsync(ConnectionRow? row)
+    {
+        if (row is null || _dialogs.Host is not { } host)
+            return;
+
+        var confirmed = await _confirm.ConfirmAsync(
+            host,
+            $"Remove \"{row.DisplayName}\"?",
+            "Exports set to this connection will stop working until another is chosen, and scripts that use it will fail. Nothing changes until you save Settings.",
+            confirmText: "Remove",
+            cancelText: "Cancel").ConfigureAwait(true);
+        if (confirmed)
+            Connections.Remove(row);
     }
 
     [ObservableProperty]
@@ -381,14 +357,9 @@ public partial class SettingsViewModel : ViewModelBase
         LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars > 0 ? settings.LocalAiMaxDocumentChars : 12_000;
         RefreshLocalAiModelStatus();
 
-        // Set BaseUrl before TenantName so the tenant-changed prefill (which only fires when the URL
-        // is still blank) never overwrites an already-saved URL.
-        ThereforeBaseUrl = settings.ThereforeBaseUrl ?? string.Empty;
-        ThereforeTenantName = settings.ThereforeTenantName ?? string.Empty;
-        ThereforeAuthMethod = settings.ThereforeAuthMethod;
-        ThereforeUsername = settings.ThereforeUsername ?? string.Empty;
-        ThereforePassword = settings.ThereforePassword ?? string.Empty;
-        ThereforeBearerToken = settings.ThereforeBearerToken ?? string.Empty;
+        Connections.Clear();
+        foreach (var connection in settings.Connections)
+            Connections.Add(new ConnectionRow(connection));
 
         ScanDpi = settings.ScanDpi > 0 ? settings.ScanDpi : 200;
         ScanGrayscale = settings.ScanGrayscale;
@@ -753,12 +724,7 @@ public partial class SettingsViewModel : ViewModelBase
             AiMaxDocumentChars = AiMaxDocumentChars > 0 ? AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars,
             AiProvider = AiProvider,
             LocalAiMaxDocumentChars = LocalAiMaxDocumentChars > 0 ? LocalAiMaxDocumentChars : 12_000,
-            ThereforeBaseUrl = string.IsNullOrWhiteSpace(ThereforeBaseUrl) ? null : ThereforeBaseUrl.Trim(),
-            ThereforeTenantName = string.IsNullOrWhiteSpace(ThereforeTenantName) ? null : ThereforeTenantName.Trim(),
-            ThereforeAuthMethod = ThereforeAuthMethod,
-            ThereforeUsername = string.IsNullOrWhiteSpace(ThereforeUsername) ? null : ThereforeUsername.Trim(),
-            ThereforePassword = string.IsNullOrWhiteSpace(ThereforePassword) ? null : ThereforePassword,
-            ThereforeBearerToken = string.IsNullOrWhiteSpace(ThereforeBearerToken) ? null : ThereforeBearerToken,
+            Connections = Connections.Select(row => row.ToModel()).ToList(),
             ScanDpi = ScanDpi > 0 ? ScanDpi : 200,
             ScanGrayscale = ScanGrayscale,
             ScanSource = SelectedScanSource == ScanSourceKind.Feeder ? ScanInputSource.Feeder : ScanInputSource.Flatbed,

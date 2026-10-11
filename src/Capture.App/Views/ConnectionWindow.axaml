@@ -1,0 +1,89 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Capture.App.ViewModels"
+        x:Class="Capture.App.Views.ConnectionWindow"
+        x:DataType="vm:ConnectionEditorViewModel"
+        Title="{Binding Title}"
+        Width="460"
+        MinWidth="380"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <Grid RowDefinitions="*,Auto" Background="{DynamicResource GroundBrush}">
+        <StackPanel Grid.Row="0" Margin="20" Spacing="10" DataContext="{Binding Row}" x:DataType="vm:ConnectionRow">
+            <TextBlock Text="Name" Classes="field-label" />
+            <TextBox Text="{Binding Name}" />
+            <TextBlock TextWrapping="Wrap" Classes="hint">
+                <Run Text="Exports list it by this name, and scripts use it as" />
+                <Run Text="{Binding ScriptUsage}" FontFamily="{DynamicResource PlexMonoFontFamily}" />
+                <Run Text="— renaming it means updating those scripts." />
+            </TextBlock>
+
+            <StackPanel Spacing="10" IsVisible="{Binding IsTherefore}">
+                <TextBlock Text="Tenant name" Classes="field-label" />
+                <TextBox Text="{Binding TenantName}" Watermark="your-tenant (leave blank for on-premise)" />
+                <TextBlock Text="Fills in the server address as https://{tenant}.thereforeonline.com — leave blank for an on-premise server."
+                           TextWrapping="Wrap" Classes="hint" />
+                <TextBlock Text="Server address" Classes="field-label" />
+                <TextBox Text="{Binding BaseUrl}" Watermark="https://your-tenant.thereforeonline.com" />
+            </StackPanel>
+
+            <StackPanel Spacing="10" IsVisible="{Binding IsRest}">
+                <TextBlock Text="Base address" Classes="field-label" />
+                <TextBox Text="{Binding BaseUrl}" Watermark="https://api.example.com/v1" />
+                <TextBlock Text="Script paths are relative to this address, and requests can only go to this server."
+                           TextWrapping="Wrap" Classes="hint" />
+            </StackPanel>
+
+            <TextBlock Text="Sign-in" Classes="field-label" />
+            <ComboBox ItemsSource="{Binding AuthChoices}" SelectedItem="{Binding SelectedAuth}" HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConnectionAuthChoice">
+                        <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <StackPanel Spacing="10" IsVisible="{Binding UsesUsername}">
+                <TextBlock Text="Username" Classes="field-label" />
+                <TextBox Text="{Binding Username}" />
+                <TextBlock Text="Password" Classes="field-label" />
+                <TextBox Text="{Binding Password}" PasswordChar="•" />
+            </StackPanel>
+
+            <StackPanel Spacing="10" IsVisible="{Binding UsesApiKeyHeader}">
+                <TextBlock Text="Header name" Classes="field-label" />
+                <TextBox Text="{Binding ApiKeyHeader}" Watermark="X-API-Key" />
+            </StackPanel>
+
+            <StackPanel Spacing="10" IsVisible="{Binding UsesToken}">
+                <TextBlock Text="{Binding TokenLabel}" Classes="field-label" />
+                <TextBox Text="{Binding Token}" PasswordChar="•" />
+            </StackPanel>
+
+            <TextBlock Text="Passwords and keys are kept in your system's secure storage, and scripts can use the connection without seeing them."
+                       TextWrapping="Wrap" Classes="hint" />
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Padding="20,14"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource BorderBrush1}"
+                Background="{DynamicResource Surface2Brush}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <Button Content="Test connection" Command="{Binding TestCommand}" VerticalAlignment="Top" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding StatusText}"
+                           IsVisible="{Binding HasStatus}"
+                           Classes.critical="{Binding StatusIsError}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Margin="4,0" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Content="Done" Command="{Binding DoneCommand}" Classes="accent" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

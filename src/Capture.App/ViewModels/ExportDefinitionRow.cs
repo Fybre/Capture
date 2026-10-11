@@ -301,6 +301,20 @@ public sealed partial class ExportDefinitionRow : ObservableObject
         Definition.FieldIds = selected.Count == FieldOptions.Count ? [] : selected;
     }
 
+    /// <summary>Read straight from <see cref="Definition"/>, since the designer fills it in for exports
+    /// saved before connections existed after this row is built.</summary>
+    public Guid? ThereforeConnectionId
+    {
+        get => Definition.ThereforeConnectionId;
+        set
+        {
+            if (Definition.ThereforeConnectionId == value)
+                return;
+            Definition.ThereforeConnectionId = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string ThereforeCategoryDisplay => Definition.ThereforeCategoryNo is null
         ? "No category selected"
         : $"{Definition.ThereforeCategoryName} (#{Definition.ThereforeCategoryNo})";

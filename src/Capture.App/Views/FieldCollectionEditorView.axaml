@@ -88,7 +88,8 @@
                     Command="{Binding $parent[UserControl].DataContext.RemoveCommand}"/>
           </Grid>
 
-          <TabControl Classes="field-tabs">
+          <TabControl Classes="field-tabs"
+                      SelectedIndex="{Binding $parent[UserControl].DataContext.SelectedFieldTab}">
             <TabItem Header="General">
               <StackPanel Spacing="8" Margin="0,8,0,0">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">

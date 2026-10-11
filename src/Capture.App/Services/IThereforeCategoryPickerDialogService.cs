@@ -9,5 +9,5 @@ public sealed record ThereforeCategorySelection(
 
 public interface IThereforeCategoryPickerDialogService
 {
-    Task<ThereforeCategorySelection?> ShowAsync(object owner);
+    Task<ThereforeCategorySelection?> ShowAsync(object owner, Guid? connectionId = null);
 }

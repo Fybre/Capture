@@ -61,6 +61,48 @@ public sealed class CaptureProfileDesignerUxTests
     }
 
     [Fact]
+    public void The_same_category_number_on_another_server_matches_by_name_not_number()
+    {
+        var invoiceNoId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var previous = new List<ThereforeFieldMapping>
+        {
+            new() { FieldNo = 101, Caption = "Invoice No", IndexDataFieldName = "Invoice_No", IndexFieldId = invoiceNoId },
+            new() { FieldNo = 102, Caption = "Supplier", IndexDataFieldName = "Supplier", IndexFieldId = supplierId }
+        };
+        // Category 360 exists here too, but its field numbers are swapped.
+        var selection = new ThereforeCategorySelection(360, "Invoices",
+            [CategoryField(101, "Supplier", "Supplier"), CategoryField(102, "Invoice No", "Invoice_No")]);
+
+        var rebuilt = CaptureProfileDesignerViewModel.RebuildThereforeFieldMappings(360, previous, selection, sameServer: false);
+
+        Assert.Equal(supplierId, rebuilt[0].IndexFieldId);
+        Assert.Equal(invoiceNoId, rebuilt[1].IndexFieldId);
+    }
+
+    [Fact]
+    public void When_the_server_is_unknown_a_field_number_match_must_also_agree_by_name()
+    {
+        var invoiceNoId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var previous = new List<ThereforeFieldMapping>
+        {
+            new() { FieldNo = 101, Caption = "Invoice No", IndexDataFieldName = "Invoice_No", IndexFieldId = invoiceNoId },
+            new() { FieldNo = 102, Caption = "Supplier", IndexDataFieldName = "Supplier", IndexFieldId = supplierId }
+        };
+        var swapped = new ThereforeCategorySelection(360, "Invoices",
+            [CategoryField(101, "Supplier", "Supplier"), CategoryField(102, "Invoice No", "Invoice_No")]);
+        var same = new ThereforeCategorySelection(360, "Invoices",
+            [CategoryField(101, "Invoice No", "Invoice_No"), CategoryField(102, "Supplier", "Supplier")]);
+
+        var fromSwapped = CaptureProfileDesignerViewModel.RebuildThereforeFieldMappings(360, previous, swapped, sameServer: null);
+        var fromSame = CaptureProfileDesignerViewModel.RebuildThereforeFieldMappings(360, previous, same, sameServer: null);
+
+        Assert.Equal([supplierId, invoiceNoId], fromSwapped.Select(m => m.IndexFieldId!.Value));
+        Assert.Equal([invoiceNoId, supplierId], fromSame.Select(m => m.IndexFieldId!.Value));
+    }
+
+    [Fact]
     public async Task Disabled_incomplete_profile_saves_as_a_draft_but_cannot_save_when_enabled()
     {
         var profile = new CaptureProfile { Enabled = false };

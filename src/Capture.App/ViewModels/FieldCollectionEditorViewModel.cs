@@ -77,8 +77,14 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
     [ObservableProperty] private FieldKind _newFieldKind = FieldKind.Text;
     public IReadOnlyList<FieldKind> FieldKinds { get; }
 
+    /// <summary>The selected field's open tab. Kept while moving between existing fields; a new field
+    /// starts on General.</summary>
+    [ObservableProperty]
+    private int _selectedFieldTab;
+
     public FieldRow Add(IndexField field)
     {
+        SelectedFieldTab = 0;
         var row = new FieldRow(field, _isBatchScope);
         Watch(row);
         Fields.Add(row);

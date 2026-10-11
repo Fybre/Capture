@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.8.18",
+    "date": "2026-10-11",
+    "changes": [
+      "Settings ▸ Connections replaces the Therefore tab. Add as many Therefore servers and REST services as you need, each with its own name and sign-in, and test each one. Your existing Therefore setup moves across automatically as a connection called \"Therefore\".",
+      "Each Therefore export chooses which connection it uses. Re-picking a category on a different server matches fields by name rather than number, so a profile imported from another system can be repointed without remapping fields.",
+      "Scripts can call a connection by name — for example Connections[\"Therefore\"].PostAsync(\"ExecuteSingleQuery\", …) — with requests signed using its stored credentials, which the script never sees. A connection only sends requests to its own server.",
+      "Button field scripts can show a message with await Message(\"…\") and ask a question with await Confirm(\"…\"). Time spent reading a dialog doesn't count toward the button's timeout.",
+      "Help ▸ scripting has new examples, including looking up a Therefore category by name and then searching it for a document.",
+      "A newly added field now opens on its General tab."
+    ]
+  },
+  {
     "version": "0.8.17",
     "date": "2026-10-10",
     "changes": [

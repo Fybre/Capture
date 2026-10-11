@@ -24,7 +24,7 @@ To do its job, Capture stores the following in its data folder on your computer:
 - your settings, capture profiles, redaction sets and, if you enable it, a troubleshooting log
 
 This information stays on your computer. Credentials you enter in Settings (the AI service API key and
-the Therefore password or token) are protected using your operating system's secure storage. These are
+the passwords, tokens and API keys for each connection) are protected using your operating system's secure storage. These are
 Windows Data Protection, the macOS Keychain, or the Linux secret service. A bearer token entered for a
 REST export is saved in that capture profile's file on your computer. You can remove documents in the
 app, and you can delete Capture's data folder at any time. In the Microsoft Store version, Windows

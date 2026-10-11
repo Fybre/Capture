@@ -28,8 +28,10 @@ to move them across.
 - **Redaction** — automatic PII detection via a bundled Presidio sidecar, fields explicitly marked
   *Sensitive*, or manually-drawn regions; PII detection can be turned off per profile to redact only
   Sensitive fields with no NLP involved.
-- **Export** — CSV, and direct document creation in a Therefore Online repository (configure the
-  connection once in Settings; category/field mapping is per export definition).
+- **Export** — CSV, and direct document creation in a Therefore Online repository (add one or more
+  Therefore servers in Settings ▸ Connections; connection, category and field mapping are per export definition).
+- **Connections** — named Therefore and REST connections in Settings that scripts can call by name
+  (`Connections["Xero"].GetAsync(...)`) without the credentials ever appearing in the script.
 - **Debug logging** — an opt-in activity log (imports, exports, watch-folder activity, errors) for
   troubleshooting, toggled in Settings.
 

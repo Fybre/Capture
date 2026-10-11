@@ -10,6 +10,7 @@ using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Paths;
 using Capture.Core.Profiles;
+using Capture.Core.Watch;
 using Capture.Core.Redaction;
 using Capture.Core.Scripting;
 using Capture.App.Services;
@@ -65,6 +66,8 @@ public sealed partial class CaptureDesignerNode : ObservableObject
     public DocumentTypeDefinition? DocumentType { get; }
 }
 
+public sealed record ThereforeConnectionChoice(Guid Id, string Name);
+
 public partial class CaptureProfileDesignerViewModel : ViewModelBase
 {
     private static readonly SeparationStrategyType[] RuleTypes = Enum.GetValues<SeparationStrategyType>();
@@ -86,6 +89,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private readonly IRedactionEntitySetStore? _redactionEntitySets;
     private readonly IPiiDetector? _piiDetector;
     private readonly IThereforeCategoryPickerDialogService? _thereforeCategoryPicker;
+    private readonly IWatchSettingsStore? _watchSettings;
     private readonly IAiExtractor? _ai;
     private readonly IHelpWindowService? _help;
     private bool _changingRedactionSet;
@@ -109,8 +113,10 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         IAiExtractor? ai = null,
         IHelpWindowService? help = null,
         IConfirmDialogService? confirm = null,
-        IToastService? toasts = null)
+        IToastService? toasts = null,
+        IWatchSettingsStore? watchSettings = null)
     {
+        _watchSettings = watchSettings;
         Profile = profile;
         _store = store;
         _workflow = workflow;
@@ -314,6 +320,36 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         }
 
         RefreshSelectedRedactionSet();
+        await LoadThereforeConnectionsAsync();
+    }
+
+    /// <summary>The Therefore connections from Settings ▸ Connections, offered on each Therefore export.</summary>
+    public ObservableCollection<ThereforeConnectionChoice> ThereforeConnections { get; } = [];
+
+    private bool _thereforeConnectionsLoaded;
+
+    private async Task LoadThereforeConnectionsAsync()
+    {
+        if (_watchSettings is null)
+            return;
+
+        var settings = await _watchSettings.LoadAsync();
+        ThereforeConnections.Clear();
+        foreach (var connection in settings.Connections.Where(item => item.Type == ConnectionType.Therefore))
+            ThereforeConnections.Add(new ThereforeConnectionChoice(connection.Id, connection.Name));
+        _thereforeConnectionsLoaded = true;
+
+        // Exports saved before connections existed use the first Therefore connection; record that
+        // explicitly so the picker shows it. Not an edit of its own, so it doesn't mark the profile changed.
+        if (ThereforeConnections.FirstOrDefault() is { } first)
+        {
+            var wasDirty = HasUnsavedChanges();
+            foreach (var export in Profile.DocumentTypes.SelectMany(type => type.Exports)
+                         .Where(export => export.Type == ExportType.Therefore && export.ThereforeConnectionId is null))
+                export.ThereforeConnectionId = first.Id;
+            if (!wasDirty)
+                _savedSnapshot = JsonSerializer.Serialize(Profile);
+        }
     }
 
     public bool HasSample => SampleImage is not null;
@@ -917,27 +953,34 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private async Task BrowseThereforeCategoryAsync(ExportDefinitionRow? row)
     {
         if (row is null || _thereforeCategoryPicker is null || _dialogs?.Host is not { } host) return;
-        var selection = await _thereforeCategoryPicker.ShowAsync(host);
+        var selection = await _thereforeCategoryPicker.ShowAsync(host, row.Definition.ThereforeConnectionId);
         if (selection is null) return;
 
+        var connectionId = row.Definition.ThereforeConnectionId;
+        var categoryConnectionId = row.Definition.ThereforeCategoryConnectionId;
         row.Definition.ThereforeFieldMappings = RebuildThereforeFieldMappings(
-            row.Definition.ThereforeCategoryNo, row.Definition.ThereforeFieldMappings, selection);
+            row.Definition.ThereforeCategoryNo, row.Definition.ThereforeFieldMappings, selection,
+            sameServer: categoryConnectionId is null ? null : categoryConnectionId == connectionId);
         row.Definition.ThereforeCategoryNo = selection.CategoryNo;
+        row.Definition.ThereforeCategoryConnectionId = connectionId;
         row.Definition.ThereforeCategoryName = selection.CategoryName;
         row.RefreshThereforeMappings();
         RefreshEnablementIssues();
     }
 
     /// <summary>Builds the mapping list for a newly picked category, carrying each existing mapping's
-    /// index field over. Re-picking the same category matches by FieldNo. Picking a different category
-    /// number matches by IndexDataFieldName, then Caption — this is what lets a profile imported from
-    /// another Therefore system (same category design, different numbering) be repointed without
-    /// remapping every field by hand. Unmatched fields come through unmapped.</summary>
+    /// index field over. Re-picking the same category on the same server matches by FieldNo. Otherwise —
+    /// a different category, or another server, where the same numbers can mean different fields — it
+    /// matches by IndexDataFieldName, then Caption. This is what lets a profile imported from another
+    /// Therefore system be repointed without remapping every field by hand. When it isn't known which
+    /// server the old category came from (<paramref name="sameServer"/> null), a FieldNo match is used
+    /// only if the field's name agrees. Unmatched fields come through unmapped.</summary>
     internal static List<ThereforeFieldMapping> RebuildThereforeFieldMappings(
-        int? previousCategoryNo, IReadOnlyList<ThereforeFieldMapping> previousMappings, ThereforeCategorySelection selection)
+        int? previousCategoryNo, IReadOnlyList<ThereforeFieldMapping> previousMappings, ThereforeCategorySelection selection,
+        bool? sameServer = true)
     {
         var mapped = previousMappings.Where(mapping => mapping.IndexFieldId is not null).ToList();
-        var sameCategory = previousCategoryNo == selection.CategoryNo;
+        var sameCategory = previousCategoryNo == selection.CategoryNo && sameServer != false;
         var byFieldNo = mapped.GroupBy(m => m.FieldNo).ToDictionary(g => g.Key, g => g.First());
         var byName = mapped.Where(m => !string.IsNullOrWhiteSpace(m.IndexDataFieldName))
             .GroupBy(m => m.IndexDataFieldName, StringComparer.OrdinalIgnoreCase)
@@ -946,15 +989,25 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
             .GroupBy(m => m.Caption, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+        ThereforeFieldMapping? ByName(Capture.Therefore.ThereforeCategoryField field)
+        {
+            if (!string.IsNullOrWhiteSpace(field.IndexDataFieldName) && byName.TryGetValue(field.IndexDataFieldName, out var named))
+                return named;
+            return !string.IsNullOrWhiteSpace(field.Caption) && byCaption.TryGetValue(field.Caption, out var captioned) ? captioned : null;
+        }
+
+        static bool NamesAgree(ThereforeFieldMapping mapping, Capture.Therefore.ThereforeCategoryField field) =>
+            string.IsNullOrWhiteSpace(mapping.IndexDataFieldName) || string.IsNullOrWhiteSpace(field.IndexDataFieldName)
+                ? string.Equals(mapping.Caption, field.Caption, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(mapping.IndexDataFieldName, field.IndexDataFieldName, StringComparison.OrdinalIgnoreCase);
+
         return selection.Fields.Select(field =>
         {
             ThereforeFieldMapping? existing = null;
-            if (sameCategory)
-                byFieldNo.TryGetValue(field.FieldNo, out existing);
-            else if (string.IsNullOrWhiteSpace(field.IndexDataFieldName)
-                     || !byName.TryGetValue(field.IndexDataFieldName, out existing))
-                if (!string.IsNullOrWhiteSpace(field.Caption))
-                    byCaption.TryGetValue(field.Caption, out existing);
+            if (sameCategory && byFieldNo.TryGetValue(field.FieldNo, out var numbered) && (sameServer == true || NamesAgree(numbered, field)))
+                existing = numbered;
+            else if (!sameCategory || sameServer is null)
+                existing = ByName(field);
 
             return new ThereforeFieldMapping
             {
@@ -1029,6 +1082,12 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
                             errors.Add($"Choose an output folder for {exportLabel}.");
                         break;
                     case ExportType.Therefore:
+                        if (_thereforeConnectionsLoaded && ThereforeConnections.All(connection => connection.Id != export.ThereforeConnectionId))
+                        {
+                            errors.Add(ThereforeConnections.Count == 0
+                                ? $"Add a Therefore connection in Settings ▸ Connections for {exportLabel}."
+                                : $"Choose a Therefore connection for {exportLabel}.");
+                        }
                         if (export.ThereforeCategoryNo is null)
                             errors.Add($"Choose a Therefore category for {exportLabel}.");
                         break;
@@ -1599,7 +1658,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
             Document = ScriptDocumentInfo.From(lattices, null),
             Scope = IsBatchSelected ? ScriptScopeKind.Batch : ScriptScopeKind.Document,
             DocumentType = IsBatchSelected ? null : SelectedDocumentType?.Name,
-            BatchValues = batchValues
+            BatchValues = batchValues,
+            Dialogs = kind == FieldScriptTestKind.Button && _confirm is not null ? new ScriptDialogs(_confirm, () => _dialogs?.Host) : null
         };
         var shared = IsBatchSelected ? BatchScripts.SharedSource : DocumentScripts?.SharedSource ?? string.Empty;
 

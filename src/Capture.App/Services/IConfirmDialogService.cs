@@ -6,4 +6,8 @@ namespace Capture.App.Services;
 public interface IConfirmDialogService
 {
     Task<bool> ConfirmAsync(object owner, string title, string message, string confirmText = "Continue", string cancelText = "Cancel");
+
+    /// <summary>The same dialog with a single button, for a message that just needs acknowledging.</summary>
+    Task ShowMessageAsync(object owner, string title, string message, string okText = "OK") =>
+        ConfirmAsync(owner, title, message, okText, cancelText: string.Empty);
 }

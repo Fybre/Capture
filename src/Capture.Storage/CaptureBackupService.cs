@@ -97,7 +97,7 @@ public sealed class CaptureBackupService(
         File.Exists(paths.AiFieldCatalogPath));
 
     /// <summary>Writes the chosen <paramref name="parts"/> to <paramref name="zipPath"/>. Without
-    /// <paramref name="includeCredentials"/>, the AI API key, Therefore password/token and REST export
+    /// <paramref name="includeCredentials"/>, the AI API key, connection passwords/tokens and REST export
     /// tokens are replaced with a placeholder; restoring such a backup keeps whatever credentials are
     /// already configured.</summary>
     public async Task<CaptureBackupManifest> CreateAsync(string zipPath, BackupParts parts, bool includeCredentials, string? appVersion, CancellationToken cancellationToken = default)
@@ -110,8 +110,11 @@ public sealed class CaptureBackupService(
         if (!includeCredentials && settings is not null)
         {
             settings.AiApiKey = CredentialRedaction.Redact(settings.AiApiKey);
-            settings.ThereforePassword = CredentialRedaction.Redact(settings.ThereforePassword);
-            settings.ThereforeBearerToken = CredentialRedaction.Redact(settings.ThereforeBearerToken);
+            foreach (var connection in settings.Connections)
+            {
+                connection.Password = CredentialRedaction.Redact(connection.Password);
+                connection.Token = CredentialRedaction.Redact(connection.Token);
+            }
         }
         if (!includeCredentials)
         {
@@ -299,13 +302,24 @@ public sealed class CaptureBackupService(
         {
             var current = await settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
             settings.AiApiKey = CredentialRedaction.PreserveIfRedacted(settings.AiApiKey, current.AiApiKey ?? string.Empty);
-            settings.ThereforePassword = CredentialRedaction.PreserveIfRedacted(settings.ThereforePassword, current.ThereforePassword ?? string.Empty);
-            settings.ThereforeBearerToken = CredentialRedaction.PreserveIfRedacted(settings.ThereforeBearerToken, current.ThereforeBearerToken ?? string.Empty);
+            // An older backup holds a single Therefore connection; bring it into the current form first.
+            settings.MigrateLegacyTherefore();
+            foreach (var connection in settings.Connections)
+            {
+                // Same connection by id, or for an older backup's migrated one, by name and type.
+                var existing = current.Connections.FirstOrDefault(item => item.Id == connection.Id)
+                    ?? current.Connections.FirstOrDefault(item => item.Type == connection.Type
+                        && string.Equals(item.Name, connection.Name, StringComparison.OrdinalIgnoreCase));
+                connection.Password = NullIfEmpty(CredentialRedaction.PreserveIfRedacted(connection.Password, existing?.Password ?? string.Empty));
+                connection.Token = NullIfEmpty(CredentialRedaction.PreserveIfRedacted(connection.Token, existing?.Token ?? string.Empty));
+            }
             // Restoring is a deliberate setup step; never send someone back through first-run setup.
             settings.HasCompletedFirstRunSetup = true;
             await settingsStore.SaveAsync(settings, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
 
     internal static bool HasScripts(CaptureProfile profile)
     {

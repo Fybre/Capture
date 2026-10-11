@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Capture.App.ViewModels;
 
 namespace Capture.App.Views;
@@ -9,28 +8,26 @@ public partial class SettingsWindow : Window
     public SettingsWindow()
     {
         InitializeComponent();
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is SettingsViewModel viewModel)
+                viewModel.ShowConnectionEditor = ShowConnectionEditorAsync;
+        };
     }
 
-    // The Therefore connection dialog shares this window's own SettingsViewModel as its DataContext
-    // (not a copy) — edits made there land directly on the same observable properties this window's
-    // own Save button persists, so there's no separate save step in the nested dialog itself.
-    private async void OnConfigureThereforeClick(object? sender, RoutedEventArgs e)
+    private async Task ShowConnectionEditorAsync(ConnectionEditorViewModel editor)
     {
-        var dialog = new ThereforeConnectionWindow { DataContext = DataContext };
-        if (DataContext is not SettingsViewModel viewModel)
-        {
-            await dialog.ShowDialog(this);
-            return;
-        }
-
-        viewModel.Toasts.AttachHost(dialog);
+        var dialog = new ConnectionWindow { DataContext = editor };
+        editor.Close = dialog.Close;
+        var toasts = (DataContext as SettingsViewModel)?.Toasts;
+        toasts?.AttachHost(dialog);
         try
         {
             await dialog.ShowDialog(this);
         }
         finally
         {
-            viewModel.Toasts.DetachHost(dialog);
+            toasts?.DetachHost(dialog);
         }
     }
 }

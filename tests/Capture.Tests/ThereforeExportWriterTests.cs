@@ -9,15 +9,28 @@ namespace Capture.Tests;
 
 public class ThereforeExportWriterTests
 {
+    private static readonly ConnectionDefinition Main = new()
+    {
+        Name = "Main",
+        Type = ConnectionType.Therefore,
+        BaseUrl = "https://example.thereforeonline.com",
+        Username = "user",
+        Password = "pass"
+    };
+
+    private static readonly ConnectionDefinition Archive = new()
+    {
+        Name = "Archive",
+        Type = ConnectionType.Therefore,
+        BaseUrl = "https://archive.thereforeonline.com",
+        AuthMethod = ConnectionAuthMethod.Bearer,
+        Token = "archive-token"
+    };
+
     private sealed class FakeWatchSettingsStore : IWatchSettingsStore
     {
         public Task<WatchSettings> LoadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WatchSettings
-            {
-                ThereforeBaseUrl = "https://example.thereforeonline.com",
-                ThereforeUsername = "user",
-                ThereforePassword = "pass"
-            });
+            Task.FromResult(new WatchSettings { Connections = [Main, Archive] });
 
         public Task SaveAsync(WatchSettings settings, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
@@ -57,6 +70,55 @@ public class ThereforeExportWriterTests
             Assert.Equal(27911, docNo);
             return Task.FromResult(documentActuallyExists);
         }
+    }
+
+    private sealed class RecordingThereforeClient : IThereforeClient
+    {
+        public ThereforeConnectionSettings? UsedConnection { get; private set; }
+
+        public Task<bool> TestConnectionAsync(ThereforeConnectionSettings settings, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<ThereforeTreeNode>> GetCategoriesTreeAsync(ThereforeConnectionSettings settings, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ThereforeCategoryInfo> GetCategoryInfoAsync(ThereforeConnectionSettings settings, int categoryNo, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ThereforeCreateDocumentResult> CreateDocumentAsync(ThereforeConnectionSettings settings, ThereforeCreateDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            UsedConnection = settings;
+            return Task.FromResult(new ThereforeCreateDocumentResult(42));
+        }
+
+        public Task<bool> DocumentExistsAsync(ThereforeConnectionSettings settings, int docNo, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task Exports_to_the_chosen_connection_or_the_first_for_older_exports()
+    {
+        var client = new RecordingThereforeClient();
+        var writer = new ThereforeExportWriter(client, new FakeWatchSettingsStore(), new NullAttachmentProcessor());
+
+        Assert.True((await writer.ExportAsync(new ExportDefinition { Name = "Old", ThereforeCategoryNo = 1 }, Context())).Success);
+        Assert.Equal(Main.BaseUrl, client.UsedConnection!.BaseUrl);
+
+        Assert.True((await writer.ExportAsync(new ExportDefinition { Name = "Archive", ThereforeCategoryNo = 1, ThereforeConnectionId = Archive.Id }, Context())).Success);
+        Assert.Equal(Archive.BaseUrl, client.UsedConnection!.BaseUrl);
+        Assert.Equal(global::Capture.Therefore.ThereforeAuthMethod.Bearer, client.UsedConnection.AuthMethod);
+        Assert.Equal("archive-token", client.UsedConnection.BearerToken);
+    }
+
+    [Fact]
+    public async Task An_export_whose_connection_was_removed_fails_with_a_reason()
+    {
+        var writer = new ThereforeExportWriter(new RecordingThereforeClient(), new FakeWatchSettingsStore(), new NullAttachmentProcessor());
+
+        var result = await writer.ExportAsync(new ExportDefinition { Name = "Gone", ThereforeCategoryNo = 1, ThereforeConnectionId = Guid.NewGuid() }, Context());
+
+        Assert.False(result.Success);
+        Assert.Contains("connection was removed", result.Message);
     }
 
     private static ExportDocumentContext Context() => new(

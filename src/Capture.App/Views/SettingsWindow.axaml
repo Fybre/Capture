@@ -266,20 +266,49 @@
               </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Therefore" Classes="settings-nav">
+            <TabItem Header="Connections" Classes="settings-nav">
               <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <Grid Margin="24,8,24,8" ColumnDefinitions="*">
                 <Border Classes="card" HorizontalAlignment="Stretch">
                     <StackPanel Spacing="10">
-                        <TextBlock Text="Therefore" Classes="section-title" />
-                        <TextBlock Text="Server" Classes="field-label" />
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Text="{Binding ThereforeConnectionDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="1" Content="Configure…" Click="OnConfigureThereforeClick" Margin="6,0,0,0" />
-                        </Grid>
-                        <TextBlock Text="Shared by every Therefore export across all profiles — configured once here."
+                        <DockPanel LastChildFill="False">
+                            <TextBlock Text="Connections" Classes="section-title" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                            <Button Content="Add connection ▾" DockPanel.Dock="Right" Classes="ghost" FontSize="12.5">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuItem Header="Therefore" Command="{Binding AddThereforeConnectionCommand}" />
+                                        <MenuItem Header="REST service" Command="{Binding AddRestConnectionCommand}" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </DockPanel>
+                        <TextBlock Text="Servers and services that exports and scripts can use. Therefore exports choose one of these; scripts reach one by name, e.g. Connections[&quot;Therefore&quot;], without seeing its password."
                                    TextWrapping="Wrap"
                                    Classes="hint" />
+                        <TextBlock Text="No connections yet." Classes="hint" IsVisible="{Binding !HasConnections}" />
+                        <ItemsControl ItemsSource="{Binding Connections}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ConnectionRow">
+                                    <Border BorderBrush="{DynamicResource BorderBrush1}" BorderThickness="0,1,0,0" Padding="0,8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding TypeLabel}" Classes="hint" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Summary}" Classes="hint" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Edit…" VerticalAlignment="Center"
+                                                    Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).EditConnectionCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="2" Content="Remove" Classes="ghost" VerticalAlignment="Center"
+                                                    Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveConnectionCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
                 </Grid>

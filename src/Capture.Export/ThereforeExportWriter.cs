@@ -35,22 +35,19 @@ public sealed class ThereforeExportWriter : IExportWriter
         try
         {
             var settings = await _watchSettings.LoadAsync(cancellationToken).ConfigureAwait(false);
-            if (!settings.ThereforeConfigured)
-                return new ExportResult(false, $"\"{definition.Name}\": Therefore connection isn't configured — set it up in Settings.");
+            var saved = settings.FindConnection(definition.ThereforeConnectionId, ConnectionType.Therefore);
+            if (saved is null)
+            {
+                return new ExportResult(false, definition.ThereforeConnectionId is null
+                    ? $"\"{definition.Name}\": no Therefore connection — add one in Settings ▸ Connections."
+                    : $"\"{definition.Name}\": its Therefore connection was removed — choose another in the profile's export settings.");
+            }
+            if (!saved.IsConfigured)
+                return new ExportResult(false, $"\"{definition.Name}\": the Therefore connection \"{saved.Name}\" isn't fully set up — finish it in Settings ▸ Connections.");
             if (definition.ThereforeCategoryNo is not { } categoryNo)
                 return new ExportResult(false, $"\"{definition.Name}\": no Therefore category selected.");
 
-            connection = new ThereforeConnectionSettings
-            {
-                BaseUrl = settings.ThereforeBaseUrl ?? string.Empty,
-                TenantName = settings.ThereforeTenantName,
-                AuthMethod = settings.ThereforeAuthMethod == Core.Watch.ThereforeAuthMethod.Bearer
-                    ? global::Capture.Therefore.ThereforeAuthMethod.Bearer
-                    : global::Capture.Therefore.ThereforeAuthMethod.Basic,
-                Username = settings.ThereforeUsername,
-                Password = settings.ThereforePassword,
-                BearerToken = settings.ThereforeBearerToken
-            };
+            connection = ThereforeConnectionSettings.From(saved);
 
             var valuesByField = context.IndexValues.ToDictionary(value => value.FieldId, value => value.Value);
             var items = definition.ThereforeFieldMappings

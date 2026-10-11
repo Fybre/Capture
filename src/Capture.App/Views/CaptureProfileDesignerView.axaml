@@ -386,6 +386,19 @@
                         </StackPanel>
 
                         <StackPanel Spacing="7" IsVisible="{Binding IsTherefore}">
+                          <TextBlock Text="Connection" Classes="field-label"/>
+                          <ComboBox ItemsSource="{Binding $parent[UserControl].DataContext.ThereforeConnections}"
+                                    SelectedValueBinding="{Binding Id}"
+                                    SelectedValue="{Binding ThereforeConnectionId}"
+                                    PlaceholderText="Choose a Therefore connection"
+                                    HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate>
+                                <TextBlock Text="{Binding Name}"/>
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                          <TextBlock Text="Set up Therefore connections in Settings ▸ Connections." Classes="hint" TextWrapping="Wrap"/>
                           <TextBlock Text="Category" Classes="field-label"/>
                           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                             <TextBlock Text="{Binding ThereforeCategoryDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>

@@ -33,24 +33,8 @@ public sealed class ThereforeClient : IThereforeClient
     /// <c>https://{tenant}.thereforeonline.com</c> when left blank, adds a scheme if missing, and
     /// tolerates a URL already ending in <c>/theservice</c>, <c>/theservice/v0001</c>, or
     /// <c>/theservice/v0001/restun</c> so pasting the "wrong" level still works.</summary>
-    public static string BuildBaseUrl(string? tenantName, string? baseUrl)
-    {
-        var server = (baseUrl ?? string.Empty).Trim();
-        if (server.Length == 0)
-            server = $"https://{tenantName}.thereforeonline.com";
-        else if (!server.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                 && !server.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            server = "https://" + server;
-
-        server = server.TrimEnd('/');
-        if (server.EndsWith("/theservice/v0001/restun", StringComparison.OrdinalIgnoreCase))
-            return server;
-        if (server.EndsWith("/theservice/v0001", StringComparison.OrdinalIgnoreCase))
-            return server + "/restun";
-        if (server.EndsWith("/theservice", StringComparison.OrdinalIgnoreCase))
-            return server + "/v0001/restun";
-        return server + "/theservice/v0001/restun";
-    }
+    public static string BuildBaseUrl(string? tenantName, string? baseUrl) =>
+        Capture.Core.Watch.ConnectionDefinition.ThereforeServiceUrl(tenantName, baseUrl);
 
     public async Task<bool> TestConnectionAsync(ThereforeConnectionSettings settings, CancellationToken cancellationToken = default)
     {

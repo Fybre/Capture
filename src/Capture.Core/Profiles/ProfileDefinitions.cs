@@ -360,6 +360,16 @@ public sealed class ExportDefinition
     // Streams. Strict redacted mode fails closed; RedactedOrOriginal deliberately falls back.
     public int? ThereforeCategoryNo { get; set; }
 
+    /// <summary>The Settings ▸ Connections entry to export to. Null (exports saved before connections
+    /// existed) uses the first Therefore connection.</summary>
+    public Guid? ThereforeConnectionId { get; set; }
+
+    /// <summary>The connection <see cref="ThereforeCategoryNo"/> was picked from. Category and field
+    /// numbers only mean the same thing on the same server, so re-picking a category matches fields by
+    /// number only when this is the export's current connection. Null for categories picked before it
+    /// was recorded.</summary>
+    public Guid? ThereforeCategoryConnectionId { get; set; }
+
     /// <summary>Display only — avoids refetching the category just to show the current selection.</summary>
     public string? ThereforeCategoryName { get; set; }
     public List<ThereforeFieldMapping> ThereforeFieldMappings { get; set; } = [];
@@ -368,7 +378,7 @@ public sealed class ExportDefinition
     public string RestUrl { get; set; } = string.Empty;
 
     /// <summary>Stored in plaintext inside the profile file — unlike WatchSettings' secrets
-    /// (AiApiKey/ThereforePassword/ThereforeBearerToken), ExportDefinition has no OS-keychain
+    /// (AiApiKey and connection passwords/tokens), ExportDefinition has no OS-keychain
     /// protection pass. Flagged in the designer UI; hardening this is a reasonable follow-up but out
     /// of scope for the initial Rest export.</summary>
     public string? RestBearerToken { get; set; }

@@ -309,7 +309,8 @@ public partial class MainViewModel
                 BatchNumber = defaultContext?.BatchNumber ?? 1,
                 Timestamp = DateTimeOffset.Now,
                 Values = documentRow.Indexes,
-                Document = ScriptDocumentInfo.From(lattices, document)
+                Document = ScriptDocumentInfo.From(lattices, document),
+                Dialogs = new ScriptDialogs(_confirm, () => _dialogs.Host)
             };
 
             // The real field's Id, not a fresh Guid — so RoslynFieldScriptRunner's compiled-script

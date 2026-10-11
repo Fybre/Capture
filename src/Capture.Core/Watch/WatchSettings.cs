@@ -103,21 +103,57 @@ public sealed class WatchSettings
     public bool AiConfigured =>
         !string.IsNullOrWhiteSpace(AiEndpoint) && !string.IsNullOrWhiteSpace(AiApiKey);
 
-    public string? ThereforeBaseUrl { get; set; }
+    /// <summary>Named connections to Therefore servers and REST services — see
+    /// <see cref="ConnectionDefinition"/>.</summary>
+    public List<ConnectionDefinition> Connections { get; set; } = [];
 
-    /// <summary>Display/prefill convenience only — sent as-is on every request's TenantName header
-    /// (see Capture.Therefore.ThereforeClient), never inferred from ThereforeBaseUrl.</summary>
+    /// <summary>The connection with this id, or — for an export saved before connections existed, whose
+    /// id is null — the first connection of that type.</summary>
+    public ConnectionDefinition? FindConnection(Guid? id, ConnectionType type) => id is { } value
+        ? Connections.FirstOrDefault(connection => connection.Id == value && connection.Type == type)
+        : Connections.FirstOrDefault(connection => connection.Type == type);
+
+    // The single Therefore connection from before Settings ▸ Connections. Read from older settings files
+    // and backups only; MigrateLegacyTherefore moves it into Connections.
+    public string? ThereforeBaseUrl { get; set; }
     public string? ThereforeTenantName { get; set; }
     public ThereforeAuthMethod ThereforeAuthMethod { get; set; } = ThereforeAuthMethod.Basic;
     public string? ThereforeUsername { get; set; }
     public string? ThereforePassword { get; set; }
     public string? ThereforeBearerToken { get; set; }
 
-    public bool ThereforeConfigured =>
-        !string.IsNullOrWhiteSpace(ThereforeBaseUrl) &&
-        (ThereforeAuthMethod == ThereforeAuthMethod.Bearer
-            ? !string.IsNullOrWhiteSpace(ThereforeBearerToken)
-            : !string.IsNullOrWhiteSpace(ThereforeUsername) && !string.IsNullOrWhiteSpace(ThereforePassword));
+    /// <summary>Moves an older settings file's Therefore connection into <see cref="Connections"/> as
+    /// "Therefore", and clears the old fields. Returns true when there was one to move.</summary>
+    public bool MigrateLegacyTherefore()
+    {
+        var hasLegacy = !string.IsNullOrWhiteSpace(ThereforeBaseUrl) || !string.IsNullOrWhiteSpace(ThereforeTenantName);
+        if (hasLegacy)
+        {
+            var name = "Therefore";
+            for (var n = 2; Connections.Any(connection => string.Equals(connection.Name, name, StringComparison.OrdinalIgnoreCase)); n++)
+                name = $"Therefore {n}";
+            // Ahead of any others, so exports saved without a connection id still resolve to it.
+            Connections.Insert(0, new ConnectionDefinition
+            {
+                Name = name,
+                Type = ConnectionType.Therefore,
+                BaseUrl = ThereforeBaseUrl,
+                TenantName = ThereforeTenantName,
+                AuthMethod = ThereforeAuthMethod == ThereforeAuthMethod.Bearer ? ConnectionAuthMethod.Bearer : ConnectionAuthMethod.Basic,
+                Username = ThereforeUsername,
+                Password = ThereforePassword,
+                Token = ThereforeBearerToken
+            });
+        }
+
+        ThereforeBaseUrl = null;
+        ThereforeTenantName = null;
+        ThereforeAuthMethod = ThereforeAuthMethod.Basic;
+        ThereforeUsername = null;
+        ThereforePassword = null;
+        ThereforeBearerToken = null;
+        return hasLegacy;
+    }
 }
 
 public enum ScanInputSource

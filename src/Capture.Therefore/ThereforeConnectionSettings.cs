@@ -6,8 +6,8 @@ public enum ThereforeAuthMethod
     Bearer = 1
 }
 
-/// <summary>The one shared Therefore server connection (see <c>WatchSettings</c>'s Therefore* fields,
-/// which this is built from at call time — never persisted as its own object).</summary>
+/// <summary>What <see cref="ThereforeClient"/> needs to reach a server, built at call time from a
+/// Therefore <see cref="Capture.Core.Watch.ConnectionDefinition"/> — never persisted as its own object.</summary>
 public sealed class ThereforeConnectionSettings
 {
     public required string BaseUrl { get; init; }
@@ -21,4 +21,14 @@ public sealed class ThereforeConnectionSettings
     public string? Username { get; init; }
     public string? Password { get; init; }
     public string? BearerToken { get; init; }
+
+    public static ThereforeConnectionSettings From(Capture.Core.Watch.ConnectionDefinition connection) => new()
+    {
+        BaseUrl = connection.BaseUrl ?? string.Empty,
+        TenantName = string.IsNullOrWhiteSpace(connection.TenantName) ? null : connection.TenantName.Trim(),
+        AuthMethod = connection.AuthMethod == Capture.Core.Watch.ConnectionAuthMethod.Bearer ? ThereforeAuthMethod.Bearer : ThereforeAuthMethod.Basic,
+        Username = connection.Username,
+        Password = connection.Password,
+        BearerToken = connection.Token
+    };
 }

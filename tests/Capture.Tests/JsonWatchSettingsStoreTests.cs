@@ -98,46 +98,84 @@ public class JsonWatchSettingsStoreTests
     }
 
     [Fact]
-    public async Task Stores_the_therefore_password_and_bearer_token_independently_of_the_ai_key()
+    public async Task Each_connection_keeps_its_secrets_out_of_the_settings_file()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
         var credentialStore = new FakeCredentialStore();
         var store = new JsonWatchSettingsStore(paths, credentialStore);
-
-        await store.SaveAsync(new WatchSettings
+        var therefore = new ConnectionDefinition
         {
-            AiApiKey = "sk-ai-secret",
-            ThereforeBaseUrl = "https://sampletenant.thereforeonline.com",
-            ThereforeTenantName = "sampletenant",
-            ThereforeAuthMethod = ThereforeAuthMethod.Basic,
-            ThereforeUsername = "sample.user",
-            ThereforePassword = "th-password-secret",
-            ThereforeBearerToken = "th-bearer-secret"
-        });
+            Name = "Therefore",
+            Type = ConnectionType.Therefore,
+            TenantName = "sampletenant",
+            AuthMethod = ConnectionAuthMethod.Basic,
+            Username = "sample.user",
+            Password = "th-password-secret"
+        };
+        var xero = new ConnectionDefinition
+        {
+            Name = "Xero",
+            Type = ConnectionType.Rest,
+            BaseUrl = "https://api.xero.com",
+            AuthMethod = ConnectionAuthMethod.Bearer,
+            Token = "xero-token-secret"
+        };
+
+        await store.SaveAsync(new WatchSettings { AiApiKey = "sk-ai-secret", Connections = [therefore, xero] });
 
         var raw = await File.ReadAllTextAsync(paths.SettingsPath);
         Assert.DoesNotContain("sk-ai-secret", raw);
         Assert.DoesNotContain("th-password-secret", raw);
-        Assert.DoesNotContain("th-bearer-secret", raw);
+        Assert.DoesNotContain("xero-token-secret", raw);
 
-        // Each secret lands under its own account name — no collision between the three.
-        // On Windows, Protect() takes the DPAPI branch instead of the IOsCredentialStore, so the
-        // fake store is legitimately never invoked there.
+        // On Windows, Protect() takes the DPAPI branch instead of the IOsCredentialStore.
         if (!OperatingSystem.IsWindows())
         {
-            Assert.Equal("sk-ai-secret", credentialStore.TryRead("AiApiKey"));
-            Assert.Equal("th-password-secret", credentialStore.TryRead("ThereforePassword"));
-            Assert.Equal("th-bearer-secret", credentialStore.TryRead("ThereforeBearerToken"));
+            Assert.Equal("th-password-secret", credentialStore.TryRead($"Connection.{therefore.Id:N}.Password"));
+            Assert.Equal("xero-token-secret", credentialStore.TryRead($"Connection.{xero.Id:N}.Token"));
         }
 
-        var loaded = await store.LoadAsync();
+        // A fresh store reads the file, not its cache.
+        var loaded = await new JsonWatchSettingsStore(paths, credentialStore).LoadAsync();
         Assert.Equal("sk-ai-secret", loaded.AiApiKey);
-        Assert.Equal("th-password-secret", loaded.ThereforePassword);
-        Assert.Equal("th-bearer-secret", loaded.ThereforeBearerToken);
-        Assert.Equal("https://sampletenant.thereforeonline.com", loaded.ThereforeBaseUrl);
-        Assert.Equal("sampletenant", loaded.ThereforeTenantName);
-        Assert.Equal("sample.user", loaded.ThereforeUsername);
-        Assert.True(loaded.ThereforeConfigured);
+        Assert.Equal(["Therefore", "Xero"], loaded.Connections.Select(connection => connection.Name));
+        Assert.Equal("th-password-secret", loaded.Connections[0].Password);
+        Assert.Equal("xero-token-secret", loaded.Connections[1].Token);
+        Assert.All(loaded.Connections, connection => Assert.True(connection.IsConfigured));
+    }
+
+    [Fact]
+    public async Task An_older_settings_file_becomes_a_therefore_connection()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        await File.WriteAllTextAsync(paths.SettingsPath, """
+            {
+              "thereforeBaseUrl": "https://sampletenant.thereforeonline.com",
+              "thereforeTenantName": "sampletenant",
+              "thereforeAuthMethod": "Basic",
+              "thereforeUsername": "sample.user",
+              "thereforePassword": "th-password-secret"
+            }
+            """);
+        var store = new JsonWatchSettingsStore(paths, new FakeCredentialStore());
+
+        var loaded = await store.LoadAsync();
+
+        var connection = Assert.Single(loaded.Connections);
+        Assert.Equal("Therefore", connection.Name);
+        Assert.Equal(ConnectionType.Therefore, connection.Type);
+        Assert.Equal("sampletenant", connection.TenantName);
+        Assert.Equal("sample.user", connection.Username);
+        Assert.Equal("th-password-secret", connection.Password);
+        Assert.Null(loaded.ThereforeBaseUrl);
+        Assert.Same(connection, loaded.FindConnection(null, ConnectionType.Therefore));
+
+        // Saving writes only the new form.
+        await store.SaveAsync(loaded);
+        var raw = await File.ReadAllTextAsync(paths.SettingsPath);
+        Assert.DoesNotContain("thereforeBaseUrl\": \"https", raw);
+        Assert.Single((await new JsonWatchSettingsStore(paths, new FakeCredentialStore()).LoadAsync()).Connections);
     }
 
     [Fact]

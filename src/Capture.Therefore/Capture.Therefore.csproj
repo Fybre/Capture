@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Capture.Core\Capture.Core.csproj" />
+  </ItemGroup>
+
 </Project>

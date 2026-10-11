@@ -16,12 +16,13 @@ public sealed class ThereforeCategoryPickerDialogService : IThereforeCategoryPic
         _toasts = toasts;
     }
 
-    public async Task<ThereforeCategorySelection?> ShowAsync(object owner)
+    public async Task<ThereforeCategorySelection?> ShowAsync(object owner, Guid? connectionId = null)
     {
         if (owner is not Window window)
             return null;
 
         var viewModel = _services.GetRequiredService<ThereforeCategoryPickerViewModel>();
+        viewModel.ConnectionId = connectionId;
         var dialog = new ThereforeCategoryPickerWindow { DataContext = viewModel };
         viewModel.Close = () => dialog.Close();
         await viewModel.InitializeAsync();

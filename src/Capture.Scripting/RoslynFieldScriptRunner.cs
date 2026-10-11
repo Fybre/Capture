@@ -28,6 +28,12 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
     // "is this feature turned on" check — WatchSettings.LoadAsync just reads a small local JSON file.
     public bool IsAvailable => Task.Run(() => _settings.LoadAsync()).GetAwaiter().GetResult().AllowFieldScripts;
 
+    // Loaded only when a script actually uses Connections, so other scripts don't pay for a settings read.
+    private ScriptConnections Connections(CancellationToken cancellationToken) => new(
+        () => Task.Run(() => _settings.LoadAsync(cancellationToken)).GetAwaiter().GetResult().Connections,
+        _http,
+        cancellationToken);
+
     public async Task<ScriptRunResult> RunProfileScriptAsync(
         FieldScript script,
         ScriptExecutionContext context,
@@ -36,12 +42,12 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
     {
         var stopwatch = Stopwatch.StartNew();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, script.TimeoutSeconds)));
+        var timeout = new ScriptTimeout(cts, TimeSpan.FromSeconds(Math.Max(1, script.TimeoutSeconds)));
 
         try
         {
             var compiled = _profileScriptCache.GetOrCompile(script.Id, Combine(sharedSource, script.Source), ProfileScriptOptions, typeof(ScriptGlobals));
-            var globals = new ScriptGlobals(context, _http, script.Name, cts.Token);
+            var globals = new ScriptGlobals(context, _http, Connections(cts.Token), script.Name, cts.Token, timeout);
             await compiled.RunAsync(globals, cancellationToken: cts.Token).ConfigureAwait(false);
             return ScriptRunResult.Ok(null, stopwatch.Elapsed);
         }
@@ -81,7 +87,7 @@ public sealed class RoslynFieldScriptRunner : IFieldScriptRunner
             // caller passes that field's own IndexField.Id) — used here to resolve its own
             // pre-evaluation value for the Value shorthand, not just as a compile-cache key.
             var selfValue = context.Values.FirstOrDefault(v => v.FieldId == scriptCacheKey)?.Value ?? string.Empty;
-            var globals = new ReadOnlyScriptGlobals(context, _http, "field expression", selfValue, cts.Token);
+            var globals = new ReadOnlyScriptGlobals(context, _http, Connections(cts.Token), "field expression", selfValue, cts.Token);
             var state = await compiled.RunAsync(globals, cancellationToken: cts.Token).ConfigureAwait(false);
             return ScriptRunResult.Ok(
                 state.ReturnValue?.ToString() ?? string.Empty,

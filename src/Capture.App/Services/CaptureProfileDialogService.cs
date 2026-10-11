@@ -215,7 +215,7 @@ public sealed class CaptureProfileDialogService(
             profile, store, workflow, dialogs,
             paths, pdfs, images, latticeBuilder, barcodes, blanks, applicator,
             scriptEditor, designer, scriptRunner, redactionEntitySets, piiDetector,
-            thereforeCategoryPicker, ai, help, confirm, toasts);
+            thereforeCategoryPicker, ai, help, confirm, toasts, watchStore);
         designer.DataContext = viewModel;
         await viewModel.InitializeAsync();
         toasts.AttachHost(designer);
