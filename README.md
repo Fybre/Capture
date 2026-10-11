@@ -4,9 +4,17 @@
 zonal/pattern/barcode/AI-based indexing, post-indexing redaction, and export to CSV or a
 Therefore Online repository.
 
+<a href="https://apps.microsoft.com/detail/9PMNN89ST3W7?mode=direct">
+  <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get it from Microsoft" />
+</a>
+
 **Download the latest release:**
 [macOS (.dmg)](https://github.com/Fybre/Capture/releases/latest/download/Capture.dmg) ·
 [Windows (.exe installer)](https://github.com/Fybre/Capture/releases/latest/download/CaptureSetup.exe)
+
+On Windows, the [Microsoft Store version](https://apps.microsoft.com/detail/9PMNN89ST3W7) installs and updates through the
+Store. Its settings and capture profiles are separate from the .exe installer's; use Settings ▸ Back up… and Restore…
+to move them across.
 
 ## Features
 
