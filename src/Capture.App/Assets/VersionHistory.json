@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.8.20",
+    "date": "2026-10-12",
+    "changes": [
+      "Choosing the category for an existing Therefore export now ticks only the fields the export already had, instead of every field. This makes repointing an export at another Therefore system much quicker: fields are matched by name there, because field numbers differ between systems.",
+      "Longer field messages in review, such as \"AI isn't set up\", now show under the field instead of over its name."
+    ]
+  },
+  {
     "version": "0.8.19",
     "date": "2026-10-12",
     "changes": [

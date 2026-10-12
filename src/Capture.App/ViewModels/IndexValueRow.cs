@@ -188,7 +188,7 @@ public sealed partial class IndexValueRow : ObservableObject
             if (Value.IsMissing)
                 return "Missing";
             if (Value.ValidationError is not null)
-                return Value.ValidationError;
+                return HasErrorDetail ? "Not filled in" : Value.ValidationError;
             if (Value.IsLowConfidence(_threshold))
                 return "Low conf";
             return string.Empty;
@@ -198,6 +198,14 @@ public sealed partial class IndexValueRow : ObservableObject
     public bool HasFlag => Flag.Length > 0;
 
     public bool HasFormatError => Value.ValidationError is not null;
+
+    // A short error ("Expected a date") fits in the header beside the field name; a longer one (an AI
+    // setup or service problem) shows wrapped under the input instead, leaving a short header flag.
+    private const int MaxHeaderFlagLength = 24;
+
+    public bool HasErrorDetail => Value.ValidationError is { Length: > MaxHeaderFlagLength } && !Value.IsConditionInactive;
+
+    public string ErrorDetail => HasErrorDetail ? Value.ValidationError! : string.Empty;
 
     public string ConfidenceDisplay => Value.IsManual
         ? "Manual"
@@ -254,6 +262,8 @@ public sealed partial class IndexValueRow : ObservableObject
         OnPropertyChanged(nameof(Flag));
         OnPropertyChanged(nameof(HasFlag));
         OnPropertyChanged(nameof(HasFormatError));
+        OnPropertyChanged(nameof(HasErrorDetail));
+        OnPropertyChanged(nameof(ErrorDetail));
         OnPropertyChanged(nameof(ConfidenceDisplay));
         OnPropertyChanged(nameof(ConfidenceValue));
         Changed?.Invoke();
@@ -274,6 +284,8 @@ public sealed partial class IndexValueRow : ObservableObject
         OnPropertyChanged(nameof(Flag));
         OnPropertyChanged(nameof(HasFlag));
         OnPropertyChanged(nameof(HasFormatError));
+        OnPropertyChanged(nameof(HasErrorDetail));
+        OnPropertyChanged(nameof(ErrorDetail));
         OnPropertyChanged(nameof(ConfidenceDisplay));
         OnPropertyChanged(nameof(ConfidenceValue));
         OnPropertyChanged(nameof(ButtonStatus));

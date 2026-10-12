@@ -83,6 +83,9 @@
                               ToolTip.Tip="Read only" />
                         <TextBlock Grid.Column="3"
                                    Text="{Binding Flag}"
+                                   MaxWidth="140"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="6,0,0,0"
                                    Foreground="{DynamicResource WarnBrush}"
                                    IsVisible="{Binding HasFlag}"
                                    FontSize="11"
@@ -148,6 +151,11 @@
                                    TextWrapping="Wrap"
                                    Classes="hint" />
                     </StackPanel>
+                    <TextBlock Text="{Binding ErrorDetail}"
+                               IsVisible="{Binding HasErrorDetail}"
+                               Foreground="{DynamicResource WarnBrush}"
+                               TextWrapping="Wrap"
+                               FontSize="11" />
                     <TextBlock Text="{Binding ConditionHint}"
                                IsVisible="{Binding IsConditionDisabled}"
                                TextWrapping="Wrap"

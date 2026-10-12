@@ -953,14 +953,17 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private async Task BrowseThereforeCategoryAsync(ExportDefinitionRow? row)
     {
         if (row is null || _thereforeCategoryPicker is null || _dialogs?.Host is not { } host) return;
-        var selection = await _thereforeCategoryPicker.ShowAsync(host, row.Definition.ThereforeConnectionId);
-        if (selection is null) return;
-
         var connectionId = row.Definition.ThereforeConnectionId;
         var categoryConnectionId = row.Definition.ThereforeCategoryConnectionId;
+        bool? sameServer = categoryConnectionId is null ? null : categoryConnectionId == connectionId;
+        var previous = row.Definition.ThereforeFieldMappings;
+        var selection = await _thereforeCategoryPicker.ShowAsync(host, connectionId,
+            previous.Count == 0 ? null : (categoryNo, field) =>
+                FindPreviousMapping(row.Definition.ThereforeCategoryNo, previous, categoryNo, field, sameServer) is not null);
+        if (selection is null) return;
+
         row.Definition.ThereforeFieldMappings = RebuildThereforeFieldMappings(
-            row.Definition.ThereforeCategoryNo, row.Definition.ThereforeFieldMappings, selection,
-            sameServer: categoryConnectionId is null ? null : categoryConnectionId == connectionId);
+            row.Definition.ThereforeCategoryNo, previous, selection, sameServer);
         row.Definition.ThereforeCategoryNo = selection.CategoryNo;
         row.Definition.ThereforeCategoryConnectionId = connectionId;
         row.Definition.ThereforeCategoryName = selection.CategoryName;
@@ -980,45 +983,44 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         bool? sameServer = true)
     {
         var mapped = previousMappings.Where(mapping => mapping.IndexFieldId is not null).ToList();
-        var sameCategory = previousCategoryNo == selection.CategoryNo && sameServer != false;
-        var byFieldNo = mapped.GroupBy(m => m.FieldNo).ToDictionary(g => g.Key, g => g.First());
-        var byName = mapped.Where(m => !string.IsNullOrWhiteSpace(m.IndexDataFieldName))
-            .GroupBy(m => m.IndexDataFieldName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        var byCaption = mapped.Where(m => !string.IsNullOrWhiteSpace(m.Caption))
-            .GroupBy(m => m.Caption, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-        ThereforeFieldMapping? ByName(Capture.Therefore.ThereforeCategoryField field)
+        return selection.Fields.Select(field => new ThereforeFieldMapping
         {
-            if (!string.IsNullOrWhiteSpace(field.IndexDataFieldName) && byName.TryGetValue(field.IndexDataFieldName, out var named))
-                return named;
-            return !string.IsNullOrWhiteSpace(field.Caption) && byCaption.TryGetValue(field.Caption, out var captioned) ? captioned : null;
+            FieldNo = field.FieldNo,
+            Caption = field.Caption,
+            IndexDataFieldName = field.IndexDataFieldName,
+            FieldType = (int)field.FieldType,
+            Mandatory = field.Mandatory,
+            IndexFieldId = FindPreviousMapping(previousCategoryNo, mapped, selection.CategoryNo, field, sameServer)?.IndexFieldId
+        }).ToList();
+    }
+
+    /// <summary>The mapping in <paramref name="previousMappings"/> that stands for <paramref name="field"/> of
+    /// category <paramref name="categoryNo"/>, matched as <see cref="RebuildThereforeFieldMappings"/> describes.</summary>
+    internal static ThereforeFieldMapping? FindPreviousMapping(
+        int? previousCategoryNo, IReadOnlyList<ThereforeFieldMapping> previousMappings, int categoryNo,
+        Capture.Therefore.ThereforeCategoryField field, bool? sameServer)
+    {
+        var sameCategory = previousCategoryNo == categoryNo && sameServer != false;
+        if (sameCategory)
+        {
+            var numbered = previousMappings.FirstOrDefault(mapping => mapping.FieldNo == field.FieldNo);
+            if (numbered is not null && (sameServer == true || NamesAgree(numbered, field)))
+                return numbered;
+            if (sameServer == true)
+                return null;
         }
+
+        if (!string.IsNullOrWhiteSpace(field.IndexDataFieldName)
+            && previousMappings.FirstOrDefault(mapping => string.Equals(mapping.IndexDataFieldName, field.IndexDataFieldName, StringComparison.OrdinalIgnoreCase)) is { } named)
+            return named;
+        return string.IsNullOrWhiteSpace(field.Caption)
+            ? null
+            : previousMappings.FirstOrDefault(mapping => string.Equals(mapping.Caption, field.Caption, StringComparison.OrdinalIgnoreCase));
 
         static bool NamesAgree(ThereforeFieldMapping mapping, Capture.Therefore.ThereforeCategoryField field) =>
             string.IsNullOrWhiteSpace(mapping.IndexDataFieldName) || string.IsNullOrWhiteSpace(field.IndexDataFieldName)
                 ? string.Equals(mapping.Caption, field.Caption, StringComparison.OrdinalIgnoreCase)
                 : string.Equals(mapping.IndexDataFieldName, field.IndexDataFieldName, StringComparison.OrdinalIgnoreCase);
-
-        return selection.Fields.Select(field =>
-        {
-            ThereforeFieldMapping? existing = null;
-            if (sameCategory && byFieldNo.TryGetValue(field.FieldNo, out var numbered) && (sameServer == true || NamesAgree(numbered, field)))
-                existing = numbered;
-            else if (!sameCategory || sameServer is null)
-                existing = ByName(field);
-
-            return new ThereforeFieldMapping
-            {
-                FieldNo = field.FieldNo,
-                Caption = field.Caption,
-                IndexDataFieldName = field.IndexDataFieldName,
-                FieldType = (int)field.FieldType,
-                Mandatory = field.Mandatory,
-                IndexFieldId = existing?.IndexFieldId
-            };
-        }).ToList();
     }
 
     public IReadOnlyList<string> Validate()

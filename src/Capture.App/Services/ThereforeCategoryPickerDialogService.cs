@@ -1,3 +1,4 @@
+using Capture.Therefore;
 using Avalonia.Controls;
 using Capture.App.ViewModels;
 using Capture.App.Views;
@@ -16,13 +17,15 @@ public sealed class ThereforeCategoryPickerDialogService : IThereforeCategoryPic
         _toasts = toasts;
     }
 
-    public async Task<ThereforeCategorySelection?> ShowAsync(object owner, Guid? connectionId = null)
+    public async Task<ThereforeCategorySelection?> ShowAsync(object owner, Guid? connectionId = null,
+        Func<int, ThereforeCategoryField, bool>? wasIncluded = null)
     {
         if (owner is not Window window)
             return null;
 
         var viewModel = _services.GetRequiredService<ThereforeCategoryPickerViewModel>();
         viewModel.ConnectionId = connectionId;
+        viewModel.WasIncluded = wasIncluded;
         var dialog = new ThereforeCategoryPickerWindow { DataContext = viewModel };
         viewModel.Close = () => dialog.Close();
         await viewModel.InitializeAsync();

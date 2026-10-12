@@ -9,5 +9,9 @@ public sealed record ThereforeCategorySelection(
 
 public interface IThereforeCategoryPickerDialogService
 {
-    Task<ThereforeCategorySelection?> ShowAsync(object owner, Guid? connectionId = null);
+    /// <param name="wasIncluded">Given a loaded category's number and one of its fields, whether the export
+    /// already had that field — so re-picking (or repointing to another server) ticks the same fields
+    /// rather than all of them. Null ticks every field, as for a new export.</param>
+    Task<ThereforeCategorySelection?> ShowAsync(object owner, Guid? connectionId = null,
+        Func<int, ThereforeCategoryField, bool>? wasIncluded = null);
 }

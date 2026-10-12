@@ -45,6 +45,30 @@ public sealed class CaptureProfileDesignerUxTests
     }
 
     [Fact]
+    public void Repointing_to_another_server_finds_only_the_fields_the_export_already_had()
+    {
+        // The export included Invoice No and Supplier (one unmapped), but not Notes or Amount.
+        var previous = new List<ThereforeFieldMapping>
+        {
+            new() { FieldNo = 101, Caption = "Invoice No", IndexDataFieldName = "Invoice_No", IndexFieldId = Guid.NewGuid() },
+            new() { FieldNo = 102, Caption = "Supplier", IndexDataFieldName = "Supplier", IndexFieldId = null }
+        };
+        var newServerFields = new[]
+        {
+            CategoryField(901, "Invoice No", "Invoice_No"),
+            CategoryField(902, "Supplier", "Supplier"),
+            CategoryField(101, "Notes", "Notes"),   // reuses an old FieldNo, but it's a different field
+            CategoryField(904, "Amount", "Amount")
+        };
+
+        var included = newServerFields
+            .Where(field => CaptureProfileDesignerViewModel.FindPreviousMapping(360, previous, 360, field, sameServer: false) is not null)
+            .Select(field => field.Caption);
+
+        Assert.Equal(["Invoice No", "Supplier"], included);
+    }
+
+    [Fact]
     public void Repicking_the_same_category_keeps_mappings_by_field_number()
     {
         var id = Guid.NewGuid();

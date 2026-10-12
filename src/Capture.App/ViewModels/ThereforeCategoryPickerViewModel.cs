@@ -99,6 +99,9 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
     /// <summary>The export's chosen Therefore connection; null uses the first one.</summary>
     public Guid? ConnectionId { get; set; }
 
+    /// <summary>See <see cref="Services.IThereforeCategoryPickerDialogService.ShowAsync"/>.</summary>
+    public Func<int, ThereforeCategoryField, bool>? WasIncluded { get; set; }
+
     public async Task InitializeAsync()
     {
         var settings = await _watchSettings.LoadAsync().ConfigureAwait(true);
@@ -156,9 +159,18 @@ public partial class ThereforeCategoryPickerViewModel : ViewModelBase
                 .Where(field => field.FieldType is not (ThereforeFieldType.Label or ThereforeFieldType.NumericCounter or ThereforeFieldType.TextCounter))
                 .ToList();
 
+            // Tick the fields the export already had. If none of them are in this category (a different
+            // one entirely), fall back to ticking everything, as for a new export.
+            var previouslyIncluded = WasIncluded is { } wasIncluded
+                ? selectable.Where(field => wasIncluded(info.CategoryNo, field)).ToHashSet()
+                : [];
             Fields.Clear();
             foreach (var field in selectable)
-                Fields.Add(new ThereforeCategoryFieldRow(field, isIncluded: !LooksLikeKeywordTextShadow(field, selectable)));
+            {
+                Fields.Add(new ThereforeCategoryFieldRow(field, isIncluded: previouslyIncluded.Count > 0
+                    ? previouslyIncluded.Contains(field)
+                    : !LooksLikeKeywordTextShadow(field, selectable)));
+            }
 
             OnPropertyChanged(nameof(HasFields));
             StatusText = $"Loaded {Fields.Count} field(s) from \"{info.Name}\"";
