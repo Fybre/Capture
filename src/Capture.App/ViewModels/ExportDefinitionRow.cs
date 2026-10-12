@@ -58,9 +58,15 @@ public sealed partial class ThereforeFieldMappingRow : ObservableObject
     public bool Mandatory => Mapping.Mandatory;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMapped))]
     private FieldSelectionRow? _selectedField;
 
+    public bool IsMapped => SelectedField is not null;
+
     partial void OnSelectedFieldChanged(FieldSelectionRow? value) => Mapping.IndexFieldId = value?.Id;
+
+    [RelayCommand]
+    private void Clear() => SelectedField = null;
 }
 
 /// <summary>One custom HTTP header row in a Rest export's designer panel — mirrors

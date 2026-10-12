@@ -76,13 +76,31 @@ public sealed class ProfileApplicator : IProfileApplicator
     {
         var results = ExtractAll(fields, locale, lattices, pages, batchSeparatorValue);
         ApplyBoundaryValues(fields, results, existingValues, locale);
-        await FillAiAsync(fields, locale, lattices, results, cancellationToken).ConfigureAwait(false);
+        var aiProblem = await FillAiAsync(fields, locale, lattices, results, cancellationToken).ConfigureAwait(false);
         await FillFieldScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
         await RunProfileScriptsAsync(fields, scripts, sharedScriptSource, profileName, locale, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
         ApplyDefaults(fields, profileName, locale, results, context, existingValues, pages?.Count ?? lattices.Count);
         await ApplyPostProcessScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
+        FlagAiProblem(fields, results, aiProblem);
         FieldConditions.Apply(results, context?.BatchValues);
         return results;
+    }
+
+    // Done last, because scripts re-validate every field: an AI field nothing else filled in gets the
+    // reason AI didn't, so the document goes to review saying why instead of just having a blank field.
+    private static void FlagAiProblem(IReadOnlyList<IndexField> fields, List<IndexValue> results, string? aiProblem)
+    {
+        if (aiProblem is null)
+            return;
+
+        foreach (var field in fields.Where(field => field.Kind == FieldKind.Ai))
+        {
+            if (results.FirstOrDefault(item => item.FieldId == field.Id) is { ValidationError: null } value
+                && string.IsNullOrWhiteSpace(value.Value))
+            {
+                value.ValidationError = aiProblem;
+            }
+        }
     }
 
     /// <summary>True when a field's value is worked out from other fields, so <see cref="RecalculateAsync"/>
@@ -173,7 +191,9 @@ public sealed class ProfileApplicator : IProfileApplicator
         return results;
     }
 
-    private async Task FillAiAsync(
+    /// <summary>Fills AI fields, returning why it couldn't (AI not set up, or the call failed) or null.
+    /// A failed call doesn't fail the document: its other fields still get their values.</summary>
+    private async Task<string?> FillAiAsync(
         IReadOnlyList<IndexField> fields,
         string? locale,
         IReadOnlyList<PageLattice> lattices,
@@ -181,11 +201,23 @@ public sealed class ProfileApplicator : IProfileApplicator
         CancellationToken cancellationToken)
     {
         var aiFields = fields.Where(field => field.Kind == FieldKind.Ai).ToList();
-        if (aiFields.Count == 0 || _ai is null || !_ai.IsConfigured)
-            return;
+        if (aiFields.Count == 0)
+            return null;
+        if (_ai is null || !_ai.IsConfigured)
+            return "AI isn't set up — choose a provider in Settings ▸ AI extraction.";
 
-        var extracted = await _ai.ExtractAsync(DocumentText.FromLattices(lattices), aiFields, cancellationToken)
-            .ConfigureAwait(false);
+        IReadOnlyDictionary<Guid, AiExtractedValue> extracted;
+        try
+        {
+            extracted = await _ai.ExtractAsync(DocumentText.FromLattices(lattices), aiFields, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            Trace.TraceError($"AI extraction failed: {ex}");
+            return $"AI extraction failed: {ex.Message}";
+        }
+
         foreach (var field in aiFields)
         {
             if (!extracted.TryGetValue(field.Id, out var hit))
@@ -209,6 +241,8 @@ public sealed class ProfileApplicator : IProfileApplicator
                 value.Bounds = located.Bounds;
             }
         }
+
+        return null;
     }
 
     // Evaluates each Script-kind field's ScriptExpression in field-list order — deliberately

@@ -651,15 +651,60 @@ public class ProfileApplicatorTests
         Assert.Equal(field.PageNumber, value.PageNumber);
     }
 
+    [Fact]
+    public async Task Ai_fields_say_so_when_ai_is_not_set_up()
+    {
+        var ai = new IndexField { Name = "Supplier", Kind = FieldKind.Ai };
+        var text = new IndexField { Name = "Reference", Kind = FieldKind.Text, DefaultValueTemplate = "REF-1" };
+        var documentType = new DocumentTypeDefinition { Fields = [ai, text] };
+
+        var values = await new ProfileApplicator(ai: new FakeAiExtractor { Configured = false })
+            .ApplyAsync(documentType, [new PageLattice { PageNumber = 1 }]);
+
+        Assert.Contains("isn't set up", values.Single(value => value.FieldId == ai.Id).ValidationError);
+        Assert.Null(values.Single(value => value.FieldId == text.Id).ValidationError);
+        Assert.Equal(DocumentStatus.NeedsReview, IndexFormat.StatusFor(values, 0));
+    }
+
+    [Fact]
+    public async Task A_failed_ai_call_is_reported_on_its_fields_and_the_rest_still_fill_in()
+    {
+        var ai = new IndexField { Name = "Supplier", Kind = FieldKind.Ai };
+        var text = new IndexField { Name = "Reference", Kind = FieldKind.Text, DefaultValueTemplate = "REF-1" };
+        var documentType = new DocumentTypeDefinition { Fields = [ai, text] };
+        var extractor = new FakeAiExtractor { Failure = new InvalidOperationException("the AI service returned 401") };
+
+        var values = await new ProfileApplicator(ai: extractor).ApplyAsync(documentType, [new PageLattice { PageNumber = 1 }]);
+
+        Assert.Equal("AI extraction failed: the AI service returned 401", values.Single(value => value.FieldId == ai.Id).ValidationError);
+        Assert.Equal("REF-1", values.Single(value => value.FieldId == text.Id).Value);
+    }
+
+    [Fact]
+    public async Task A_cancelled_ai_call_still_cancels()
+    {
+        var documentType = new DocumentTypeDefinition { Fields = [new IndexField { Name = "Supplier", Kind = FieldKind.Ai }] };
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+        var extractor = new FakeAiExtractor { Failure = new OperationCanceledException(cancel.Token) };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ProfileApplicator(ai: extractor).ApplyAsync(documentType, [new PageLattice { PageNumber = 1 }], cancellationToken: cancel.Token));
+    }
+
     private sealed class FakeAiExtractor : IAiExtractor
     {
         private readonly Dictionary<Guid, AiExtractedValue> _values = [];
-        public bool IsConfigured => true;
+        public bool Configured { get; init; } = true;
+        public Exception? Failure { get; init; }
+        public bool IsConfigured => Configured;
         public AiExtractedValue this[Guid fieldId] { set => _values[fieldId] = value; }
 
         public Task<IReadOnlyDictionary<Guid, AiExtractedValue>> ExtractAsync(
             string documentText, IReadOnlyList<IndexField> fields, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyDictionary<Guid, AiExtractedValue>>(_values);
+            Failure is not null
+                ? Task.FromException<IReadOnlyDictionary<Guid, AiExtractedValue>>(Failure)
+                : Task.FromResult<IReadOnlyDictionary<Guid, AiExtractedValue>>(_values);
     }
 
     private static LatticeWord Word(string text, float x, float y) => new()

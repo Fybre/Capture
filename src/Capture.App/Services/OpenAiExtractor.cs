@@ -57,11 +57,33 @@ public sealed class OpenAiExtractor : IAiExtractor
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"AI extract failed ({(int)response.StatusCode}).");
+            throw new InvalidOperationException($"the AI service returned {(int)response.StatusCode}{ErrorDetail(body)}.");
 
         var parsed = JsonSerializer.Deserialize<ChatResponse>(body, Json);
         var content = parsed?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
         return AiExtractPrompt.Parse(content, fields);
+    }
+
+    // OpenAI-style errors carry {"error":{"message":"..."}}; anything else is left out rather than
+    // putting a page of HTML into a field's error.
+    private static string ErrorDetail(string body)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(body);
+            if (json.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.Object
+                && error.TryGetProperty("message", out var message)
+                && message.GetString() is { Length: > 0 } text)
+            {
+                return " — " + (text.Length > 200 ? text[..200] + "…" : text);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return string.Empty;
     }
 
     private sealed class ChatResponse

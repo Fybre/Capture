@@ -411,11 +411,13 @@
                           <ItemsControl ItemsSource="{Binding ThereforeMappings}">
                             <ItemsControl.ItemTemplate>
                               <DataTemplate>
-                                <Grid ColumnDefinitions="2*,3*" ColumnSpacing="8" Margin="0,3">
+                                <Grid ColumnDefinitions="2*,3*,Auto" ColumnSpacing="8" Margin="0,3">
                                   <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="•" Foreground="{DynamicResource WarnBrush}" ToolTip.Tip="Mandatory in Therefore" IsVisible="{Binding Mandatory}"/>
                                   </StackPanel>
+                                  <Button Grid.Column="2" Content="✕" Classes="ghost" Command="{Binding ClearCommand}"
+                                          IsEnabled="{Binding IsMapped}" ToolTip.Tip="Clear this mapping (leave the Therefore field unmapped)"/>
                                   <ComboBox Grid.Column="1" ItemsSource="{Binding ProfileFields}" SelectedItem="{Binding SelectedField}"
                                             PlaceholderText="Choose field…" HorizontalAlignment="Stretch">
                                     <ComboBox.ItemTemplate>

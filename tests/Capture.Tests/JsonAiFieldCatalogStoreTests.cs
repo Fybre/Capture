@@ -90,4 +90,45 @@ public class AiFieldCatalogLoadTests
             AiFieldCatalog.Load(null);
         }
     }
+
+    [Fact]
+    public async Task Adds_new_built_in_types_to_an_older_catalog_once()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-ai-catalog-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        await File.WriteAllTextAsync(paths.AiFieldCatalogPath, """
+            [
+              { "id": "invoice.number", "classification": "Invoice", "name": "Invoice No", "format": "string", "hint": "Edited hint." },
+              { "id": "invoice.total", "classification": "Invoice", "name": "Invoice Total", "format": "money", "hint": "" },
+              { "id": "letter.date", "classification": "Correspondence", "name": "Letter Date", "format": "date", "hint": "" }
+            ]
+            """);
+        var store = new JsonAiFieldCatalogStore(paths);
+
+        var types = await store.LoadAsync();
+
+        Assert.Equal(["invoice.number", "invoice.total", "invoice.abn", "invoice.net", "letter.date"], types.Select(item => item.Id));
+        Assert.Equal("Edited hint.", types[0].Hint);
+
+        // Deleting a newly added type keeps it deleted.
+        await File.WriteAllTextAsync(paths.AiFieldCatalogPath, """
+            [ { "id": "invoice.number", "classification": "Invoice", "name": "Invoice No", "format": "string", "hint": "" } ]
+            """);
+        types = await store.LoadAsync();
+        Assert.Equal(["invoice.number"], types.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task New_built_in_types_skip_classifications_the_catalog_no_longer_uses()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-ai-catalog-" + Guid.NewGuid().ToString("N")));
+        paths.EnsureCreated();
+        await File.WriteAllTextAsync(paths.AiFieldCatalogPath, """
+            [ { "id": "shipping.container", "classification": "Shipping", "name": "Container No", "format": "string", "hint": "" } ]
+            """);
+
+        var types = await new JsonAiFieldCatalogStore(paths).LoadAsync();
+
+        Assert.Equal(["shipping.container"], types.Select(item => item.Id));
+    }
 }

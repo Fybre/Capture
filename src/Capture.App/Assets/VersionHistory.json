@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.8.19",
+    "date": "2026-10-12",
+    "changes": [
+      "AI fields now say why they're empty. If AI isn't set up, each AI field shows \"AI isn't set up\" and the document goes to review. If the AI service fails, its fields show the error — including the service's own message, such as an incorrect API key — and the rest of the document is still indexed instead of the whole capture failing.",
+      "The AI field catalog has two new Invoice types: ABN (the supplier's Australian Business Number, in NN NNN NNN NNN format) and Total Net (the invoice total before tax). New built-in types are now added to an existing catalog file once, so they appear without resetting it; types you've deleted or edited are left alone.",
+      "A Therefore export's field mapping can now be cleared with the ✕ beside it, leaving that Therefore field unmapped."
+    ]
+  },
+  {
     "version": "0.8.18",
     "date": "2026-10-11",
     "changes": [
