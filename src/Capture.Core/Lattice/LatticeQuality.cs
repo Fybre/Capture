@@ -29,4 +29,16 @@ public static class LatticeQuality
 
         return true;
     }
+
+    /// <summary>Whether built-in OCR read a page badly enough to try an external service — typically
+    /// handwriting, which comes back as low-confidence fragments. A page with no words at all is taken
+    /// to be blank and isn't sent.</summary>
+    public static bool IsPoorOcr(IReadOnlyList<LatticeWord> words, int minConfidence)
+    {
+        if (words.Count == 0)
+            return false;
+        var characters = words.Sum(word => Math.Max(1, word.Text.Length));
+        var confidence = words.Sum(word => word.Confidence * Math.Max(1, word.Text.Length)) / characters;
+        return confidence < minConfidence || !LooksLikeRealText(words);
+    }
 }

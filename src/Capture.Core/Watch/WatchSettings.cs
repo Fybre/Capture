@@ -24,6 +24,10 @@ public sealed class WatchSettings
     public string? AiModel { get; set; } = "gpt-4o-mini";
     public int AiMaxDocumentChars { get; set; } = AiExtractPrompt.MaxDocumentChars;
 
+    /// <summary>Whether AI document separation sends page images (as well as their text) to the cloud
+    /// provider. Off for endpoints whose models can't read images; the local model never gets them.</summary>
+    public bool AiSendPageImages { get; set; } = true;
+
     /// <summary>Which extractor <c>AiExtractorRouter</c> delegates to — the cloud OpenAI-compatible
     /// endpoint above, or a locally-downloaded model (see Capture.LocalAi).</summary>
     public AiProvider AiProvider { get; set; } = AiProvider.OpenAiCompatible;

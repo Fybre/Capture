@@ -4,6 +4,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using System.Linq;
 using Avalonia.VisualTree;
 using Capture.App.ViewModels;
 
@@ -29,6 +32,43 @@ public partial class CaptureProfileDesignerView : UserControl
         InitializeComponent();
         WireDocumentTypeDragDrop(DocumentTypeList);
         WireExportDragDrop(ExportsList);
+        WireTestCaptureDrop(TestCaptureDropZone);
+    }
+
+    // Files or folders dragged from Finder/Explorer onto the Test Capture drop zone are previewed, the
+    // same as choosing them with the button.
+    private void WireTestCaptureDrop(Border zone)
+    {
+        DragDrop.SetAllowDrop(zone, true);
+        zone.AddHandler(DragDrop.DragOverEvent, OnTestCaptureDragOver);
+        zone.AddHandler(DragDrop.DragLeaveEvent, (_, _) => zone.BorderBrush = (IBrush?)this.FindResource("BorderBrush1"));
+        zone.AddHandler(DragDrop.DropEvent, OnTestCaptureDrop);
+    }
+
+    private void OnTestCaptureDragOver(object? sender, DragEventArgs e)
+    {
+        var accepts = e.Data.Contains(DataFormats.Files)
+            && DataContext is CaptureProfileDesignerViewModel viewModel && viewModel.CanRunTestCapture();
+        e.DragEffects = accepts ? DragDropEffects.Copy : DragDropEffects.None;
+        if (sender is Border zone)
+            zone.BorderBrush = (IBrush?)this.FindResource(accepts ? "AccentBrush1" : "BorderBrush1");
+        e.Handled = true;
+    }
+
+    private async void OnTestCaptureDrop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is Border zone)
+            zone.BorderBrush = (IBrush?)this.FindResource("BorderBrush1");
+        if (DataContext is not CaptureProfileDesignerViewModel viewModel || !e.Data.Contains(DataFormats.Files))
+            return;
+
+        var paths = (e.Data.GetFiles() ?? [])
+            .Select(item => item.TryGetLocalPath())
+            .OfType<string>()
+            .ToList();
+        if (paths.Count > 0)
+            await viewModel.TestCaptureDroppedPathsAsync(paths);
     }
 
     private ColumnExpander? _rightPanel;

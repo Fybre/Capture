@@ -16,6 +16,9 @@ public sealed class SkiaImagePageImporter : IImagePageImporter
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
 
+        if (TiffPageReader.IsTiff(imagePath))
+            return Task.Run(() => ImportTiff(imagePath, outputDirectory, dpiOverride, cancellationToken), cancellationToken);
+
         return Task.Run(() =>
         {
             using var stream = File.OpenRead(imagePath);
@@ -50,5 +53,25 @@ public sealed class SkiaImagePageImporter : IImagePageImporter
 
             return (IReadOnlyList<RasterPage>)pages;
         }, cancellationToken);
+    }
+
+    // SkiaSharp has no TIFF decoder. A TIFF also carries the scan's resolution, which is kept so OCR
+    // and zones measure the page correctly instead of assuming 96 dpi.
+    private static IReadOnlyList<RasterPage> ImportTiff(string imagePath, string outputDirectory, int? dpiOverride, CancellationToken cancellationToken)
+    {
+        var pages = new List<RasterPage>();
+        TiffPageReader.ReadPages(imagePath, (bitmap, dpi) =>
+        {
+            var number = pages.Count + 1;
+            var outPath = Path.Combine(outputDirectory, $"{number:D4}.png");
+            using (var output = File.Create(outPath))
+            {
+                if (!bitmap.Encode(output, SKEncodedImageFormat.Png, 90))
+                    throw new InvalidOperationException($"Unable to write page image '{outPath}'.");
+            }
+
+            pages.Add(new RasterPage(number, outPath, bitmap.Width, bitmap.Height, dpiOverride is > 0 ? dpiOverride.Value : dpi ?? 96));
+        }, cancellationToken);
+        return pages;
     }
 }

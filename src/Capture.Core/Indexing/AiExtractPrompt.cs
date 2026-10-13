@@ -112,7 +112,7 @@ public static class AiExtractPrompt
         return fields.FirstOrDefault(field => string.Equals(field.Name, key, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string StripFence(string json)
+    internal static string StripFence(string json)
     {
         json = json.Trim();
         if (!json.StartsWith("```", StringComparison.Ordinal))

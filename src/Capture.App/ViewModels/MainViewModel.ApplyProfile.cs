@@ -86,6 +86,7 @@ public partial class MainViewModel
 
                 await _indexes.SaveAsync(document.Id, values).ConfigureAwait(true);
                 document.ProfileId = type?.Id;
+                document.ReviewNote = null;
                 document.Status = type is not null
                     ? IndexFormat.StatusFor(batchValues.Concat(values), type.AutoReadyThreshold)
                     // A profile with no document types (applying "None"/Unsorted) has nothing to
@@ -117,6 +118,94 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             StatusText = $"Apply profile failed: {ex.Message}";
+            StatusIsError = true;
+            _toasts.ShowError(StatusText);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>The document types the selected document can be changed to: those of the capture
+    /// profile its current type belongs to, or of its batch's profile when it has no type yet.</summary>
+    public async Task<IReadOnlyList<DocumentTypeDefinition>> GetDocumentTypeChoicesAsync()
+    {
+        if (SelectedDocument?.Document is not { } document)
+            return [];
+        var profile = FindCaptureProfileForDocumentType(document.ProfileId);
+        if (profile is null && document.BatchId is { } batchId
+            && (await _store.GetBatchesAsync([batchId]).ConfigureAwait(true)).GetValueOrDefault(batchId)?.CaptureProfileId is { } profileId)
+            profile = _allCaptureProfiles.FirstOrDefault(item => item.Id == profileId);
+        return profile?.DocumentTypes ?? [];
+    }
+
+    public bool IsCurrentDocumentType(DocumentTypeDefinition type) => SelectedDocument?.Document.ProfileId == type.Id;
+
+    /// <summary>Re-files the selected document under another document type of its profile: its fields
+    /// are extracted again for that type, keeping any value the reviewer typed into a field of the same
+    /// name. It stays in its batch.</summary>
+    public async Task ChangeDocumentTypeAsync(DocumentTypeDefinition type)
+    {
+        if (SelectedDocument is not { } row || IsBusy || row.Document.ProfileId == type.Id)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var document = row.Document;
+            var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
+            var lattices = await LoadLatticesAsync(document.Id, pages).ConfigureAwait(true);
+            var previous = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
+            IReadOnlyList<IndexValue> batchValues = [];
+            int batchNumber = 1, documentNumber = 1;
+            if (document.BatchId is { } batchId)
+            {
+                batchValues = await _indexes.GetBatchAsync(batchId).ConfigureAwait(true);
+                batchNumber = await _store.GetBatchNumberAsync(batchId).ConfigureAwait(true);
+                documentNumber = await _store.GetDocumentNumberInBatchAsync(batchId, document.Id).ConfigureAwait(true);
+            }
+
+            var values = await _profileApplicator.ApplyAsync(
+                type,
+                lattices,
+                context: new DefaultValueContext
+                {
+                    BatchNumber = batchNumber,
+                    DocumentNumber = documentNumber,
+                    ScriptScope = ScriptScopeKind.Document,
+                    DocumentType = type.Name,
+                    BatchValues = batchValues
+                },
+                pages: pages,
+                document: document).ConfigureAwait(true);
+            ManualValueCarryOver.Apply(values, previous, type.Locale);
+
+            await _indexes.SaveAsync(document.Id, values).ConfigureAwait(true);
+            document.ProfileId = type.Id;
+            document.ReviewNote = null;
+            document.Status = IndexFormat.StatusFor(batchValues.Concat(values), type.AutoReadyThreshold);
+            await _store.UpdateAsync(document).ConfigureAwait(true);
+
+            row.ConfidenceThreshold = type.AutoReadyThreshold;
+            row.Locale = type.Locale;
+            row.ProfileName = type.Name;
+            row.SetDocumentIndexes(values);
+            row.NotifyIndexes();
+            RefreshDocumentGroups();
+            if (SelectedDocument == row)
+            {
+                LoadReviewIndexes(row);
+                RefreshIndexHighlights();
+            }
+
+            StatusText = $"Changed to {type.Name}";
+            StatusIsError = false;
+            _toasts.ShowSuccess(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Change document type failed: {ex.Message}";
             StatusIsError = true;
             _toasts.ShowError(StatusText);
         }

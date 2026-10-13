@@ -25,6 +25,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly IBackupDialogService _backupDialogs;
     private readonly ICaptureProfileStore _captureProfiles;
     private readonly IAiFieldCatalogStore _catalogStore;
+    private readonly IAiDocumentTypeStore? _documentTypeStore;
     private readonly IRedactionEntitySetStore _redactionEntitySets;
     private readonly IScanSource _scanSource;
     private readonly IAppPaths _paths;
@@ -52,8 +53,10 @@ public partial class SettingsViewModel : ViewModelBase
         IConfirmDialogService confirm,
         IDocumentStore documents,
         CaptureBackupService backup,
-        IBackupDialogService backupDialogs)
+        IBackupDialogService backupDialogs,
+        IAiDocumentTypeStore? documentTypeStore = null)
     {
+        _documentTypeStore = documentTypeStore;
         _backup = backup;
         _backupDialogs = backupDialogs;
         _dialogs = dialogs;
@@ -76,6 +79,8 @@ public partial class SettingsViewModel : ViewModelBase
     public bool HasWatchFolders => WatchFolders.Count > 0;
 
     public string AiFieldCatalogPath => _paths.AiFieldCatalogPath;
+
+    public string AiDocumentTypesPath => _paths.AiDocumentTypesPath;
 
     public IReadOnlyList<WorkspaceMode> StartViewOptions { get; } = Enum.GetValues<WorkspaceMode>();
 
@@ -164,6 +169,9 @@ public partial class SettingsViewModel : ViewModelBase
     private int _aiMaxDocumentChars = AiExtractPrompt.MaxDocumentChars;
 
     [ObservableProperty]
+    private bool _aiSendPageImages = true;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAiOpenAiCompatible))]
     [NotifyPropertyChangedFor(nameof(IsAiLocal))]
     [NotifyPropertyChangedFor(nameof(IsAiNone))]
@@ -190,6 +198,49 @@ public partial class SettingsViewModel : ViewModelBase
     private double _localAiDownloadProgress;
 
     public string LocalAiModelFileName => _localAiModelDownloader.ModelFileName;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowAiTestSuccess), nameof(ShowAiTestFailure))]
+    private string _aiTestResult = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowAiTestSuccess), nameof(ShowAiTestFailure))]
+    private bool _aiTestSucceeded;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TestAiEndpointCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowAiTestSuccess), nameof(ShowAiTestFailure))]
+    private bool _isTestingAi;
+
+    public bool ShowAiTestSuccess => !IsTestingAi && AiTestResult.Length > 0 && AiTestSucceeded;
+
+    public bool ShowAiTestFailure => !IsTestingAi && AiTestResult.Length > 0 && !AiTestSucceeded;
+
+    private bool CanTestAiEndpoint() => !IsTestingAi;
+
+    /// <summary>Sends one small request with the endpoint, key and model as entered (saved or not).</summary>
+    [RelayCommand(CanExecute = nameof(CanTestAiEndpoint))]
+    private async Task TestAiEndpointAsync()
+    {
+        IsTestingAi = true;
+        AiTestResult = string.Empty;
+        AiTestSucceeded = false;
+        try
+        {
+            var model = string.IsNullOrWhiteSpace(AiModel) ? "gpt-4o-mini" : AiModel.Trim();
+            var result = await AiEndpointTester.TestAsync(_http, AiEndpoint ?? string.Empty, AiApiKey ?? string.Empty, model, AiSendPageImages);
+            AiTestSucceeded = result.Success;
+            AiTestResult = result.Message;
+        }
+        catch (Exception ex)
+        {
+            AiTestResult = ex.Message;
+        }
+        finally
+        {
+            IsTestingAi = false;
+        }
+    }
 
     private void RefreshLocalAiModelStatus()
     {
@@ -262,9 +313,17 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private Task AddRestConnectionAsync() => AddConnectionAsync(ConnectionType.Rest);
 
+    [RelayCommand]
+    private Task AddAzureConnectionAsync() => AddConnectionAsync(ConnectionType.AzureDocumentIntelligence);
+
     private async Task AddConnectionAsync(ConnectionType type)
     {
-        var baseName = type == ConnectionType.Therefore ? "Therefore" : "REST";
+        var baseName = type switch
+        {
+            ConnectionType.Therefore => "Therefore",
+            ConnectionType.AzureDocumentIntelligence => "Azure OCR",
+            _ => "REST"
+        };
         var name = baseName;
         for (var n = 2; Connections.Any(row => string.Equals(row.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)); n++)
             name = $"{baseName} {n}";
@@ -273,7 +332,12 @@ public partial class SettingsViewModel : ViewModelBase
         {
             Name = name,
             Type = type,
-            AuthMethod = type == ConnectionType.Therefore ? ConnectionAuthMethod.Basic : ConnectionAuthMethod.None
+            AuthMethod = type switch
+            {
+                ConnectionType.Therefore => ConnectionAuthMethod.Basic,
+                ConnectionType.AzureDocumentIntelligence => ConnectionAuthMethod.ApiKey,
+                _ => ConnectionAuthMethod.None
+            }
         });
         var editor = new ConnectionEditorViewModel(row, isNew: true, Connections.Select(item => item.Name.Trim()).ToList(), _http);
         if (ShowConnectionEditor is null)
@@ -353,6 +417,7 @@ public partial class SettingsViewModel : ViewModelBase
         AiApiKey = settings.AiApiKey ?? string.Empty;
         AiModel = string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel;
         AiMaxDocumentChars = settings.AiMaxDocumentChars > 0 ? settings.AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars;
+        AiSendPageImages = settings.AiSendPageImages;
         AiProvider = settings.AiProvider;
         LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars > 0 ? settings.LocalAiMaxDocumentChars : 12_000;
         RefreshLocalAiModelStatus();
@@ -722,6 +787,7 @@ public partial class SettingsViewModel : ViewModelBase
             AiApiKey = string.IsNullOrWhiteSpace(AiApiKey) ? null : AiApiKey.Trim(),
             AiModel = string.IsNullOrWhiteSpace(AiModel) ? "gpt-4o-mini" : AiModel.Trim(),
             AiMaxDocumentChars = AiMaxDocumentChars > 0 ? AiMaxDocumentChars : AiExtractPrompt.MaxDocumentChars,
+            AiSendPageImages = AiSendPageImages,
             AiProvider = AiProvider,
             LocalAiMaxDocumentChars = LocalAiMaxDocumentChars > 0 ? LocalAiMaxDocumentChars : 12_000,
             Connections = Connections.Select(row => row.ToModel()).ToList(),
@@ -898,7 +964,12 @@ public partial class SettingsViewModel : ViewModelBase
     {
         var types = await _catalogStore.LoadAsync();
         AiFieldCatalog.Load(types);
-        StatusText = $"Reloaded {types.Count} AI field type(s) from {AiFieldCatalogPath}";
+        var documentTypes = _documentTypeStore is null ? null : await _documentTypeStore.LoadAsync();
+        if (documentTypes is not null)
+            AiDocumentTypeCatalog.Load(documentTypes);
+        StatusText = documentTypes is null
+            ? $"Reloaded {types.Count} AI field type(s) from {AiFieldCatalogPath}"
+            : $"Reloaded {types.Count} AI field type(s) and {documentTypes.Count} document type(s)";
         StatusIsError = false;
         _toasts.ShowSuccess(StatusText);
     }

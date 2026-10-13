@@ -45,6 +45,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IWatchFolderService _watch;
     private readonly IWatchSettingsStore _watchStore;
     private readonly IAiFieldCatalogStore _aiCatalogStore;
+    private readonly IAiDocumentTypeStore? _aiDocumentTypeStore;
     private readonly ISettingsDialogService _settings;
     private readonly IHelpWindowService _help;
     private readonly IAboutDialogService _about;
@@ -104,7 +105,8 @@ public partial class MainViewModel : ViewModelBase
         IExportPdfDialogService exportPdfDialog,
         IPdfExportWriter pdfExportWriter,
         IFieldScriptRunner? scripts = null,
-        IEnumerable<IPostIndexStep>? postIndexSteps = null)
+        IEnumerable<IPostIndexStep>? postIndexSteps = null,
+        IAiDocumentTypeStore? aiDocumentTypeStore = null)
     {
         _paths = paths;
         _store = store;
@@ -122,6 +124,7 @@ public partial class MainViewModel : ViewModelBase
         _watch = watch;
         _watchStore = watchStore;
         _aiCatalogStore = aiCatalogStore;
+        _aiDocumentTypeStore = aiDocumentTypeStore;
         _settings = settings;
         _help = help;
         _about = about;
@@ -307,6 +310,8 @@ public partial class MainViewModel : ViewModelBase
             _paths.EnsureCreated();
             await _store.InitializeAsync().ConfigureAwait(true);
             AiFieldCatalog.Load(await _aiCatalogStore.LoadAsync().ConfigureAwait(true));
+            if (_aiDocumentTypeStore is not null)
+                AiDocumentTypeCatalog.Load(await _aiDocumentTypeStore.LoadAsync().ConfigureAwait(true));
             _watchSettings = await _watchStore.LoadAsync().ConfigureAwait(true);
             await LoadProfilesAsync().ConfigureAwait(true);
 

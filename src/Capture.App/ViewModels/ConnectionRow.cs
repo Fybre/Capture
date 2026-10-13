@@ -39,7 +39,17 @@ public sealed partial class ConnectionRow : ObservableObject
 
     public bool IsRest => Type == ConnectionType.Rest;
 
-    public string TypeLabel => IsTherefore ? "Therefore" : "REST";
+    public bool IsAzure => Type == ConnectionType.AzureDocumentIntelligence;
+
+    public string TypeLabel => Type switch
+    {
+        ConnectionType.Therefore => "Therefore",
+        ConnectionType.AzureDocumentIntelligence => "Azure Document Intelligence",
+        _ => "REST"
+    };
+
+    /// <summary>Azure only signs in with its key, so there's no choice to show.</summary>
+    public bool HasAuthChoice => AuthChoices.Count > 1;
 
     public IReadOnlyList<ConnectionAuthChoice> AuthChoices { get; }
 
@@ -86,9 +96,9 @@ public sealed partial class ConnectionRow : ObservableObject
 
     public bool UsesToken => SelectedAuth.Value is ConnectionAuthMethod.Bearer or ConnectionAuthMethod.ApiKey;
 
-    public bool UsesApiKeyHeader => SelectedAuth.Value == ConnectionAuthMethod.ApiKey;
+    public bool UsesApiKeyHeader => SelectedAuth.Value == ConnectionAuthMethod.ApiKey && !IsAzure;
 
-    public string TokenLabel => SelectedAuth.Value == ConnectionAuthMethod.ApiKey ? "API key" : "Bearer token";
+    public string TokenLabel => IsAzure ? "Key" : SelectedAuth.Value == ConnectionAuthMethod.ApiKey ? "API key" : "Bearer token";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Summary))]
@@ -115,7 +125,7 @@ public sealed partial class ConnectionRow : ObservableObject
         {
             var model = ToModel();
             if (model.ServiceUrl is null)
-                return IsTherefore ? "Not set up — no tenant or server address" : "Not set up — no address";
+                return IsTherefore ? "Not set up — no tenant or server address" : IsAzure ? "Not set up — no endpoint" : "Not set up — no address";
             var address = IsTherefore
                 ? string.IsNullOrWhiteSpace(BaseUrl) ? $"https://{TenantName.Trim()}.thereforeonline.com" : BaseUrl.Trim()
                 : BaseUrl.Trim();

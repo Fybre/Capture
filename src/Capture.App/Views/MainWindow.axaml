@@ -788,14 +788,21 @@
                                    VerticalAlignment="Center"
                                    FontSize="12.5"
                                    FontWeight="Medium" />
-                        <Border Classes="chip chip-neutral"
-                                Padding="7,2"
-                                MaxWidth="150"
+                        <Button Classes="ghost"
+                                Padding="0"
+                                MinHeight="0"
+                                Cursor="Hand"
+                                Click="OnDocumentTypeChipClick"
                                 IsVisible="{Binding SelectedDocument, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                ToolTip.Tip="{Binding SelectedDocument.DocumentTypeTooltip}">
-                            <TextBlock Text="{Binding SelectedDocument.DocumentTypeDisplay, StringFormat='Type: {0}'}"
-                                       TextTrimming="CharacterEllipsis" />
-                        </Border>
+                                ToolTip.Tip="Document type — click to change it">
+                            <Border Classes="chip chip-neutral" Padding="7,2" MaxWidth="170">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding SelectedDocument.DocumentTypeDisplay, StringFormat='Type: {0}'}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="▾" FontSize="10" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Button>
                     </StackPanel>
                     <Button Grid.Column="2"
                             Classes="ghost"
@@ -1044,6 +1051,17 @@
                            Margin="16,14,16,8" />
                 <ScrollViewer Grid.Row="1">
                     <StackPanel Margin="16,0">
+                        <Border IsVisible="{Binding HasReviewNote}"
+                                BorderBrush="{DynamicResource WarnBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10,8"
+                                Margin="0,0,0,10">
+                            <TextBlock Text="{Binding ReviewNote}"
+                                       Foreground="{DynamicResource WarnBrush}"
+                                       FontSize="11.5"
+                                       TextWrapping="Wrap" />
+                        </Border>
                         <DockPanel Margin="0,0,0,10"
                                    IsVisible="{Binding HasReviewBatchIndexes}"
                                    LastChildFill="True">

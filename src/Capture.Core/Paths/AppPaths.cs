@@ -23,6 +23,7 @@ public interface IAppPaths
     string RedactionSetJsonPath(Guid redactionSetId);
     string SettingsPath { get; }
     string AiFieldCatalogPath { get; }
+    string AiDocumentTypesPath { get; }
     string DebugLogPath { get; }
     string LocalAiModelsDirectory { get; }
     string LocalAiModelPath { get; }
@@ -42,6 +43,7 @@ public sealed class AppPaths : IAppPaths
         DatabasePath = Path.Combine(Root, "capture.db");
         SettingsPath = Path.Combine(Root, "settings.json");
         AiFieldCatalogPath = Path.Combine(Root, "ai-field-catalog.json");
+        AiDocumentTypesPath = Path.Combine(Root, "ai-document-types.json");
         DebugLogPath = Path.Combine(Root, "logs", "activity.log");
         LocalAiModelsDirectory = Path.Combine(Root, "models");
         LocalAiModelPath = Path.Combine(LocalAiModelsDirectory, "llama-3.2-3b-instruct-q4_k_m.gguf");
@@ -51,6 +53,7 @@ public sealed class AppPaths : IAppPaths
     public string DatabasePath { get; }
     public string SettingsPath { get; }
     public string AiFieldCatalogPath { get; }
+    public string AiDocumentTypesPath { get; }
     public string DebugLogPath { get; }
     public string LocalAiModelsDirectory { get; }
     public string LocalAiModelPath { get; }

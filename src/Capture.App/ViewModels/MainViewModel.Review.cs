@@ -105,8 +105,16 @@ public partial class MainViewModel
         RefreshIndexHighlights();
     }
 
+    /// <summary>Why the selected document was flagged for review beyond its fields — e.g. an AI split it
+    /// wasn't sure of. Cleared when the document is marked Ready.</summary>
+    public string ReviewNote => SelectedDocument?.Document.ReviewNote ?? string.Empty;
+
+    public bool HasReviewNote => ReviewNote.Length > 0;
+
     private void LoadReviewIndexes(DocumentRow? row)
     {
+        OnPropertyChanged(nameof(ReviewNote));
+        OnPropertyChanged(nameof(HasReviewNote));
         ClearReview(ReviewBatchIndexes);
         ClearReview(ReviewDocumentIndexes);
         SelectedIndex = null;

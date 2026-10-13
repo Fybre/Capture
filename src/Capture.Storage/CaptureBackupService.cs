@@ -86,6 +86,7 @@ public sealed class CaptureBackupService(
     private const string ManifestEntry = "manifest.json";
     private const string SettingsEntry = "settings.json";
     private const string AiCatalogEntry = "ai-field-catalog.json";
+    private const string AiDocumentTypesEntry = "ai-document-types.json";
     private const string ProfilesFolder = "capture-profiles/";
     private const string RedactionSetsFolder = "redaction-sets/";
     private const string ProfileFileName = "capture-profile.json";
@@ -160,6 +161,9 @@ public sealed class CaptureBackupService(
                     await WriteJsonAsync(archive, $"{RedactionSetsFolder}{set.Id:N}.json", set, cancellationToken).ConfigureAwait(false);
                 if (includeCatalog)
                     archive.CreateEntryFromFile(paths.AiFieldCatalogPath, AiCatalogEntry, CompressionLevel.Optimal);
+                // The AI document types travel with the field catalog: they refer to its field types.
+                if (includeCatalog && File.Exists(paths.AiDocumentTypesPath))
+                    archive.CreateEntryFromFile(paths.AiDocumentTypesPath, AiDocumentTypesEntry, CompressionLevel.Optimal);
             }
 
             File.Move(temporary, zipPath, overwrite: true);
@@ -297,6 +301,8 @@ public sealed class CaptureBackupService(
 
         if (parts.HasFlag(BackupParts.AiFieldCatalog) && archive?.GetEntry(AiCatalogEntry) is { } catalog)
             catalog.ExtractToFile(paths.AiFieldCatalogPath, overwrite: true);
+        if (parts.HasFlag(BackupParts.AiFieldCatalog) && archive?.GetEntry(AiDocumentTypesEntry) is { } documentTypes)
+            documentTypes.ExtractToFile(paths.AiDocumentTypesPath, overwrite: true);
 
         if (parts.HasFlag(BackupParts.Settings) && backup.Settings is { } settings)
         {

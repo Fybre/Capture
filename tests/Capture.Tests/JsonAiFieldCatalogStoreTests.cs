@@ -107,7 +107,10 @@ public class AiFieldCatalogLoadTests
 
         var types = await store.LoadAsync();
 
-        Assert.Equal(["invoice.number", "invoice.total", "invoice.abn", "invoice.net", "letter.date"], types.Select(item => item.Id));
+        // New types join their classification; new classifications go at the end.
+        Assert.Equal(["invoice.number", "invoice.total", "invoice.abn", "invoice.net", "letter.date"], types.Select(item => item.Id).Take(5));
+        Assert.Equal("credit.number", types[5].Id);
+        Assert.Contains(types, item => item.Id == "statement.closing");
         Assert.Equal("Edited hint.", types[0].Hint);
 
         // Deleting a newly added type keeps it deleted.
@@ -119,7 +122,7 @@ public class AiFieldCatalogLoadTests
     }
 
     [Fact]
-    public async Task New_built_in_types_skip_classifications_the_catalog_no_longer_uses()
+    public async Task A_catalog_of_only_the_users_own_types_is_not_refilled()
     {
         var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-ai-catalog-" + Guid.NewGuid().ToString("N")));
         paths.EnsureCreated();
@@ -130,5 +133,25 @@ public class AiFieldCatalogLoadTests
         var types = await new JsonAiFieldCatalogStore(paths).LoadAsync();
 
         Assert.Equal(["shipping.container"], types.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task Bootstraps_the_document_type_catalog_with_the_built_in_types()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-ai-catalog-" + Guid.NewGuid().ToString("N")));
+
+        var types = await new JsonAiDocumentTypeStore(paths).LoadAsync();
+
+        Assert.True(File.Exists(paths.AiDocumentTypesPath));
+        Assert.Equal(AiDocumentTypeCatalog.DefaultTypes.Select(item => item.Id), types.Select(item => item.Id));
+        var invoice = types.Single(item => item.Id == "invoice");
+        Assert.All(invoice.FieldTypeIds, id => Assert.NotNull(AiFieldCatalog.DefaultTypes.FirstOrDefault(field => field.Id == id)));
+    }
+
+    [Fact]
+    public void Every_built_in_document_type_refers_to_real_field_types()
+    {
+        foreach (var type in AiDocumentTypeCatalog.DefaultTypes)
+            Assert.All(type.FieldTypeIds, id => Assert.Contains(AiFieldCatalog.DefaultTypes, field => field.Id == id));
     }
 }

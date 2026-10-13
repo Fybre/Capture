@@ -8,7 +8,8 @@ internal sealed class NoOpLatticeBuilder : ILatticeBuilder
     public Task<PageLattice> BuildPageAsync(
         CaptureDocument document,
         DocumentPage page,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+            Capture.Core.CaptureProfiles.OcrOptions? ocr = null)
     {
         return Task.FromResult(new PageLattice
         {

@@ -3,7 +3,10 @@ namespace Capture.Core.Lattice;
 public enum LatticeSource
 {
     PdfText = 0,
-    Ocr = 1
+    Ocr = 1,
+
+    /// <summary>Read by an external OCR service (Azure Document Intelligence) rather than the built-in engine.</summary>
+    ExternalOcr = 2
 }
 
 public sealed class LatticeWord
@@ -24,6 +27,10 @@ public sealed class PageLattice
     public int Dpi { get; init; }
     public LatticeSource Source { get; init; }
     public IReadOnlyList<LatticeWord> Words { get; init; } = [];
+
+    /// <summary>A problem reading this page that a reviewer should know about — e.g. external OCR failed
+    /// and the built-in engine's text was used instead.</summary>
+    public string? Warning { get; init; }
 }
 
 public sealed class OcrWord

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Capture.Core.Import;
+using Capture.Core.Indexing;
 using Capture.Core.Lattice;
 using Capture.Core.Models;
 using Capture.Core.Profiles;
@@ -29,6 +30,25 @@ public sealed class CapturePlanner
             ?? (profile.DocumentTypes.Count == 1 ? profile.DocumentTypes[0] : null);
     }
 
+    /// <summary>The profile's document types as the AI sees them for separation. A fallback type with no
+    /// AI description is the catch-all, not a kind of document: the AI answers "other" for what fits
+    /// nothing, which lands there anyway — offering it by name alone made the AI pick it arbitrarily.
+    /// Null when the AI only splits documents (<see cref="CaptureProfile.AiClassifies"/> off): it isn't
+    /// shown any types.</summary>
+    public static IReadOnlyList<AiSeparationType>? AiTypes(CaptureProfile profile) =>
+        !profile.AiClassifies ? null : profile.DocumentTypes
+            .Where(type => type.Id != profile.DefaultDocumentTypeId || !string.IsNullOrWhiteSpace(type.AiDescription))
+            .Select(type => new AiSeparationType(AiTypeId(type), type.Name.Trim(), type.AiDescription?.Trim() ?? string.Empty))
+            .ToList();
+
+    /// <summary>A short id the AI answers with: the type's name in lower case with dashes. Names are
+    /// unique within a profile, so these are too.</summary>
+    public static string AiTypeId(DocumentTypeDefinition type)
+    {
+        var slug = Regex.Replace(type.Name.Trim().ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return slug.Length > 0 ? slug : type.Id.ToString("N")[..8];
+    }
+
     public CapturePlan Plan(CaptureProfile profile, IEnumerable<AnalyzedInput> inputs)
     {
         var batches = new List<BatchBuilder>();
@@ -51,7 +71,10 @@ public sealed class CapturePlanner
                     batches.Add(batch);
                 }
 
-                var candidates = MatchDocumentTypes(profile.DocumentTypes, page);
+                // A type set to let the AI decide drops out of rule matching on pages the AI analysed.
+                var ai = profile.AiSeparation ? page.Ai : null;
+                var candidates = MatchDocumentTypes(
+                    ai is null || !profile.AiClassifies ? profile.DocumentTypes : profile.DocumentTypes.Where(type => !type.AiIgnoresRules), page);
                 if (candidates.Count > 1)
                     diagnostics.Add(new ProcessingDiagnostic("ambiguous-document-type", $"Page matches: {string.Join(", ", candidates.Select(item => item.Type.Name))}", pageRef));
 
@@ -62,7 +85,45 @@ public sealed class CapturePlanner
                          && selected.RecognitionMatches.Count > 0
                          && IsMatch(selected.Type.RecognitionRules, selected.RecognitionMatches)));
 
-                if (documentStarts || (document is null && selected is not null))
+                // AI separation only decides what no rule did: a rule-matched type and a rule-matched
+                // start always win, and a separator sheet is consumed below as usual.
+                if (ai is not null && !documentStarts && !profile.AiClassifies)
+                {
+                    // Split only: the AI decides where documents start; each document's type comes
+                    // from its pages' rules once it's complete (see ResolveTypeFromPages).
+                    if (ai.StartsNewDocument || document is null)
+                    {
+                        document = new DocumentBuilder(null, []) { TypeFromPages = true };
+                        (batch ??= AddGenericBatch(batches)).Documents.Add(document);
+                    }
+
+                    if (ai.Confidence < profile.AiSeparationMinConfidence)
+                        document.ReviewReasons.Add(AiReviewReason(ai, page, ai.StartsNewDocument, null));
+                }
+                else if (ai is not null && !documentStarts)
+                {
+                    var aiType = ai.TypeId is null ? null : profile.DocumentTypes.FirstOrDefault(type => AiTypeId(type) == ai.TypeId);
+                    var type = selected?.Type ?? aiType ?? profile.DocumentTypes.FirstOrDefault(item => item.Id == profile.DefaultDocumentTypeId);
+                    var aiStarts = ai.StartsNewDocument && (aiType?.AiStartsNewDocument ?? true);
+                    if (aiStarts || document is null)
+                    {
+                        document = new DocumentBuilder(type, selected?.AllMatches ?? RuleValueMatches(type, page))
+                        {
+                            AiSuggestedType = selected is null && aiType is null ? ai.SuggestedType : null
+                        };
+                        (batch ??= AddGenericBatch(batches)).Documents.Add(document);
+                        if (type is null)
+                            diagnostics.Add(new ProcessingDiagnostic("unclassified-page", "The AI matched no document type and there's no fallback type.", pageRef));
+                        // A confident "none of these" still needs a person to choose the type; an unsure
+                        // answer is flagged below instead.
+                        if (selected is null && aiType is null && ai.Confidence >= profile.AiSeparationMinConfidence)
+                            document.ReviewReasons.Add(NoTypeFitsReason(ai, type));
+                    }
+
+                    if (ai.Confidence < profile.AiSeparationMinConfidence)
+                        document.ReviewReasons.Add(AiReviewReason(ai, page, aiStarts, aiType ?? type));
+                }
+                else if (documentStarts || (document is null && selected is not null))
                 {
                     document = new DocumentBuilder(selected!.Type, selected.AllMatches);
                     (batch ??= AddGenericBatch(batches)).Documents.Add(document);
@@ -85,17 +146,72 @@ public sealed class CapturePlanner
                     if (fallback is null)
                         diagnostics.Add(new ProcessingDiagnostic("unclassified-page", "No document type or fallback matched this page.", pageRef));
                 }
+                if (profile.AiSeparation && page.Ai is null && !document.ReviewReasons.Contains(AiNotSetUpReason))
+                    document.ReviewReasons.Add(AiNotSetUpReason);
                 document.Pages.Add(pageRef);
+                document.Analyzed.Add(page);
             }
 
             if (profile.FileIsDocumentBoundary) document = null;
             if (profile.Batch.StartNewBatchForEachFile) batch = null;
         }
 
+        foreach (var built in batches.SelectMany(item => item.Documents).Where(item => item.TypeFromPages))
+            ResolveTypeFromPages(profile, built);
+
         return new CapturePlan(
             batches.Select(item => item.Build()).ToList(),
             diagnostics,
             consumed);
+    }
+
+    public const string AiNotSetUpReason = "AI separation is on, but AI isn't set up — documents were split by rules only. Choose a provider in Settings ▸ AI extraction.";
+
+    /// <summary>The type of a document the AI split off: the first of its pages, in order, that a type's
+    /// identify or start rules match — the AI's first page often isn't the one a rule recognises — or
+    /// the fallback type. Pages matching different types suggest the AI joined two documents.</summary>
+    private static void ResolveTypeFromPages(CaptureProfile profile, DocumentBuilder document)
+    {
+        TypeMatch? first = null;
+        var others = new List<(DocumentTypeDefinition Type, int Page)>();
+        foreach (var page in document.Analyzed)
+        {
+            foreach (var match in MatchDocumentTypes(profile.DocumentTypes, page))
+            {
+                if (first is null)
+                    first = match;
+                else if (match.Type.Id != first.Type.Id && others.All(item => item.Type.Id != match.Type.Id))
+                    others.Add((match.Type, page.PageNumber));
+            }
+        }
+
+        document.Type = first?.Type ?? profile.DocumentTypes.FirstOrDefault(item => item.Id == profile.DefaultDocumentTypeId);
+        document.Matches = first?.AllMatches ?? [];
+        if (first is not null && others.Count > 0)
+        {
+            var firstPage = document.Analyzed.First(page => MatchDocumentTypes([first.Type], page).Count > 0).PageNumber;
+            var listed = string.Join(", ", others.Select(item => $"{item.Type.Name} on page {item.Page}"));
+            document.ReviewReasons.Add(
+                $"Pages match more than one document type ({first.Type.Name} on page {firstPage}, {listed}) — the AI may have joined two documents. It was given {first.Type.Name}.");
+        }
+    }
+
+    private static string NoTypeFitsReason(AiPageVerdict ai, DocumentTypeDefinition? fallback)
+    {
+        var label = ai.SuggestedType is { } suggested ? $" — the AI calls it \"{suggested}\"" : string.Empty;
+        var kept = fallback is null ? "it has no type" : $"it was given the fallback type, {fallback.Name}";
+        return $"None of this profile's document types fit{label}, so {kept}. Check the document type.";
+    }
+
+    private static string AiReviewReason(AiPageVerdict ai, AnalyzedPage page, bool starts, DocumentTypeDefinition? type)
+    {
+        var decision = starts
+            ? $"starts a new {type?.Name ?? "document"}"
+            : "continues the document before it";
+        var reason = string.IsNullOrWhiteSpace(ai.Reason) ? string.Empty : $": {ai.Reason}";
+        return ai.Reason.StartsWith("AI failed", StringComparison.Ordinal)
+            ? $"Page {page.PageNumber}: {ai.Reason}"
+            : $"AI was {ai.Confidence}% sure page {page.PageNumber} {decision}{reason}";
     }
 
     private static BatchBuilder AddGenericBatch(List<BatchBuilder> batches)
@@ -118,6 +234,13 @@ public sealed class CapturePlanner
                 : 0
         }).ToList();
     }
+
+    // The rule matches of a type the AI chose while its rules were ignored, so boundary-rule fields
+    // still pick up their captured values.
+    private static IReadOnlyList<RuleMatch> RuleValueMatches(DocumentTypeDefinition? type, AnalyzedPage page) =>
+        type is { AiIgnoresRules: true }
+            ? new TypeMatch(type, Evaluate(type.StartRules, page), Evaluate(type.RecognitionRules, page)).AllMatches
+            : [];
 
     private static List<TypeMatch> MatchDocumentTypes(IEnumerable<DocumentTypeDefinition> types, AnalyzedPage page)
     {
@@ -241,7 +364,16 @@ public sealed class CapturePlanner
     private sealed class DocumentBuilder(DocumentTypeDefinition? type, IReadOnlyList<RuleMatch> matches)
     {
         public Guid Id { get; } = Guid.NewGuid();
+        public DocumentTypeDefinition? Type { get; set; } = type;
+        public IReadOnlyList<RuleMatch> Matches { get; set; } = matches;
         public List<SourcePage> Pages { get; } = [];
-        public PlannedDocument Build() => new(Id, type, Pages, matches);
+        public List<AnalyzedPage> Analyzed { get; } = [];
+        public List<string> ReviewReasons { get; } = [];
+        public string? AiSuggestedType { get; init; }
+
+        /// <summary>Split off by the AI with its type still to come from its pages' rules.</summary>
+        public bool TypeFromPages { get; init; }
+
+        public PlannedDocument Build() => new(Id, Type, Pages, Matches, ReviewReasons.Count > 0 ? ReviewReasons : null, AiSuggestedType);
     }
 }

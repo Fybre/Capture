@@ -20,7 +20,8 @@ public sealed class CaptureWorkflowService(
     IBlankPageDetector blanks,
     CapturePlanner planner,
     CapturePlanMaterializer materializer,
-    IProfileApplicator? applicator = null)
+    IProfileApplicator? applicator = null,
+    IAiPageSeparator? aiSeparator = null)
 {
     private const int AnalysisDpi = 200;
 
@@ -178,13 +179,17 @@ public sealed class CaptureWorkflowService(
                         status = IndexFormat.StatusFor(batchValues.Concat(documentValues), type.AutoReadyThreshold);
                     }
 
+                    var reviewNote = CapturePlanMaterializer.ReviewNote(plannedDocument, analysis.Sources);
+                    if (reviewNote is not null)
+                        status = DocumentStatus.NeedsReview;
                     previewDocuments.Add(new CapturePreviewDocument(
                         documentIndex + 1,
                         plannedDocument.Type?.Name ?? "Unclassified",
                         prepared.SourceFiles,
                         prepared.Pages.Count,
                         status,
-                        documentValues));
+                        documentValues,
+                        reviewNote?.Split('\n')));
                 }
 
                 previewBatches.Add(new CapturePreviewBatch(batchIndex + 1, batchValues, previewDocuments));
@@ -274,7 +279,7 @@ public sealed class CaptureWorkflowService(
                         Height = raster.Height,
                         Dpi = raster.Dpi
                     };
-                    var lattice = await latticeBuilder.BuildPageAsync(transientDocument, transientPage, ct).ConfigureAwait(false);
+                    var lattice = await latticeBuilder.BuildPageAsync(transientDocument, transientPage, ct, profile.OcrOptions).ConfigureAwait(false);
 
                     var analyzedBarcodes = new List<AnalyzedBarcode>();
                     foreach (var rule in allRules.Where(rule => rule.Type == SeparationStrategyType.Barcode))
@@ -331,7 +336,49 @@ public sealed class CaptureWorkflowService(
             };
         }
 
+        if (profile.AiSeparation)
+            analyzedInputs = await AddAiVerdictsAsync(profile, analyzedInputs, materializationSources, cancellationToken).ConfigureAwait(false);
+
         return new AnalysisResult(analyzedInputs, materializationSources);
+    }
+
+    /// <summary>Asks the AI, page by page across every input, where documents start and what type each
+    /// is. A file that's its own document always starts one on its first page. Without a configured AI
+    /// the pages are left without a verdict: rules and the fallback type decide, and the planner flags the
+    /// documents for review.</summary>
+    private async Task<List<AnalyzedInput>> AddAiVerdictsAsync(
+        CaptureProfile profile,
+        List<AnalyzedInput> inputs,
+        IReadOnlyDictionary<string, CaptureMaterializationSource> sources,
+        CancellationToken cancellationToken)
+    {
+        if (aiSeparator is not { IsConfigured: true } || inputs.All(input => input.Pages.Count == 0))
+            return inputs;
+
+        var pages = new List<AiSeparationPage>();
+        foreach (var input in inputs)
+        {
+            var source = sources[input.Id];
+            for (var index = 0; index < input.Pages.Count; index++)
+            {
+                var page = input.Pages[index];
+                var raster = source.RasterPages.FirstOrDefault(item => item.PageNumber == page.PageNumber);
+                var text = source.Lattices.TryGetValue(page.PageNumber, out var lattice)
+                    ? LatticeText.Build(lattice.Words).Text
+                    : page.Text;
+                pages.Add(new AiSeparationPage(
+                    text,
+                    raster?.ImagePath,
+                    raster is not null && blanks.IsBlank(raster.ImagePath, profile.RemoveBlankPagesInkPercent),
+                    ForceNew: index == 0 && profile.FileIsDocumentBoundary));
+            }
+        }
+
+        var verdicts = await aiSeparator.AnalyzeAsync(pages, CapturePlanner.AiTypes(profile), cancellationToken).ConfigureAwait(false);
+        var next = 0;
+        return inputs
+            .Select(input => input with { Pages = input.Pages.Select(page => page with { Ai = verdicts[next++] }).ToList() })
+            .ToList();
     }
 
     private string CreateScratch(string prefix)

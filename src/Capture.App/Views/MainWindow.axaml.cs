@@ -152,6 +152,34 @@ public partial class MainWindow : Window
         return true;
     }
 
+    // The review header's type chip opens a menu of the document's profile's types; choosing one
+    // re-files the document under it. Built here because the choices depend on the document's profile.
+    private async void OnDocumentTypeChipClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel viewModel)
+            return;
+
+        var types = await viewModel.GetDocumentTypeChoicesAsync();
+        var flyout = new MenuFlyout();
+        if (types.Count == 0)
+        {
+            flyout.Items.Add(new MenuItem { Header = "No document types — this document's profile has none", IsEnabled = false });
+        }
+        else
+        {
+            flyout.Items.Add(new MenuItem { Header = "Change document type to", IsEnabled = false });
+            foreach (var type in types)
+            {
+                var current = viewModel.IsCurrentDocumentType(type);
+                var item = new MenuItem { Header = current ? $"✓ {type.Name}" : type.Name, IsEnabled = !current };
+                item.Click += async (_, _) => await viewModel.ChangeDocumentTypeAsync(type);
+                flyout.Items.Add(item);
+            }
+        }
+
+        flyout.ShowAt(button);
+    }
+
     private async void OnOpened(object? sender, EventArgs e)
     {
         if (DataContext is not MainViewModel viewModel)

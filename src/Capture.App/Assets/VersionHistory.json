@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.8.21",
+    "date": "2026-10-13",
+    "changes": [
+      "AI document separation: a profile can have AI decide where documents start in a mixed stack. Choose Split documents only — each document's type then comes from its pages' identify rules, or the fallback type — or Split and classify documents, where the AI also chooses the type. Barcodes, separator sheets and first-page rules still apply, and splits the AI is unsure of go to Needs review with its reason.",
+      "Ready-made AI document types: + From catalog adds Invoice, Credit Note, Statement, Purchase Order, Remittance Advice, Delivery Docket, Receipt, Contract or Correspondence, with a description for the AI and the AI fields those documents usually carry. Your own types work too — give them an AI description. New AI fields cover credit notes, statements and remittances.",
+      "Test capture shows the pages in each document and the AI's reasons, names documents that fit none of the profile's types (\"AI: Bank Statement\") so you can see which types to add, and accepts files and folders dragged onto it.",
+      "Change a document's type in review: click the Type chip above the page and choose another type from its profile. Fields are extracted again for that type, keeping any values you typed into fields of the same name.",
+      "OCR with Azure AI Document Intelligence, for handwriting and poor scans: add an Azure Document Intelligence connection, then have a profile send every scanned page to Azure, or only pages the built-in OCR reads poorly.",
+      "AI extraction works with Azure OpenAI and Azure AI Foundry endpoints (resource, deployment or project address, with an api-key header) and with GPT-5 and other reasoning models. Settings ▸ AI extraction has a Test button that shows the service's answer, or its error and the address called.",
+      "TIFF files can be imported: every page of a multi-page TIFF, including Group 4 fax compression, at the resolution the scanner recorded.",
+      "Settings ▸ AI extraction can stop page images being sent for AI separation, for models that can't read images."
+    ]
+  },
+  {
     "version": "0.8.20",
     "date": "2026-10-12",
     "changes": [

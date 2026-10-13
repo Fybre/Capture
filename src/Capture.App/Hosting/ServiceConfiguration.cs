@@ -41,11 +41,16 @@ public static class ServiceConfiguration
         services.AddSingleton<IMergedDocumentWriter, PdfPigMergedDocumentWriter>();
         services.AddSingleton<IPdfExportWriter, PdfPigExportWriter>();
         services.AddSingleton<IOcrEngine, TesseractCliOcrEngine>();
+        services.AddSingleton<IExternalOcrEngine, AzureDocumentIntelligenceOcr>();
+        services.AddSingleton<IOcrOptionsResolver, CaptureProfileOcrOptionsResolver>();
         services.AddSingleton<ILatticeBuilder, LatticeBuilder>();
         services.AddSingleton(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(90) });
         services.AddSingleton<OpenAiExtractor>();
         services.AddSingleton<LocalLlmExtractor>();
         services.AddSingleton<IAiExtractor, AiExtractorRouter>();
+        services.AddSingleton<OpenAiPageSeparator>();
+        services.AddSingleton<LocalLlmPageSeparator>();
+        services.AddSingleton<IAiPageSeparator, AiPageSeparatorRouter>();
         services.AddSingleton<ILocalAiModelDownloader, LocalAiModelDownloader>();
         services.AddSingleton<IBarcodeDecoder, ZxingBarcodeDecoder>();
         services.AddSingleton<IFieldScriptRunner, RoslynFieldScriptRunner>();
@@ -73,6 +78,7 @@ public static class ServiceConfiguration
         services.AddSingleton<ICaptureProfileStore, JsonCaptureProfileStore>();
         services.AddSingleton<IWatchSettingsStore, JsonWatchSettingsStore>();
         services.AddSingleton<IAiFieldCatalogStore, JsonAiFieldCatalogStore>();
+        services.AddSingleton<IAiDocumentTypeStore, JsonAiDocumentTypeStore>();
         services.AddSingleton<IWatchFolderService, WatchFolderService>();
         services.AddSingleton<IScanSource>(_ =>
             OperatingSystem.IsMacOS() ? new MacScanSource()

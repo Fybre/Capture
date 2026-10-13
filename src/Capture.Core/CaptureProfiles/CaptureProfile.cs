@@ -24,8 +24,53 @@ public sealed class CaptureProfile
     /// scale as a BlankPage separation rule's own <see cref="SeparationStrategy.BlankInkPercent"/>.</summary>
     public float RemoveBlankPagesInkPercent { get; set; } = 1f;
 
+    /// <summary>Lets AI decide where each document starts and which document type it is, using each
+    /// type's <see cref="DocumentTypeDefinition.AiDescription"/>. Rules still win where they match:
+    /// batch rules, separator sheets, and a type's start or recognition rules.</summary>
+    public bool AiSeparation { get; set; }
+
+    /// <summary>With <see cref="AiSeparation"/> on: true lets the AI choose each document's type too;
+    /// false has it only split documents, each then typed by its pages' rules or given the fallback
+    /// type.</summary>
+    public bool AiClassifies { get; set; } = true;
+
+    /// <summary>Below this confidence (0–100), an AI split or type is still applied, but the document is
+    /// flagged for review with the AI's reason.</summary>
+    public int AiSeparationMinConfidence { get; set; } = 70;
+
+    /// <summary>When to send scanned pages to an external OCR service instead of, or after, the built-in
+    /// engine. Pages with a real PDF text layer never need OCR.</summary>
+    public ExternalOcrMode ExternalOcr { get; set; }
+
+    /// <summary>The Azure Document Intelligence connection used for external OCR; null uses the first one.</summary>
+    public Guid? ExternalOcrConnectionId { get; set; }
+
+    /// <summary>For <see cref="ExternalOcrMode.WhenPoor"/>: a page whose built-in OCR averages below this
+    /// word confidence (0–100), or doesn't read as real text, is sent to the external service.</summary>
+    public int ExternalOcrMinConfidence { get; set; } = 70;
+
+    public OcrOptions OcrOptions => new(ExternalOcr, ExternalOcrConnectionId, ExternalOcrMinConfidence);
+
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ModifiedUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public enum ExternalOcrMode
+{
+    /// <summary>Built-in OCR only.</summary>
+    Off = 0,
+
+    /// <summary>Every scanned page goes to the external service.</summary>
+    AllPages = 1,
+
+    /// <summary>Built-in OCR first; pages it reads poorly (e.g. handwriting) go to the external service.</summary>
+    WhenPoor = 2
+}
+
+/// <summary>How a page is OCR'd: a capture profile's external OCR settings.</summary>
+public sealed record OcrOptions(ExternalOcrMode Mode, Guid? ConnectionId = null, int MinConfidence = 70)
+{
+    public static readonly OcrOptions BuiltInOnly = new(ExternalOcrMode.Off);
 }
 
 public sealed class BatchDefinition
@@ -58,6 +103,22 @@ public sealed class DocumentTypeDefinition
     public List<ExportDefinition> Exports { get; set; } = [];
     public string? Locale { get; set; }
     public int AutoReadyThreshold { get; set; } = 80;
+
+    /// <summary>The AI document type catalog entry this type was added from, if any.</summary>
+    public string? AiCatalogTypeId { get; set; }
+
+    /// <summary>What a document of this type looks like, for AI separation — e.g. "a supplier's bill
+    /// requesting payment". Filled in from the catalog and editable.</summary>
+    public string? AiDescription { get; set; }
+
+    /// <summary>When false, a page the AI sees as the start of a new document of this type joins the
+    /// previous document instead — for attachments that travel with another document.</summary>
+    public bool AiStartsNewDocument { get; set; } = true;
+
+    /// <summary>When true and AI separation is on, this type's recognition and start rules don't split
+    /// or type documents — the AI does. Rule matches still fill boundary-rule fields on a document the
+    /// AI typed as this one, and the rules apply as before on pages the AI couldn't analyse.</summary>
+    public bool AiIgnoresRules { get; set; }
 }
 
 public sealed class RuleSet

@@ -86,5 +86,34 @@ public class AiExtractPromptTests
         Assert.Equal("https://api.openai.com/v1/chat/completions", OpenAiEndpoints.CompletionsUrl("https://api.openai.com/v1"));
         Assert.Equal("https://host/v1/chat/completions", OpenAiEndpoints.CompletionsUrl("https://host/v1/chat/completions"));
         Assert.Equal("https://host/v1/chat/completions", OpenAiEndpoints.CompletionsUrl("https://host"));
+        Assert.Equal("http://localhost:11434/v1/chat/completions", OpenAiEndpoints.CompletionsUrl("http://localhost:11434/v1/"));
+    }
+
+    [Theory]
+    [InlineData("https://res.openai.azure.com", "https://res.openai.azure.com/openai/v1/chat/completions")]
+    [InlineData("https://res.openai.azure.com/openai/v1/", "https://res.openai.azure.com/openai/v1/chat/completions")]
+    [InlineData("https://res.services.ai.azure.com/api/projects/proj", "https://res.services.ai.azure.com/openai/v1/chat/completions")]
+    [InlineData("https://res.services.ai.azure.com/models", "https://res.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview")]
+    [InlineData("https://res.openai.azure.com/openai/deployments/gpt-4o", "https://res.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21")]
+    [InlineData("https://res.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-01-01-preview",
+        "https://res.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-01-01-preview")]
+    [InlineData("https://llama.eastus2.models.ai.azure.com", "https://llama.eastus2.models.ai.azure.com/chat/completions")]
+    public void Azure_and_foundry_addresses_reach_chat_completions(string endpoint, string expected)
+    {
+        Assert.Equal(expected, OpenAiEndpoints.CompletionsUrl(endpoint));
+    }
+
+    [Fact]
+    public void Azure_resources_get_an_api_key_header_and_others_a_bearer_key()
+    {
+        using var azure = new HttpRequestMessage(HttpMethod.Post, "https://x");
+        OpenAiEndpoints.Authorize(azure, "https://res.services.ai.azure.com", "secret");
+        Assert.Equal(["secret"], azure.Headers.GetValues("api-key"));
+        Assert.Null(azure.Headers.Authorization);
+
+        using var openAi = new HttpRequestMessage(HttpMethod.Post, "https://x");
+        OpenAiEndpoints.Authorize(openAi, "https://api.openai.com/v1", "secret");
+        Assert.Equal("Bearer", openAi.Headers.Authorization?.Scheme);
+        Assert.False(openAi.Headers.Contains("api-key"));
     }
 }

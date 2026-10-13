@@ -201,6 +201,19 @@
                             <TextBox Text="{Binding AiApiKey}" PasswordChar="•" />
                             <TextBlock Text="Model" Classes="field-label" />
                             <TextBox Text="{Binding AiModel}" Watermark="gpt-4o-mini" />
+                            <TextBlock Text="For Azure OpenAI or Azure AI Foundry, the endpoint can be the resource address (https://my-resource.openai.azure.com or https://my-resource.services.ai.azure.com) and Model is your deployment name."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button Content="Test" Command="{Binding TestAiEndpointCommand}" />
+                                <TextBlock Text="Sends one short request with these settings, saved or not."
+                                           VerticalAlignment="Center" Classes="hint" />
+                            </StackPanel>
+                            <TextBlock Text="Testing…" IsVisible="{Binding IsTestingAi}" Classes="hint" />
+                            <SelectableTextBlock Text="{Binding AiTestResult}" IsVisible="{Binding ShowAiTestSuccess}" TextWrapping="Wrap"
+                                                 Foreground="{DynamicResource GoodBrush}" />
+                            <SelectableTextBlock Text="{Binding AiTestResult}" IsVisible="{Binding ShowAiTestFailure}" TextWrapping="Wrap"
+                                                 Foreground="{DynamicResource CriticalBrush}" />
                             <TextBlock Text="Max document characters sent to AI" Classes="field-label" />
                             <NumericUpDown Value="{Binding AiMaxDocumentChars}"
                                            Minimum="1000"
@@ -209,6 +222,11 @@
                                            FormatString="0"
                                            HorizontalAlignment="Stretch" />
                             <TextBlock Text="Longer documents are truncated to this length before being sent — raise it for long contracts, lower it to cut cost/latency."
+                                       TextWrapping="Wrap"
+                                       Classes="hint" />
+                            <CheckBox Content="Send page images for AI document separation"
+                                      IsChecked="{Binding AiSendPageImages}" />
+                            <TextBlock Text="Profiles that separate documents with AI send each page's image as well as its text, which is more accurate when documents share a template. Each page is sent with the pages either side, so it costs more. Turn this off if your model can't read images."
                                        TextWrapping="Wrap"
                                        Classes="hint" />
                         </StackPanel>
@@ -256,6 +274,12 @@
                         <TextBlock Text="{Binding AiFieldCatalogPath}"
                                    Classes="mono field-label"
                                    TextWrapping="Wrap" />
+                        <TextBlock Text="The ready-made document types for AI separation (Invoice, Statement, etc.) are in a second file beside it. Each has a description the AI reads and the field types it adds."
+                                   TextWrapping="Wrap"
+                                   Classes="hint" />
+                        <TextBlock Text="{Binding AiDocumentTypesPath}"
+                                   Classes="mono field-label"
+                                   TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button Content="Open folder" Command="{Binding OpenCatalogFolderCommand}" />
                             <Button Content="Reload catalog" Command="{Binding ReloadCatalogCommand}" />
@@ -278,6 +302,7 @@
                                     <MenuFlyout Placement="BottomEdgeAlignedRight">
                                         <MenuItem Header="Therefore" Command="{Binding AddThereforeConnectionCommand}" />
                                         <MenuItem Header="REST service" Command="{Binding AddRestConnectionCommand}" />
+                                        <MenuItem Header="Azure Document Intelligence (OCR)" Command="{Binding AddAzureConnectionCommand}" />
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>

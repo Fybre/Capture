@@ -219,6 +219,82 @@ public sealed class CaptureWorkflowPreviewTests
                 .ToList());
     }
 
+    [Fact]
+    public async Task Ai_separation_splits_and_types_a_stack_and_flags_uncertain_documents()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-ai-separation-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "stack.png");
+            await File.WriteAllTextAsync(source, "test input");
+            var invoice = new DocumentTypeDefinition { Name = "Invoice", AiDescription = "A bill." };
+            var statement = new DocumentTypeDefinition { Name = "Statement", AiDescription = "An account statement." };
+            var profile = new CaptureProfile
+            {
+                AiSeparation = true,
+                DefaultDocumentTypeId = invoice.Id,
+                DocumentTypes = [invoice, statement]
+            };
+            var separator = new ScriptedSeparator(
+                new AiPageVerdict(true, "invoice", 95, "Invoice header."),
+                new AiPageVerdict(false, null, 50, "Unclear."),
+                new AiPageVerdict(true, "statement", 92, "Statement header."));
+            var workflow = new CaptureWorkflowService(
+                new AppPaths(Path.Combine(root, "app")),
+                pdfs: null!,
+                new ThreePageImageImporter(),
+                new InvoiceLatticeBuilder(),
+                new NoBarcodeDecoder(),
+                new NeverBlankDetector(),
+                new CapturePlanner(),
+                materializer: null!,
+                aiSeparator: separator);
+
+            var plan = await workflow.PreviewAsync(profile, [source], DocumentSource.Import);
+
+            var documents = plan.Batches.SelectMany(batch => batch.Documents).ToList();
+            Assert.Equal(["Invoice", "Statement"], documents.Select(document => document.Type?.Name));
+            Assert.Equal([2, 1], documents.Select(document => document.SourcePages.Count));
+            Assert.Contains("50%", Assert.Single(documents[0].ReviewReasons!));
+            Assert.Null(documents[1].ReviewReasons);
+            Assert.Equal(3, separator.Pages.Count);
+            Assert.True(separator.Pages[0].ForceNew);
+            Assert.Equal("Invoice", separator.Pages[0].Text);
+            Assert.Equal(["invoice", "statement"], separator.Types.Select(type => type.Id));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private sealed class ScriptedSeparator(params AiPageVerdict[] verdicts) : IAiPageSeparator
+    {
+        public IReadOnlyList<AiSeparationPage> Pages { get; private set; } = [];
+        public IReadOnlyList<AiSeparationType> Types { get; private set; } = [];
+        public bool IsConfigured => true;
+
+        public Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
+            IReadOnlyList<AiSeparationPage> pages, IReadOnlyList<AiSeparationType>? types, CancellationToken cancellationToken = default)
+        {
+            Pages = pages;
+            Types = types;
+            return Task.FromResult<IReadOnlyList<AiPageVerdict>>(verdicts);
+        }
+    }
+
+    private sealed class ThreePageImageImporter : IImagePageImporter
+    {
+        public Task<IReadOnlyList<RasterPage>> ImportAsync(
+            string imagePath,
+            string outputDirectory,
+            CancellationToken cancellationToken = default,
+            int? dpiOverride = null) =>
+            Task.FromResult<IReadOnlyList<RasterPage>>(
+                [new RasterPage(1, imagePath, 100, 100, 200), new RasterPage(2, imagePath, 100, 100, 200), new RasterPage(3, imagePath, 100, 100, 200)]);
+    }
+
     private sealed class BlankOnSuffixDetector(string suffix) : IBlankPageDetector
     {
         public bool IsBlank(string imagePath, float maxInkPercent) => imagePath.EndsWith(suffix, StringComparison.Ordinal);
@@ -239,7 +315,8 @@ public sealed class CaptureWorkflowPreviewTests
         public Task<PageLattice> BuildPageAsync(
             CaptureDocument document,
             DocumentPage page,
-            CancellationToken cancellationToken = default) =>
+            CancellationToken cancellationToken = default,
+            Capture.Core.CaptureProfiles.OcrOptions? ocr = null) =>
             Task.FromResult(new PageLattice
             {
                 PageNumber = page.PageNumber,

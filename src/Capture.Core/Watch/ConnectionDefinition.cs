@@ -5,7 +5,10 @@ namespace Capture.Core.Watch;
 public enum ConnectionType
 {
     Therefore = 0,
-    Rest = 1
+    Rest = 1,
+
+    /// <summary>An Azure AI Document Intelligence resource, used for external OCR: its endpoint and key.</summary>
+    AzureDocumentIntelligence = 2
 }
 
 public enum ConnectionAuthMethod
@@ -49,9 +52,15 @@ public sealed class ConnectionDefinition
     [JsonIgnore]
     public IReadOnlyList<ConnectionAuthMethod> AuthMethods => AuthMethodsFor(Type);
 
-    public static IReadOnlyList<ConnectionAuthMethod> AuthMethodsFor(ConnectionType type) => type == ConnectionType.Therefore
-        ? [ConnectionAuthMethod.Basic, ConnectionAuthMethod.Bearer]
-        : [ConnectionAuthMethod.None, ConnectionAuthMethod.Basic, ConnectionAuthMethod.Bearer, ConnectionAuthMethod.ApiKey];
+    /// <summary>The header Azure AI services read their key from.</summary>
+    public const string AzureKeyHeader = "Ocp-Apim-Subscription-Key";
+
+    public static IReadOnlyList<ConnectionAuthMethod> AuthMethodsFor(ConnectionType type) => type switch
+    {
+        ConnectionType.Therefore => [ConnectionAuthMethod.Basic, ConnectionAuthMethod.Bearer],
+        ConnectionType.AzureDocumentIntelligence => [ConnectionAuthMethod.ApiKey],
+        _ => [ConnectionAuthMethod.None, ConnectionAuthMethod.Basic, ConnectionAuthMethod.Bearer, ConnectionAuthMethod.ApiKey]
+    };
 
     /// <summary>The address requests are made against: Therefore's <c>…/theservice/v0001/restun</c>, or
     /// the REST base address as entered. Null when there isn't a usable address yet.</summary>
@@ -78,7 +87,9 @@ public sealed class ConnectionDefinition
         ConnectionAuthMethod.None => true,
         ConnectionAuthMethod.Basic => !string.IsNullOrWhiteSpace(Username) && !string.IsNullOrEmpty(Password),
         ConnectionAuthMethod.Bearer => !string.IsNullOrWhiteSpace(Token),
-        ConnectionAuthMethod.ApiKey => !string.IsNullOrWhiteSpace(Token) && !string.IsNullOrWhiteSpace(ApiKeyHeader),
+        // Azure always sends its key in AzureKeyHeader, so it has no header of its own to fill in.
+        ConnectionAuthMethod.ApiKey => !string.IsNullOrWhiteSpace(Token)
+            && (Type == ConnectionType.AzureDocumentIntelligence || !string.IsNullOrWhiteSpace(ApiKeyHeader)),
         _ => false
     };
 

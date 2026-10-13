@@ -315,6 +315,7 @@ public partial class MainViewModel
         {
             var document = SelectedDocument.Document;
             document.Status = DocumentStatus.Ready;
+            document.ReviewNote = null;
             await _store.UpdateAsync(document);
             SelectedDocument.NotifyIndexes();
             StatusText = "Marked ready";
@@ -378,6 +379,7 @@ public partial class MainViewModel
 
                 var document = row.Document;
                 document.Status = DocumentStatus.Ready;
+                document.ReviewNote = null;
                 await _store.UpdateAsync(document).ConfigureAwait(true);
                 row.NotifyIndexes();
                 marked++;

@@ -13,6 +13,7 @@
     <EmbeddedResource Include="Resources\IBMPlexSans-Regular.ttf" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="PDFtoImage" Version="5.1.1" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />

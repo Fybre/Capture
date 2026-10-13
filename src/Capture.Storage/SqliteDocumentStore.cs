@@ -66,7 +66,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
               deleted_utc TEXT,
               content_hash TEXT,
               source_import_id TEXT,
-              exported_utc TEXT
+              exported_utc TEXT,
+              review_note TEXT
             );
             """,
             """
@@ -116,6 +117,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         // by an earlier build of this same prototype still needs to remain usable while it is running.
         await EnsureColumnAsync(connection, "documents", "source_import_id", "TEXT", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "documents", "exported_utc", "TEXT", cancellationToken).ConfigureAwait(false);
+        await EnsureColumnAsync(connection, "documents", "review_note", "TEXT", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "batches", "display_number", "INTEGER", cancellationToken).ConfigureAwait(false);
 
         await RenumberBatchesForNewSessionAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -174,8 +176,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         {
             upsert.Transaction = (SqliteTransaction)transaction;
             upsert.CommandText = """
-                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error, content_hash, source_import_id, exported_utc)
-                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError, $contentHash, $sourceImportId, $exportedUtc)
+                INSERT INTO documents (id, original_file_name, stored_path, source, profile_id, batch_id, status, page_count, created_utc, error_message, redaction_status, redacted_path, redaction_error, content_hash, source_import_id, exported_utc, review_note)
+                VALUES ($id, $original, $stored, $source, $profile, $batch, $status, $pages, $created, $error, $redactionStatus, $redactedPath, $redactionError, $contentHash, $sourceImportId, $exportedUtc, $reviewNote)
                 ON CONFLICT(id) DO UPDATE SET
                   original_file_name = excluded.original_file_name,
                   stored_path = excluded.stored_path,
@@ -190,7 +192,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
                   redaction_error = excluded.redaction_error,
                   content_hash = excluded.content_hash,
                   source_import_id = excluded.source_import_id,
-                  exported_utc = excluded.exported_utc;
+                  exported_utc = excluded.exported_utc,
+                  review_note = excluded.review_note;
                 """;
             AddDocumentParameters(upsert, document);
             await upsert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -235,7 +238,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
               redaction_error = $redactionError,
               content_hash = $contentHash,
               source_import_id = $sourceImportId,
-              exported_utc = $exportedUtc
+              exported_utc = $exportedUtc,
+              review_note = $reviewNote
             WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", document.Id.ToString("D"));
@@ -251,6 +255,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         command.Parameters.AddWithValue("$contentHash", (object?)document.ContentHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$sourceImportId", (object?)document.SourceImportId?.ToString("D") ?? DBNull.Value);
         command.Parameters.AddWithValue("$exportedUtc", (object?)document.ExportedUtc?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        command.Parameters.AddWithValue("$reviewNote", (object?)document.ReviewNote ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -262,7 +267,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error, d.deleted_utc, d.content_hash, d.source_import_id, d.exported_utc
+            SELECT d.id, d.original_file_name, d.stored_path, d.source, d.profile_id, d.status, d.page_count, d.created_utc, d.error_message, d.batch_id, d.redaction_status, d.redacted_path, d.redaction_error, d.deleted_utc, d.content_hash, d.source_import_id, d.exported_utc, d.review_note
             FROM documents d
             LEFT JOIN batches b ON b.id = d.batch_id
             WHERE d.deleted_utc IS NULL
@@ -284,7 +289,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc, review_note
             FROM documents
             WHERE deleted_utc IS NOT NULL
             ORDER BY deleted_utc DESC;
@@ -306,7 +311,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc, review_note
             FROM documents
             WHERE id = $id;
             """;
@@ -327,7 +332,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc, review_note
             FROM documents
             WHERE content_hash = $hash AND deleted_utc IS NULL
             ORDER BY created_utc;
@@ -352,7 +357,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         await using var command = connection.CreateCommand();
         var parameterNames = distinctHashes.Select((_, index) => $"$hash{index}").ToList();
         command.CommandText = $"""
-            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc
+            SELECT id, original_file_name, stored_path, source, profile_id, status, page_count, created_utc, error_message, batch_id, redaction_status, redacted_path, redaction_error, deleted_utc, content_hash, source_import_id, exported_utc, review_note
             FROM documents
             WHERE content_hash IN ({string.Join(", ", parameterNames)}) AND deleted_utc IS NULL
             ORDER BY created_utc;
@@ -721,6 +726,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         command.Parameters.AddWithValue("$contentHash", (object?)document.ContentHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$sourceImportId", (object?)document.SourceImportId?.ToString("D") ?? DBNull.Value);
         command.Parameters.AddWithValue("$exportedUtc", (object?)document.ExportedUtc?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        command.Parameters.AddWithValue("$reviewNote", (object?)document.ReviewNote ?? DBNull.Value);
     }
 
     private static CaptureDocument ReadDocument(SqliteDataReader reader)
@@ -750,7 +756,8 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             SourceImportId = reader.FieldCount > 15 && !reader.IsDBNull(15) ? Guid.Parse(reader.GetString(15)) : null,
             ExportedUtc = reader.FieldCount > 16 && !reader.IsDBNull(16)
                 ? DateTimeOffset.Parse(reader.GetString(16), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
-                : null
+                : null,
+            ReviewNote = reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetString(17) : null
         };
     }
 

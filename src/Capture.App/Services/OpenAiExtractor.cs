@@ -38,35 +38,22 @@ public sealed class OpenAiExtractor : IAiExtractor
         if (!settings.AiConfigured)
             return new Dictionary<Guid, AiExtractedValue>();
 
-        var url = OpenAiEndpoints.CompletionsUrl(settings.AiEndpoint!);
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AiApiKey);
-        var payload = new
-        {
-            model = string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel,
-            temperature = 0,
-            response_format = new { type = "json_object" },
-            messages = new object[]
-            {
+        var content = await OpenAiChatClient.CompleteAsync(
+            _http,
+            settings.AiEndpoint!,
+            settings.AiApiKey,
+            string.IsNullOrWhiteSpace(settings.AiModel) ? "gpt-4o-mini" : settings.AiModel,
+            [
                 new { role = "system", content = AiExtractPrompt.SystemMessage() },
                 new { role = "user", content = AiExtractPrompt.UserMessage(documentText, fields, settings.AiMaxDocumentChars) }
-            }
-        };
-        request.Content = new StringContent(JsonSerializer.Serialize(payload, Json), Encoding.UTF8, "application/json");
-
-        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"the AI service returned {(int)response.StatusCode}{ErrorDetail(body)}.");
-
-        var parsed = JsonSerializer.Deserialize<ChatResponse>(body, Json);
-        var content = parsed?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
+            ],
+            cancellationToken).ConfigureAwait(false);
         return AiExtractPrompt.Parse(content, fields);
     }
 
     // OpenAI-style errors carry {"error":{"message":"..."}}; anything else is left out rather than
     // putting a page of HTML into a field's error.
-    private static string ErrorDetail(string body)
+    internal static string ErrorDetail(string body)
     {
         try
         {
@@ -84,20 +71,5 @@ public sealed class OpenAiExtractor : IAiExtractor
         }
 
         return string.Empty;
-    }
-
-    private sealed class ChatResponse
-    {
-        public List<Choice>? Choices { get; set; }
-    }
-
-    private sealed class Choice
-    {
-        public ChatMessage? Message { get; set; }
-    }
-
-    private sealed class ChatMessage
-    {
-        public string? Content { get; set; }
     }
 }

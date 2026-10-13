@@ -39,9 +39,13 @@ public sealed record TestCaptureDocumentRow(
     string Heading,
     string Detail,
     string Status,
-    IReadOnlyList<TestCaptureIndexRow> Indexes)
+    IReadOnlyList<TestCaptureIndexRow> Indexes,
+    string ReviewNote = "",
+    string AiLabel = "")
 {
+    public bool HasAiLabel => AiLabel.Length > 0;
     public bool HasIndexes => Indexes.Count > 0;
+    public bool HasReviewNote => ReviewNote.Length > 0;
 }
 public sealed record TestCaptureBatchRow(
     string Heading,
@@ -273,6 +277,168 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         }
     }
 
+    public sealed record AiSeparationChoice(bool Separate, bool Classify, string Label);
+
+    public IReadOnlyList<AiSeparationChoice> AiSeparationChoices { get; } =
+    [
+        new(false, false, "Off — rules only"),
+        new(true, false, "Split documents only"),
+        new(true, true, "Split and classify documents")
+    ];
+
+    public AiSeparationChoice SelectedAiSeparation
+    {
+        get => AiSeparationChoices.First(choice => choice.Separate == Profile.AiSeparation && (!choice.Separate || choice.Classify == Profile.AiClassifies));
+        set
+        {
+            if (value is null || (Profile.AiSeparation == value.Separate && (!value.Separate || Profile.AiClassifies == value.Classify))) return;
+            Profile.AiSeparation = value.Separate;
+            if (value.Separate)
+                Profile.AiClassifies = value.Classify;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(AiSeparation));
+            OnPropertyChanged(nameof(AiClassifies));
+            OnPropertyChanged(nameof(AiSeparationHint));
+            OnPropertyChanged(nameof(AiSeparationWarning));
+            OnPropertyChanged(nameof(HasAiSeparationWarning));
+            RefreshDirtyState();
+        }
+    }
+
+    public bool AiSeparation => Profile.AiSeparation;
+
+    /// <summary>The AI chooses document types too, so each type's AI settings matter.</summary>
+    public bool AiClassifies => Profile.AiSeparation && Profile.AiClassifies;
+
+    public string AiSeparationHint => AiClassifies
+        ? "AI decides where each document starts and which document type it is, using each type's AI description. Rules still win where they match: batch rules, separator sheets, and a type's identify or first-page rules."
+        : "AI decides where each document starts. Each document's type then comes from its pages: the first page a type's identify or first-page rules match decides it, otherwise it gets the fallback type. Batch rules, separator sheets and first-page rules still split as well.";
+
+    public int AiSeparationMinConfidence
+    {
+        get => Profile.AiSeparationMinConfidence;
+        set
+        {
+            if (Profile.AiSeparationMinConfidence == value) return;
+            Profile.AiSeparationMinConfidence = Math.Clamp(value, 0, 100);
+            OnPropertyChanged();
+            RefreshDirtyState();
+        }
+    }
+
+    /// <summary>Why AI separation won't work as set up — AI turned off or missing in Settings, or no
+    /// document types for it to choose between.</summary>
+    public string AiSeparationWarning =>
+        !Profile.AiSeparation ? string.Empty
+        : _ai is not { IsConfigured: true } ? "AI isn't set up on this computer (Settings ▸ AI extraction). Until it is, documents are split by rules only and flagged for review."
+        : Profile.AiClassifies && Profile.DocumentTypes.Count == 0 ? "Add document types for the AI to choose between — \"+ From catalog\" adds ready-made ones."
+        : string.Empty;
+
+    public bool HasAiSeparationWarning => AiSeparationWarning.Length > 0;
+
+    /// <summary>The ready-made document types offered by "+ From catalog".</summary>
+    public IReadOnlyList<CatalogDocumentTypeChoice> CatalogDocumentTypes =>
+        AiDocumentTypeCatalog.All.Select(type => new CatalogDocumentTypeChoice(type, AddCatalogDocumentTypeCommand)).ToList();
+
+    /// <summary>Adds a ready-made document type with its AI description and the AI fields its documents
+    /// usually carry, and turns AI separation on.</summary>
+    [RelayCommand]
+    private void AddCatalogDocumentType(AiDocumentType? catalogType)
+    {
+        if (catalogType is null) return;
+        FlushSelectedDocument();
+        var name = catalogType.Name;
+        for (var copy = 2; Profile.DocumentTypes.Any(type => string.Equals(type.Name, name, StringComparison.OrdinalIgnoreCase)); copy++)
+            name = $"{catalogType.Name} {copy}";
+
+        var type = new DocumentTypeDefinition
+        {
+            Name = name,
+            AiCatalogTypeId = catalogType.Id,
+            AiDescription = catalogType.Description,
+            AiStartsNewDocument = catalogType.StartsNewDocument,
+            Fields = catalogType.FieldTypeIds
+                .Select(AiFieldCatalog.Find)
+                .OfType<AiFieldType>()
+                .Select(field => new IndexField { Name = field.Name, Kind = FieldKind.Ai, Format = field.Format, AiTypeId = field.Id })
+                .ToList()
+        };
+        Profile.DocumentTypes.Add(type);
+        Profile.DefaultDocumentTypeId ??= type.Id;
+        // A catalog type is described for the AI; with AI separation off, turn on the mode that uses it.
+        if (!Profile.AiSeparation)
+            SelectedAiSeparation = AiSeparationChoices[^1];
+        RefreshNavigation(type.Id);
+        OnPropertyChanged(nameof(AiSeparationWarning));
+        OnPropertyChanged(nameof(HasAiSeparationWarning));
+        RefreshDirtyState();
+    }
+
+    public sealed record OcrModeChoice(ExternalOcrMode Value, string Label);
+
+    public IReadOnlyList<OcrModeChoice> OcrModeChoices { get; } =
+    [
+        new(ExternalOcrMode.Off, "Built-in OCR only"),
+        new(ExternalOcrMode.WhenPoor, "Azure for pages the built-in OCR reads poorly"),
+        new(ExternalOcrMode.AllPages, "Azure for every scanned page")
+    ];
+
+    public OcrModeChoice SelectedOcrMode
+    {
+        get => OcrModeChoices.First(choice => choice.Value == Profile.ExternalOcr);
+        set
+        {
+            if (value is null || Profile.ExternalOcr == value.Value) return;
+            Profile.ExternalOcr = value.Value;
+            if (value.Value != ExternalOcrMode.Off && Profile.ExternalOcrConnectionId is null && OcrConnections.FirstOrDefault() is { } first)
+                Profile.ExternalOcrConnectionId = first.Id;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(UsesExternalOcr));
+            OnPropertyChanged(nameof(IsOcrWhenPoor));
+            OnPropertyChanged(nameof(ExternalOcrConnectionId));
+            OnPropertyChanged(nameof(ExternalOcrWarning));
+            OnPropertyChanged(nameof(HasExternalOcrWarning));
+            RefreshDirtyState();
+        }
+    }
+
+    public bool UsesExternalOcr => Profile.ExternalOcr != ExternalOcrMode.Off;
+
+    public bool IsOcrWhenPoor => Profile.ExternalOcr == ExternalOcrMode.WhenPoor;
+
+    /// <summary>The Azure Document Intelligence connections from Settings ▸ Connections.</summary>
+    public ObservableCollection<ThereforeConnectionChoice> OcrConnections { get; } = [];
+
+    public Guid? ExternalOcrConnectionId
+    {
+        get => Profile.ExternalOcrConnectionId;
+        set
+        {
+            if (value is null || Profile.ExternalOcrConnectionId == value) return;
+            Profile.ExternalOcrConnectionId = value;
+            OnPropertyChanged();
+            RefreshDirtyState();
+        }
+    }
+
+    public int ExternalOcrMinConfidence
+    {
+        get => Profile.ExternalOcrMinConfidence;
+        set
+        {
+            if (Profile.ExternalOcrMinConfidence == value) return;
+            Profile.ExternalOcrMinConfidence = Math.Clamp(value, 0, 100);
+            OnPropertyChanged();
+            RefreshDirtyState();
+        }
+    }
+
+    public string ExternalOcrWarning => UsesExternalOcr && _watchSettings is not null && OcrConnections.Count == 0
+        ? "There's no Azure Document Intelligence connection yet — add one in Settings ▸ Connections. Until then pages use the built-in OCR and are flagged for review."
+        : string.Empty;
+
+    public bool HasExternalOcrWarning => ExternalOcrWarning.Length > 0;
+
     public bool RemoveBlankPagesOnIngestion
     {
         get => Profile.RemoveBlankPagesOnIngestion;
@@ -338,6 +504,13 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         foreach (var connection in settings.Connections.Where(item => item.Type == ConnectionType.Therefore))
             ThereforeConnections.Add(new ThereforeConnectionChoice(connection.Id, connection.Name));
         _thereforeConnectionsLoaded = true;
+
+        OcrConnections.Clear();
+        foreach (var connection in settings.Connections.Where(item => item.Type == ConnectionType.AzureDocumentIntelligence))
+            OcrConnections.Add(new ThereforeConnectionChoice(connection.Id, connection.Name));
+        OnPropertyChanged(nameof(ExternalOcrConnectionId));
+        OnPropertyChanged(nameof(ExternalOcrWarning));
+        OnPropertyChanged(nameof(HasExternalOcrWarning));
 
         // Exports saved before connections existed use the first Therefore connection; record that
         // explicitly so the picker shows it. Not an edit of its own, so it doesn't mark the profile changed.
@@ -807,26 +980,80 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
                     : $"Disabled draft saved — {errors.Count} setup item{(errors.Count == 1 ? string.Empty : "s")} remain.";
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunTestCapture))]
     private async Task RunTestCaptureAsync()
     {
-        if (_workflow is null || _dialogs is null) return;
+        if (_workflow is null || _dialogs is null || !TestCaptureReady()) return;
+        var files = await _dialogs.PickFilesAsync();
+        await PreviewTestCaptureAsync(files);
+    }
+
+    /// <summary>Test capture on files and folders dragged onto the Test Capture page; a folder brings in
+    /// the supported files directly inside it, as an import does.</summary>
+    public async Task TestCaptureDroppedPathsAsync(IReadOnlyList<string> paths)
+    {
+        if (_workflow is null || !CanRunTestCapture() || !TestCaptureReady()) return;
+        var files = paths
+            .SelectMany(path => Directory.Exists(path) ? Directory.EnumerateFiles(path) : [path])
+            .Where(ImportFormats.IsSupported)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (files.Count == 0)
+        {
+            TestCaptureResults = [];
+            OnPropertyChanged(nameof(HasTestCaptureResults));
+            TestCaptureSuggestedTypes = string.Empty;
+            TestCaptureSummary = "None of the dropped items are files Capture can import.";
+            return;
+        }
+
+        await PreviewTestCaptureAsync(files);
+    }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunTestCaptureCommand))]
+    private bool _isTestCaptureRunning;
+
+    public bool CanRunTestCapture() => !IsTestCaptureRunning;
+
+    private bool TestCaptureReady()
+    {
         Flush();
         RefreshEnablementIssues();
         var errors = EnablementIssues;
-        if (errors.Count > 0) { ValidationSummary = string.Join(Environment.NewLine, errors); return; }
-        var files = await _dialogs.PickFilesAsync();
-        if (files.Count == 0) return;
+        if (errors.Count == 0) return true;
+        ValidationSummary = string.Join(Environment.NewLine, errors);
+        return false;
+    }
+
+    private async Task PreviewTestCaptureAsync(IReadOnlyList<string> files)
+    {
+        if (_workflow is null || files.Count == 0) return;
+        IsTestCaptureRunning = true;
+        try
+        {
+            await RunPreviewAsync(files);
+        }
+        finally
+        {
+            IsTestCaptureRunning = false;
+        }
+    }
+
+    private async Task RunPreviewAsync(IReadOnlyList<string> files)
+    {
         TestCaptureResults = [];
         OnPropertyChanged(nameof(HasTestCaptureResults));
+        TestCaptureSuggestedTypes = string.Empty;
         TestCaptureSummary = "Analysing files…";
-        var preview = await _workflow.PreviewWithIndexesAsync(Profile, files, DocumentSource.Import);
+        var preview = await _workflow!.PreviewWithIndexesAsync(Profile, files, DocumentSource.Import);
         var plan = preview.Plan;
         var documentCount = plan.Batches.Sum(batch => batch.Documents.Count);
         var pageCount = plan.Batches.SelectMany(batch => batch.Documents).Sum(document => document.SourcePages.Count);
         TestCaptureSummary = $"Preview only — {documentCount} document{(documentCount == 1 ? string.Empty : "s")} in " +
             $"{plan.Batches.Count} batch{(plan.Batches.Count == 1 ? string.Empty : "es")}; " +
             $"{pageCount} pages kept; {plan.ConsumedPages.Count} removed; {plan.Diagnostics.Count} diagnostic{(plan.Diagnostics.Count == 1 ? string.Empty : "s")}. Nothing was imported.";
+        TestCaptureSuggestedTypes = SuggestedTypesSummary(plan);
         TestCaptureResults = preview.Batches.Select((batch, batchIndex) =>
         {
             var plannedBatch = plan.Batches[batchIndex];
@@ -835,15 +1062,50 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
                 batch.IndexValues.Select(value => PreviewIndex(value, 0)).ToList(),
                 batch.Documents.Select((document, documentIndex) =>
                 {
-                    var threshold = plannedBatch.Documents[documentIndex].Type?.AutoReadyThreshold ?? 0;
+                    var planned = plannedBatch.Documents[documentIndex];
+                    var threshold = planned.Type?.AutoReadyThreshold ?? 0;
                     return new TestCaptureDocumentRow(
                         $"Document {document.Number} — {document.DocumentType}",
-                        $"{document.SourceFiles} · {document.PageCount} page{(document.PageCount == 1 ? string.Empty : "s")}",
+                        $"{document.SourceFiles} · {PageList(planned.SourcePages)}",
                         document.Status == DocumentStatus.Ready ? "Ready" : "Needs review",
-                        document.IndexValues.Select(value => PreviewIndex(value, threshold)).ToList());
+                        document.IndexValues.Select(value => PreviewIndex(value, threshold)).ToList(),
+                        string.Join(Environment.NewLine, document.ReviewReasons ?? []),
+                        planned.AiSuggestedType is { } suggested ? $"AI: {suggested}" : string.Empty);
                 }).ToList());
         }).ToList();
         OnPropertyChanged(nameof(HasTestCaptureResults));
+    }
+
+    /// <summary>Labels the AI gave documents that fit none of the profile's types — candidates for new
+    /// document types.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTestCaptureSuggestedTypes))]
+    private string _testCaptureSuggestedTypes = string.Empty;
+
+    public bool HasTestCaptureSuggestedTypes => TestCaptureSuggestedTypes.Length > 0;
+
+    internal static string SuggestedTypesSummary(CapturePlan plan)
+    {
+        var counts = plan.Batches.SelectMany(batch => batch.Documents)
+            .Select(document => document.AiSuggestedType)
+            .OfType<string>()
+            .GroupBy(label => label, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(group => group.Count()).ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Count() == 1 ? group.First() : $"{group.First()} ×{group.Count()}")
+            .ToList();
+        return counts.Count == 0
+            ? string.Empty
+            : $"The AI found documents that fit none of this profile's types: {string.Join(", ", counts)}. Consider adding types for them — \"+ From catalog\" may have one ready-made.";
+    }
+
+    // "page 3" or "pages 1–4" — which pages went where is the point of a separation test.
+    private static string PageList(IReadOnlyList<SourcePage> pages)
+    {
+        var numbers = pages.Select(page => page.PageNumber).ToList();
+        if (numbers.Count == 1)
+            return $"page {numbers[0]}";
+        var contiguous = numbers.Zip(numbers.Skip(1)).All(pair => pair.Second == pair.First + 1);
+        return contiguous ? $"pages {numbers[0]}–{numbers[^1]}" : $"pages {string.Join(", ", numbers)}";
     }
 
     private static TestCaptureIndexRow PreviewIndex(IndexValue value, int confidenceThreshold)
@@ -1104,6 +1366,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         FlushSelectedDocument();
         EnablementIssues = Validate();
         OnPropertyChanged(nameof(EnablementIssues));
+        OnPropertyChanged(nameof(AiSeparationWarning));
+        OnPropertyChanged(nameof(HasAiSeparationWarning));
         OnPropertyChanged(nameof(HasEnablementIssues));
         RefreshDirtyState();
     }
@@ -1833,4 +2097,11 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         }
     }
     private static RuleSet ToRuleSet(RuleSetEditorViewModel editor) => new() { Rules = editor.ToModels(), MatchMode = editor.MatchMode, MatchMinimum = editor.MatchMinimum };
+}
+
+/// <summary>One "+ From catalog" menu entry.</summary>
+public sealed record CatalogDocumentTypeChoice(AiDocumentType Type, System.Windows.Input.ICommand AddCommand)
+{
+    public string Name => Type.Name;
+    public string Description => Type.Description;
 }

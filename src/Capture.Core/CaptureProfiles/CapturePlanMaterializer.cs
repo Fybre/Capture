@@ -160,7 +160,9 @@ public sealed class CapturePlanMaterializer(
                             pages: documentPages, existingValues: boundaryValues,
                             document: document, cancellationToken: cancellationToken).ConfigureAwait(false);
                         await indexes.SaveAsync(document.Id, values, cancellationToken).ConfigureAwait(false);
-                        document.Status = IndexFormat.StatusFor(materializedBatchValues.Concat(values), type.AutoReadyThreshold);
+                        document.Status = document.ReviewNote is not null
+                            ? DocumentStatus.NeedsReview
+                            : IndexFormat.StatusFor(materializedBatchValues.Concat(values), type.AutoReadyThreshold);
                         await documents.UpdateAsync(document, cancellationToken).ConfigureAwait(false);
                         await RunPostIndexStepsAsync(document, documentPages, values, type, cancellationToken)
                             .ConfigureAwait(false);
@@ -201,6 +203,20 @@ public sealed class CapturePlanMaterializer(
             }
             throw;
         }
+    }
+
+    /// <summary>Everything a reviewer should know about how this document was put together: AI
+    /// separation decisions it wasn't sure of, and pages whose OCR didn't go as configured.</summary>
+    internal static string? ReviewNote(PlannedDocument planned, IReadOnlyDictionary<string, CaptureMaterializationSource> sources)
+    {
+        var notes = (planned.ReviewReasons ?? [])
+            .Concat(planned.SourcePages
+                .Select(page => sources.TryGetValue(page.InputId, out var source) && source.Lattices.TryGetValue(page.PageNumber, out var lattice)
+                    ? lattice.Warning
+                    : null)
+                .OfType<string>())
+            .ToList();
+        return notes.Count > 0 ? string.Join("\n", notes) : null;
     }
 
     private async Task<CaptureDocument> MaterializeDocumentAsync(
@@ -270,6 +286,7 @@ public sealed class CapturePlanMaterializer(
             // actually applied.
             Status = profile.DocumentTypes.Count == 0 ? DocumentStatus.Ready : DocumentStatus.NeedsReview,
             PageCount = pageRows.Count,
+            ReviewNote = ReviewNote(planned, sources),
             ContentHash = sourceIds.Count == 1 ? primarySource.ContentHash : null,
             SourceImportId = sourceIds.Count == 1 ? primarySource.SourceImportId : null
         };

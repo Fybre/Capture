@@ -70,10 +70,17 @@ public sealed class LocalLlmExtractor : IAiExtractor, IDisposable
         var userPrompt = AiExtractPrompt.UserMessage(documentText, fields, maxChars);
         var grammar = LocalExtractGrammar.Build(fields);
 
-        var weights = await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
-        var raw = await RunInferenceAsync(weights, systemPrompt, userPrompt, grammar, fields.Count, cancellationToken)
+        var raw = await CompleteAsync(systemPrompt, userPrompt, grammar, Math.Max(MinMaxTokens, fields.Count * MaxTokensPerField), cancellationToken)
             .ConfigureAwait(false);
         return AiExtractPrompt.Parse(raw, fields);
+    }
+
+    /// <summary>One grammar-constrained chat completion on the local model, loading it on first use.
+    /// Shared with <see cref="LocalLlmPageSeparator"/> so both use the one copy of the weights.</summary>
+    internal async Task<string> CompleteAsync(string systemPrompt, string userPrompt, string grammar, int maxTokens, CancellationToken cancellationToken)
+    {
+        var weights = await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+        return await RunInferenceAsync(weights, systemPrompt, userPrompt, grammar, maxTokens, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<LLamaWeights> EnsureLoadedAsync(CancellationToken cancellationToken)
@@ -110,7 +117,7 @@ public sealed class LocalLlmExtractor : IAiExtractor, IDisposable
         string systemPrompt,
         string userPrompt,
         string grammar,
-        int fieldCount,
+        int maxTokens,
         CancellationToken cancellationToken)
     {
         using var context = weights.CreateContext(_modelParams!);
@@ -125,7 +132,7 @@ public sealed class LocalLlmExtractor : IAiExtractor, IDisposable
         var inferenceParams = new InferenceParams
         {
             SamplingPipeline = new DefaultSamplingPipeline { Temperature = 0f, Grammar = new Grammar(grammar, "root") },
-            MaxTokens = Math.Max(MinMaxTokens, fieldCount * MaxTokensPerField),
+            MaxTokens = maxTokens,
             AntiPrompts = ["User:"]
         };
 

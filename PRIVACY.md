@@ -45,6 +45,15 @@ you configure or request:
   provide. That service's own terms and privacy policy apply to what it receives. If you choose the
   local AI option instead, extraction runs on your computer. The model is downloaded once from Hugging
   Face when you ask for it, and no document content is sent. AI extraction can be turned off.
+- **AI document separation (optional).** If a capture profile separates documents with AI and a cloud
+  AI service is configured, Capture sends that service the recognised text of each page, together with
+  the pages either side of it, and the profile's document type names and descriptions. Unless you turn
+  page images off in Settings, it also sends those pages' images. The local AI option is text only and
+  runs on your computer.
+- **External OCR (optional).** If a capture profile uses Azure AI Document Intelligence for OCR,
+  Capture sends the scanned page images it is set to read (every page, or only pages the built-in OCR
+  reads poorly) to the Azure resource you configure in Settings ▸ Connections, using its key. Microsoft's
+  terms and privacy policy for that resource apply. PDF pages that already contain text are not sent.
 - **Exports you set up.** Capture sends documents and their index values to the destinations you
   configure: a Therefore™ server, a REST web service, or files and folders you choose. Those systems
   are operated by you or your organisation, and their own policies apply.

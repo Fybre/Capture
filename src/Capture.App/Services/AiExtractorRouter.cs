@@ -65,3 +65,38 @@ public sealed class AiExtractorRouter : IAiExtractor
             Task.FromResult<IReadOnlyDictionary<Guid, AiExtractedValue>>(new Dictionary<Guid, AiExtractedValue>());
     }
 }
+
+/// <summary>The <see cref="IAiPageSeparator"/> registered for the app: the cloud or local separator by
+/// <c>WatchSettings.AiProvider</c>, read on every call like <see cref="AiExtractorRouter"/>. With AI
+/// turned off it reports unconfigured, so captures fall back to rules and flag their documents.</summary>
+public sealed class AiPageSeparatorRouter : IAiPageSeparator
+{
+    private readonly IWatchSettingsStore _settings;
+    private readonly OpenAiPageSeparator _cloud;
+    private readonly LocalLlmPageSeparator _local;
+
+    public AiPageSeparatorRouter(IWatchSettingsStore settings, OpenAiPageSeparator cloud, LocalLlmPageSeparator local)
+    {
+        _settings = settings;
+        _cloud = cloud;
+        _local = local;
+    }
+
+    public bool IsConfigured => Current() is { IsConfigured: true };
+
+    public Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
+        IReadOnlyList<AiSeparationPage> pages,
+        IReadOnlyList<AiSeparationType>? types,
+        CancellationToken cancellationToken = default) =>
+        Current() is { } separator
+            ? separator.AnalyzeAsync(pages, types, cancellationToken)
+            : Task.FromResult<IReadOnlyList<AiPageVerdict>>([]);
+
+    private IAiPageSeparator? Current() =>
+        Task.Run(() => _settings.LoadAsync()).GetAwaiter().GetResult().AiProvider switch
+        {
+            AiProvider.Local => _local,
+            AiProvider.None => null,
+            _ => _cloud
+        };
+}

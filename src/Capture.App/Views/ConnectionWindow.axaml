@@ -35,8 +35,15 @@
                            TextWrapping="Wrap" Classes="hint" />
             </StackPanel>
 
-            <TextBlock Text="Sign-in" Classes="field-label" />
-            <ComboBox ItemsSource="{Binding AuthChoices}" SelectedItem="{Binding SelectedAuth}" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="10" IsVisible="{Binding IsAzure}">
+                <TextBlock Text="Endpoint" Classes="field-label" />
+                <TextBox Text="{Binding BaseUrl}" Watermark="https://your-resource.cognitiveservices.azure.com/" />
+                <TextBlock Text="From the Azure portal: your Document Intelligence resource ▸ Keys and Endpoint. Capture profiles use it to read scanned pages, including handwriting, with Azure's Read model."
+                           TextWrapping="Wrap" Classes="hint" />
+            </StackPanel>
+
+            <TextBlock Text="Sign-in" Classes="field-label" IsVisible="{Binding HasAuthChoice}" />
+            <ComboBox ItemsSource="{Binding AuthChoices}" SelectedItem="{Binding SelectedAuth}" HorizontalAlignment="Stretch" IsVisible="{Binding HasAuthChoice}">
                 <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:ConnectionAuthChoice">
                         <TextBlock Text="{Binding Label}" />

@@ -41,6 +41,10 @@ public sealed class CaptureDocument
     public int PageCount { get; set; }
     public DateTimeOffset CreatedUtc { get; init; } = DateTimeOffset.UtcNow;
     public string? ErrorMessage { get; set; }
+
+    /// <summary>Why this document needs a reviewer's attention beyond its index fields — e.g. an AI
+    /// separation decision it wasn't sure of. Shown above the fields in review.</summary>
+    public string? ReviewNote { get; set; }
     public RedactionStatus RedactionStatus { get; set; } = RedactionStatus.None;
     public string? RedactedPath { get; set; }
     public string? RedactionError { get; set; }

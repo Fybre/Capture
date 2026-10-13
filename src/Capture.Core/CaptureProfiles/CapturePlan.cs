@@ -1,3 +1,4 @@
+using Capture.Core.Indexing;
 using Capture.Core.Models;
 
 namespace Capture.Core.CaptureProfiles;
@@ -35,7 +36,8 @@ public sealed record CapturePreviewDocument(
     string SourceFiles,
     int PageCount,
     DocumentStatus Status,
-    IReadOnlyList<IndexValue> IndexValues);
+    IReadOnlyList<IndexValue> IndexValues,
+    IReadOnlyList<string>? ReviewReasons = null);
 
 public sealed record PlannedBatch(
     Guid PlanId,
@@ -49,7 +51,9 @@ public sealed record PlannedDocument(
     Guid PlanId,
     DocumentTypeDefinition? Type,
     IReadOnlyList<SourcePage> SourcePages,
-    IReadOnlyList<RuleMatch> BoundaryMatches);
+    IReadOnlyList<RuleMatch> BoundaryMatches,
+    IReadOnlyList<string>? ReviewReasons = null,
+    string? AiSuggestedType = null);
 
 public sealed record ProcessingDiagnostic(string Code, string Message, SourcePage? Page = null);
 
@@ -60,7 +64,8 @@ public sealed record AnalyzedPage(
     IReadOnlyList<AnalyzedBarcode> Barcodes,
     bool IsBlank = false,
     IReadOnlyDictionary<Guid, string>? RuleTexts = null,
-    IReadOnlySet<Guid>? PreMatchedRuleIds = null);
+    IReadOnlySet<Guid>? PreMatchedRuleIds = null,
+    AiPageVerdict? Ai = null);
 
 public sealed record AnalyzedBarcode(string Value, string? Format = null, double? Confidence = null, Guid? RuleId = null);
 

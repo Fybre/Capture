@@ -41,7 +41,10 @@ public static class ConnectionRequests
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", connection.Token);
                 break;
             case ConnectionAuthMethod.ApiKey:
-                request.Headers.TryAddWithoutValidation(connection.ApiKeyHeader!.Trim(), connection.Token);
+                var header = connection.Type == ConnectionType.AzureDocumentIntelligence
+                    ? ConnectionDefinition.AzureKeyHeader
+                    : connection.ApiKeyHeader!.Trim();
+                request.Headers.TryAddWithoutValidation(header, connection.Token);
                 break;
         }
 
@@ -71,6 +74,8 @@ public static class ConnectionRequests
         try
         {
             var isTherefore = connection.Type == ConnectionType.Therefore;
+            if (connection.Type == ConnectionType.AzureDocumentIntelligence)
+                return await TestAzureAsync(http, connection, cancellationToken).ConfigureAwait(false);
             using var request = Create(connection, isTherefore ? HttpMethod.Post : HttpMethod.Get, isTherefore ? "GetConnectionToken" : string.Empty);
             using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var status = (int)response.StatusCode;
@@ -99,6 +104,24 @@ public static class ConnectionRequests
             return (false, ex is TaskCanceledException ? "The server didn't answer in time." : ex.Message);
         }
     }
+
+    // The resource's info call needs a valid key and touches no documents, so it's a safe sign-in test.
+    private static async Task<(bool Ok, string Message)> TestAzureAsync(HttpClient http, ConnectionDefinition connection, CancellationToken cancellationToken)
+    {
+        using var request = Create(connection, HttpMethod.Get, "documentintelligence/info?api-version=" + AzureApiVersion);
+        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var status = (int)response.StatusCode;
+        return response.StatusCode switch
+        {
+            _ when response.IsSuccessStatusCode => (true, "Connected to Azure Document Intelligence."),
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => (false, $"Azure refused the key ({status})."),
+            HttpStatusCode.NotFound => (false, "Azure answered, but this doesn't look like a Document Intelligence endpoint (404)."),
+            _ => (false, $"Azure returned {status}: {Shorten(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))}")
+        };
+    }
+
+    /// <summary>The Azure Document Intelligence REST API version Capture calls.</summary>
+    public const string AzureApiVersion = "2024-11-30";
 
     internal static string Shorten(string text) => text.Length > 300 ? text[..300] + "…" : text;
 }
