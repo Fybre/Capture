@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.8.25",
+    "date": "2026-10-15",
+    "changes": [
+      "Button fields on the batch now run their script; before, clicking one said \"This button has no script configured\". A batch button's script sees the batch fields as Fields, like other batch scripts.",
+      "A document button's script can read the batch's fields with Context.Batch.Fields[\"Name\"], the same as in the designer's Run test and in every other document script."
+    ]
+  },
+  {
     "version": "0.8.24",
     "date": "2026-10-14",
     "changes": [
