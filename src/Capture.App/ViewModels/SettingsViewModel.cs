@@ -525,7 +525,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanScanDuplex));
     }
 
-    // While restoring saved settings (see InitializeAsync), a device's capability probe is trusted
+    // While restoring saved settings (see InitializeAsync) for the saved device, its capability probe is trusted
     // to EXPAND what's shown as available, but never to silently overturn what the user explicitly
     // saved — the probe (a native helper subprocess + ImageCaptureCore) can be slow, report an
     // incomplete capability set, or fall back to restrictive defaults on timeout, and none of that
@@ -533,6 +533,10 @@ public partial class SettingsViewModel : ViewModelBase
     // window, corrective clamping to the confirmed capabilities resumes as normal.
     private void RefreshScanCapabilities(ScanDevice? device)
     {
+        // Only for the device the settings were saved with: when it's gone and the first device
+        // listed is picked instead, the saved choices (or the defaults, when no device was saved —
+        // Flatbed for a feeder-only scanner) don't apply to it.
+        var keepSaved = _restoringSettings && device is not null && device.Id == _pendingScanDeviceId;
         var previousDpi = ScanDpi;
         ScanDpiOptions.Clear();
         foreach (var dpi in (device?.SupportedDpis is { Count: > 0 } supported
@@ -543,7 +547,7 @@ public partial class SettingsViewModel : ViewModelBase
                  .Order())
             ScanDpiOptions.Add(dpi);
 
-        if (_restoringSettings)
+        if (keepSaved)
         {
             if (previousDpi > 0 && !ScanDpiOptions.Contains(previousDpi))
                 InsertSorted(ScanDpiOptions, previousDpi);
@@ -559,7 +563,7 @@ public partial class SettingsViewModel : ViewModelBase
         if (device?.SupportsFeeder == true)
             ScanSourceOptions.Add(ScanSourceKind.Feeder);
 
-        if (_restoringSettings)
+        if (keepSaved)
         {
             if (!ScanSourceOptions.Contains(SelectedScanSource))
                 ScanSourceOptions.Add(SelectedScanSource);
@@ -569,7 +573,7 @@ public partial class SettingsViewModel : ViewModelBase
             SelectedScanSource = ScanSourceOptions.FirstOrDefault();
         }
 
-        if (!_restoringSettings)
+        if (!keepSaved)
         {
             if (device?.SupportsGrayscale == false)
                 ScanGrayscale = false;

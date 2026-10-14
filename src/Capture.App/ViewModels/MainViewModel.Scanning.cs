@@ -268,6 +268,12 @@ public partial class MainViewModel
         var sourceKind = _watchSettings.ScanSource == ScanInputSource.Feeder
             ? ScanSourceKind.Feeder
             : ScanSourceKind.Flatbed;
+        // The saved source can belong to another scanner (or be the default, Flatbed, when none was
+        // saved): a scanner with only the other one uses that.
+        if (sourceKind == ScanSourceKind.Flatbed && !device.SupportsFlatbed && device.SupportsFeeder)
+            sourceKind = ScanSourceKind.Feeder;
+        else if (sourceKind == ScanSourceKind.Feeder && !device.SupportsFeeder && device.SupportsFlatbed)
+            sourceKind = ScanSourceKind.Flatbed;
         var options = new ScanOptions(
             device.Id, _watchSettings.ScanDpi, _watchSettings.ScanDuplex, colorMode, sourceKind,
             _watchSettings.ScanShowDriverSettings);
