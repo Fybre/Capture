@@ -286,7 +286,15 @@ public partial class MainViewModel
 
         var document = documentRow.Document;
         var profile = FindDocumentType(document.ProfileId);
+        var captureProfile = FindCaptureProfileForDocumentType(document.ProfileId);
+        // A button can be a batch field, defined on the capture profile rather than the document type.
         var field = profile?.Fields.FirstOrDefault(item => item.Id == row.Value.FieldId);
+        var isBatchField = false;
+        if (field is null && captureProfile?.Batch.Fields.FirstOrDefault(item => item.Id == row.Value.FieldId) is { } batchField)
+        {
+            field = batchField;
+            isBatchField = true;
+        }
         if (field is null || string.IsNullOrWhiteSpace(field.ButtonScriptSource))
         {
             StatusText = "This button has no script configured";
@@ -310,14 +318,20 @@ public partial class MainViewModel
                 };
             }
 
+            // Scoped like the field's other scripts: a batch button sees the batch fields as Fields, the
+            // same as a batch-level script; a document button sees every field as Fields (as before)
+            // and the batch's own fields as Context.Batch.Fields, the same as a document-level script.
             var context = new ScriptExecutionContext
             {
-                ProfileName = profile!.Name,
+                ProfileName = isBatchField ? captureProfile!.Name : profile!.Name,
                 DocumentNumber = defaultContext?.DocumentNumber ?? 1,
                 BatchNumber = defaultContext?.BatchNumber ?? 1,
                 Timestamp = DateTimeOffset.Now,
-                Values = documentRow.Indexes,
+                Values = isBatchField ? documentRow.BatchIndexes : documentRow.Indexes,
                 Document = ScriptDocumentInfo.From(lattices, document),
+                Scope = isBatchField ? ScriptScopeKind.Batch : ScriptScopeKind.Document,
+                DocumentType = profile?.Name,
+                BatchValues = isBatchField ? null : documentRow.BatchIndexes,
                 Dialogs = new ScriptDialogs(_confirm, () => _dialogs.Host)
             };
 
@@ -331,7 +345,8 @@ public partial class MainViewModel
                 TimeoutSeconds = field.ButtonTimeoutSeconds
             };
 
-            var result = await _scripts.RunProfileScriptAsync(script, context, sharedSource: profile.SharedScriptSource).ConfigureAwait(true);
+            var sharedSource = isBatchField ? captureProfile!.Batch.SharedScriptSource : profile!.SharedScriptSource;
+            var result = await _scripts.RunProfileScriptAsync(script, context, sharedSource: sharedSource).ConfigureAwait(true);
             if (!result.Success)
             {
                 Trace.TraceError($"Button script \"{field.Name}\" failed: {result.ErrorMessage}");
