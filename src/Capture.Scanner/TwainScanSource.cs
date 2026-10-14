@@ -167,12 +167,16 @@ public sealed class TwainScanSource : IScanSource, IDisposable
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (job.Error is null && !job.StopRequested && options.Source == ScanSourceKind.Feeder
-                && await Task.Run(() => FeederLoaded(session)).ConfigureAwait(false) == true)
+            if (job.Error is null && !job.StopRequested && options.Source == ScanSourceKind.Feeder)
             {
-                // NTwain ends the transfers without an error event when the driver reports a jam or a
-                // double feed, so the paper left behind is the only sign the stack wasn't finished.
-                job.Error = "The scanner stopped before the feeder was empty. Check for a paper jam or two sheets fed together, then scan the rest.";
+                // NTwain ends the transfers without an error event when the driver reports a jam, a
+                // double feed or an open cover, so the feeder's state is the only sign the stack
+                // wasn't finished.
+                var (loaded, problem) = await Task.Run(() => FeederState(session)).ConfigureAwait(false);
+                if (problem == TWCC.INTERLOCK)
+                    job.Error = "The scanner stopped because its cover is open. Close it, then scan the rest.";
+                else if (loaded == true)
+                    job.Error = "The scanner stopped before the feeder was empty. Check for a paper jam or two sheets fed together, then scan the rest.";
             }
 
             if (job.Error is { } error)
@@ -251,7 +255,10 @@ public sealed class TwainScanSource : IScanSource, IDisposable
         if (feeder)
         {
             // Checked up front: NTwain reports a driver's "no paper" as an empty scan, not an error.
-            if (FeederLoaded(session) == false)
+            var (loaded, problem) = FeederState(session);
+            if (problem == TWCC.INTERLOCK)
+                throw new InvalidOperationException("The scanner's cover is open.");
+            if (loaded == false)
                 throw new InvalidOperationException("There's no paper in the scanner's feeder.");
             caps.CAP_AUTOFEED.Set(TW_BOOL.True);
             if (options.Duplex && !caps.CAP_DUPLEXENABLED.Set(TW_BOOL.True).IsSuccess)
@@ -277,20 +284,22 @@ public sealed class TwainScanSource : IScanSource, IDisposable
             throw new InvalidOperationException($"The scanner didn't start: {Describe(enabled)}");
     }
 
-    // Whether the feeder has paper in it, or null when the driver can't tell.
-    private static bool? FeederLoaded(TwainAppSession session)
+    // Whether the feeder has paper in it (null when the driver can't tell), and the condition the
+    // driver gave if it couldn't — an open cover makes the R50 answer INTERLOCK.
+    private static (bool? Loaded, TWCC Problem) FeederState(TwainAppSession session)
     {
         try
         {
-            var loaded = session.Caps.CAP_FEEDERLOADED;
-            if (!loaded.Supports.HasFlag(TWQC.GETCURRENT))
-                return null;
-            var current = loaded.GetCurrent();
-            return current.Count == 0 ? null : current[0] == TW_BOOL.True;
+            if (!session.Caps.CAP_FEEDERLOADED.Supports.HasFlag(TWQC.GETCURRENT))
+                return (null, TWCC.None);
+            var sts = session.GetCapCurrent(CAP.CAP_FEEDERLOADED, out List<TW_BOOL> values);
+            if (!sts.IsSuccess)
+                return (null, sts.ConditionCode);
+            return (values.Count == 0 ? null : values[0] == TW_BOOL.True, TWCC.None);
         }
         catch (Exception)
         {
-            return null;
+            return (null, TWCC.None);
         }
     }
 
