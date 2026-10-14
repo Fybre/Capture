@@ -268,7 +268,9 @@ public partial class MainViewModel
         var sourceKind = _watchSettings.ScanSource == ScanInputSource.Feeder
             ? ScanSourceKind.Feeder
             : ScanSourceKind.Flatbed;
-        var options = new ScanOptions(device.Id, _watchSettings.ScanDpi, _watchSettings.ScanDuplex, colorMode, sourceKind);
+        var options = new ScanOptions(
+            device.Id, _watchSettings.ScanDpi, _watchSettings.ScanDuplex, colorMode, sourceKind,
+            _watchSettings.ScanShowDriverSettings);
 
         IsScanning = true;
         StatusText = $"Scanning from {device.Name}…";

@@ -100,6 +100,10 @@ public sealed class WatchSettings
     public ScanInputSource ScanSource { get; set; } = ScanInputSource.Flatbed;
     public bool ScanDuplex { get; set; }
 
+    /// <summary>Open a TWAIN scanner's own settings window before each scan, for its clean-up options
+    /// (deskew, blank-page removal, colour dropout…). Ignored by other scanners.</summary>
+    public bool ScanShowDriverSettings { get; set; }
+
     /// <summary>The scanner to use, by IScanSource-reported Id — null/empty means "the first available
     /// device", which is also the fallback if this device is no longer present.</summary>
     public string? ScanPreferredDeviceId { get; set; }

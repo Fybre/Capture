@@ -509,6 +509,10 @@
                         <CheckBox Content="Scan in grayscale"
                                   IsChecked="{Binding ScanGrayscale}"
                                   IsEnabled="{Binding CanScanGrayscale}" />
+                        <CheckBox Content="Show the scanner's own settings before each scan"
+                                  IsChecked="{Binding ScanShowDriverSettings}"
+                                  IsVisible="{Binding IsTwainScanner}"
+                                  ToolTip.Tip="Opens the TWAIN driver's window, for its own options such as deskew, blank-page removal or colour dropout. Its resolution, colour and feeder choices then apply instead of the ones above." />
                     </StackPanel>
                 </Border>
                 </Grid>

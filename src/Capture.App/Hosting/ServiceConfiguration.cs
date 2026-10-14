@@ -82,7 +82,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IWatchFolderService, WatchFolderService>();
         services.AddSingleton<IScanSource>(_ =>
             OperatingSystem.IsMacOS() ? new MacScanSource()
-            : OperatingSystem.IsWindows() ? new WiaScanSource()
+            : OperatingSystem.IsWindows() ? new CompositeScanSource(("WIA", new WiaScanSource()), ("TWAIN", new TwainScanSource()))
             : new UnavailableScanSource());
         services.AddSingleton<IExportAttachmentProcessor, PdfExportAttachmentProcessor>();
         services.AddSingleton<IExportWriter, CsvExportWriter>();

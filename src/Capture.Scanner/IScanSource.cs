@@ -22,12 +22,15 @@ public enum ScanColorMode
     Grayscale = 1
 }
 
+/// <param name="ShowDriverSettings">Open the scanner driver's own settings window first, for its
+/// image clean-up options (TWAIN only; other sources ignore it).</param>
 public sealed record ScanOptions(
     string DeviceId,
     int Dpi,
     bool Duplex,
     ScanColorMode ColorMode = ScanColorMode.Color,
-    ScanSourceKind Source = ScanSourceKind.Flatbed);
+    ScanSourceKind Source = ScanSourceKind.Flatbed,
+    bool ShowDriverSettings = false);
 
 /// <summary>A scanner-owned temporary image handed to the caller. Once yielded, the caller owns the
 /// file and must delete it after import (including on partial-job failure).</summary>

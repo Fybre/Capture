@@ -1,5 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- TWAIN on Windows. v4 is the only release targeting plain net8.0 (v3 needs net6.0-windows);
+         it's used with native transfers, which every TWAIN driver must support. -->
+    <PackageReference Include="NTwain" Version="4.0.0-beta.4" />
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
+  </ItemGroup>
 </Project>

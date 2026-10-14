@@ -430,6 +430,7 @@ public partial class SettingsViewModel : ViewModelBase
         ScanGrayscale = settings.ScanGrayscale;
         SelectedScanSource = settings.ScanSource == ScanInputSource.Feeder ? ScanSourceKind.Feeder : ScanSourceKind.Flatbed;
         ScanDuplex = settings.ScanDuplex;
+        ScanShowDriverSettings = settings.ScanShowDriverSettings;
         _pendingScanDeviceId = settings.ScanPreferredDeviceId;
 
         await LoadRedactionSetsAsync();
@@ -467,6 +468,12 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _scanDuplex;
+
+    [ObservableProperty]
+    private bool _scanShowDriverSettings;
+
+    /// <summary>The driver's own settings window is a TWAIN feature.</summary>
+    public bool IsTwainScanner => SelectedScanDevice?.Id.StartsWith(TwainScanSource.IdPrefix, StringComparison.Ordinal) == true;
 
     public ObservableCollection<int> ScanDpiOptions { get; } = [];
 
@@ -571,6 +578,7 @@ public partial class SettingsViewModel : ViewModelBase
         }
         OnPropertyChanged(nameof(CanScanDuplex));
         OnPropertyChanged(nameof(CanScanGrayscale));
+        OnPropertyChanged(nameof(IsTwainScanner));
 
         // ScanDpiOptions/ScanSourceOptions are rebuilt above by Clear()-then-Add(), but ScanDpi/
         // SelectedScanSource themselves may not have changed value at all (the common case: the
@@ -795,6 +803,7 @@ public partial class SettingsViewModel : ViewModelBase
             ScanGrayscale = ScanGrayscale,
             ScanSource = SelectedScanSource == ScanSourceKind.Feeder ? ScanInputSource.Feeder : ScanInputSource.Flatbed,
             ScanDuplex = ScanDuplex,
+            ScanShowDriverSettings = ScanShowDriverSettings,
             ScanPreferredDeviceId = SelectedScanDevice?.Id
         };
         return true;
