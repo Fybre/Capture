@@ -31,6 +31,7 @@ public partial class MainViewModel : ViewModelBase
 {
     private readonly IAppPaths _paths;
     private readonly IDocumentStore _store;
+    private readonly IExportHistoryStore? _exportHistory;
     private readonly CaptureWorkflowService _captureWorkflow;
     private readonly IPageManagementService _pageManagement;
     private readonly IFileDialogService _dialogs;
@@ -106,8 +107,10 @@ public partial class MainViewModel : ViewModelBase
         IPdfExportWriter pdfExportWriter,
         IFieldScriptRunner? scripts = null,
         IEnumerable<IPostIndexStep>? postIndexSteps = null,
-        IAiDocumentTypeStore? aiDocumentTypeStore = null)
+        IAiDocumentTypeStore? aiDocumentTypeStore = null,
+        IExportHistoryStore? exportHistory = null)
     {
+        _exportHistory = exportHistory;
         _paths = paths;
         _store = store;
         _captureWorkflow = captureWorkflow;

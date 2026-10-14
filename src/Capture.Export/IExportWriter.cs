@@ -7,6 +7,10 @@ public sealed record ExportResult(bool Success, string? Message)
 {
     /// <summary>The ExportDefinition this result is for; set by <see cref="ProfileExportRunner"/>.</summary>
     public Guid ExportId { get; init; }
+
+    /// <summary>What the export produced, for the document's export history — e.g. "Therefore document
+    /// 1234", or the file it wrote.</summary>
+    public string? Reference { get; init; }
 }
 
 public sealed record ExportDocumentContext(

@@ -56,18 +56,22 @@ public sealed class CsvExportWriter : IExportWriter
                 row.Add(copiedFilePath ?? string.Empty);
             }
 
+            string csvPath;
             if (definition.OutputMode == ExportOutputMode.AppendToSharedFile)
             {
-                var path = Path.Combine(definition.OutputFolder, definition.SharedFileName);
-                await AppendRowAsync(path, header, row, definition.IncludeHeader, cancellationToken).ConfigureAwait(false);
+                csvPath = Path.Combine(definition.OutputFolder, definition.SharedFileName);
+                await AppendRowAsync(csvPath, header, row, definition.IncludeHeader, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                var path = EnsureUniquePath(Path.Combine(definition.OutputFolder, baseName + ".csv"));
-                await WriteNewFileAsync(path, header, row, definition.IncludeHeader, cancellationToken).ConfigureAwait(false);
+                csvPath = EnsureUniquePath(Path.Combine(definition.OutputFolder, baseName + ".csv"));
+                await WriteNewFileAsync(csvPath, header, row, definition.IncludeHeader, cancellationToken).ConfigureAwait(false);
             }
 
-            return new ExportResult(true, null);
+            return new ExportResult(true, null)
+            {
+                Reference = copiedFilePath is null ? csvPath : $"{csvPath} and {copiedFilePath}"
+            };
         }
         catch (Exception ex)
         {

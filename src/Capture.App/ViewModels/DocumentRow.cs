@@ -33,6 +33,33 @@ public sealed partial class DocumentRow : ObservableObject
 
     public Guid Id => Document.Id;
 
+    /// <summary>Every export run for this document, newest first.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasExportRecords))]
+    [NotifyPropertyChangedFor(nameof(ExportSummary))]
+    private IReadOnlyList<ExportRecordRow> _exportRecords = [];
+
+    public bool HasExportRecords => ExportRecords.Count > 0;
+
+    /// <summary>Where it went, one line per export that has succeeded (the latest run of each) — the
+    /// Table view's Status tooltip. Null when it hasn't been exported.</summary>
+    public string? ExportSummary
+    {
+        get
+        {
+            var latest = ExportRecords
+                .Where(row => row.Success)
+                .GroupBy(row => row.Record.ExportId)
+                .Select(group => group.First())
+                .Select(row => $"{row.Record.ExportName}: {row.Detail} ({row.When})")
+                .ToList();
+            return latest.Count == 0 ? null : "Exported to\n" + string.Join("\n", latest);
+        }
+    }
+
+    public void AddExportRecords(IEnumerable<ExportRecord> records) =>
+        ExportRecords = records.Select(record => new ExportRecordRow(record)).Reverse().Concat(ExportRecords).ToList();
+
     public string FileName => Document.OriginalFileName;
 
     public int PageCount => Document.PageCount;
@@ -216,7 +243,10 @@ public sealed partial class DocumentRow : ObservableObject
     public void RecalcStatus()
     {
         ApplyConditions();
-        if (Document.Status != DocumentStatus.Error && Indexes.Count > 0)
+        // An Exported document stays Exported, like an Error one stays Error: turned back into Ready
+        // whenever its fields were loaded, Export all would send it again (a second Therefore document),
+        // and any later save would store Ready over Exported. Mark ready re-opens it deliberately.
+        if (Document.Status is not (DocumentStatus.Error or DocumentStatus.Exported) && Indexes.Count > 0)
             Document.Status = IndexFormat.StatusFor(Indexes, ConfidenceThreshold);
         NotifyIndexes();
     }

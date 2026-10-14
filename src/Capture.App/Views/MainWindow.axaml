@@ -1134,6 +1134,49 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <DockPanel Margin="0,8,0,10"
+                                   IsVisible="{Binding SelectedDocument.HasExportRecords, FallbackValue=False}"
+                                   LastChildFill="True">
+                            <TextBlock Text="EXPORTS"
+                                       DockPanel.Dock="Left"
+                                       Classes="eyebrow"
+                                       FontSize="11"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
+                            <Border Height="1" Background="{DynamicResource BorderBrush1}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding SelectedDocument.ExportRecords, FallbackValue={x:Null}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ExportRecordRow">
+                                    <StackPanel Spacing="1" Margin="0,0,0,8">
+                                        <DockPanel LastChildFill="True">
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding When}"
+                                                       FontSize="10.5"
+                                                       Foreground="{DynamicResource FaintBrush}"
+                                                       VerticalAlignment="Center" />
+                                            <Panel>
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontWeight="Medium"
+                                                           FontSize="12.5"
+                                                           IsVisible="{Binding Success}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontWeight="Medium"
+                                                           FontSize="12.5"
+                                                           Foreground="{DynamicResource CriticalBrush}"
+                                                           IsVisible="{Binding !Success}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </Panel>
+                                        </DockPanel>
+                                        <SelectableTextBlock Text="{Binding Detail}"
+                                                             FontSize="11"
+                                                             Foreground="{DynamicResource MutedBrush}"
+                                                             TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
                 <StackPanel Grid.Row="2" Margin="16,12" Spacing="8">
@@ -1365,6 +1408,7 @@
                                                                     <DataTemplate DataType="vm:DocumentRow">
                                                                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                                                             <Border Classes="chip"
+                                                                                    ToolTip.Tip="{Binding ExportSummary}"
                                                                                     Classes.chip-ready="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReady}}"
                                                                                     Classes.chip-review="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsReview}}"
                                                                                     Classes.chip-error="{Binding StatusDisplay, Converter={x:Static conv:StatusChipConverter.IsError}}"

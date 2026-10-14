@@ -247,6 +247,11 @@
                                    Classes="help-body" />
                         <Border Classes="help-tip"><TextBlock Text="Because removal runs first, a discarded page is invisible to every later rule — including a Blank page separation rule on the Batch or on any document type, which can never match while this setting is enabled." Classes="help-note" /></Border>
 
+                        <TextBlock Text="Straighten crooked pages" Classes="help-h2" />
+                        <TextBlock Text="On the Overview tab, and on by default: before a scanned page is read, a tilt of up to 10° — a sheet that went through the feeder at an angle, or lay crooked on the glass — is levelled out. A page that reads badly is also tried upside down and sideways, and turned if one of those reads clearly better. Straight pages read better, so barcodes, zones, AI and field values all benefit. Pages with their own PDF text are left as they are. A document with a corrected page is saved from the corrected images, so the exported file is straight too."
+                                   Classes="help-body" />
+                        <Border Classes="help-tip"><TextBlock Text="Turn it off for a profile whose pages are deliberately at an angle, such as a form with rotated stamps or labels. A page can always be turned by hand with the page tools." Classes="help-note" /></Border>
+
                         <TextBlock Text="Capture V2 storage" Classes="help-h2" />
                         <TextBlock Text="Capture V2 stores its database, settings, profiles, documents, and models separately from the previous application version. Capture Profiles are the only supported profile format in this version."
                                    Classes="help-body" />
@@ -624,7 +629,12 @@
                         <TextBlock Text="Add your Therefore server in Settings ▸ Connections (you can add several). In the profile export, choose the connection, then a category and supply each Therefore field from a batch field, document field, or typed constant value. Scope labels distinguish same-named batch and document fields. Mandatory category fields must be supplied. The file mode determines whether the original or redacted document stream is attached."
                                    Classes="help-body" />
                         <TextBlock Text="Safe operation" Classes="help-h2" />
-                        <TextBlock Text="Only Ready documents are exported. A successful export changes the document status to Exported according to the profile's workflow; failures remain visible with an error so you can correct the configuration and retry. Check output permissions and filename tokens if a CSV destination fails."
+                        <TextBlock Text="Only Ready documents are exported. A successful export changes the document status to Exported according to the profile's workflow; failures remain visible with an error so you can correct the configuration and retry. An Exported document isn't sent again by Export or Export all — the status bar counts it as already exported. To send it again on purpose, select it and choose Mark ready first. Check output permissions and filename tokens if a CSV destination fails."
+                                   Classes="help-body" />
+                        <TextBlock Text="When a document has several exports and one fails, the ones that worked are remembered: retrying sends only the ones that failed, so a Therefore document isn't created twice. Once every export has succeeded the document is Exported, and exporting it again later (after setting it back to Ready) sends everything again. A value corrected between attempts only reaches the exports that are retried."
+                                   Classes="help-body" />
+                        <TextBlock Text="Export history" Classes="help-h2" />
+                        <TextBlock Text="Every export run is recorded on the document: which export, when, and what it produced — the Therefore document number, the CSV file written, or the REST address — or why it failed. See it under Exports at the bottom of the review panel, or hover over an Exported status in the Table view."
                                    Classes="help-body" />
                         <Border Classes="help-tip"><TextBlock Text="Test every new export definition with one document before running Export all. For delivery that must never expose an original, open the generated redacted PDF first and choose Redacted — required. Use the fallback option only when sending the original is acceptable." Classes="help-note" /></Border>
                     </StackPanel>

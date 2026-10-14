@@ -24,6 +24,11 @@ public sealed class CaptureProfile
     /// scale as a BlankPage separation rule's own <see cref="SeparationStrategy.BlankInkPercent"/>.</summary>
     public float RemoveBlankPagesInkPercent { get; set; } = 1f;
 
+    /// <summary>Straightens scanned pages that are tilted, and turns ones that are upside down or sideways,
+    /// before they're read — see <see cref="Import.IPageStraightener"/>. Pages with real PDF text are
+    /// left alone.</summary>
+    public bool StraightenPages { get; set; } = true;
+
     /// <summary>Lets AI decide where each document starts and which document type it is, using each
     /// type's <see cref="DocumentTypeDefinition.AiDescription"/>. Rules still win where they match:
     /// batch rules, separator sheets, and a type's start or recognition rules.</summary>

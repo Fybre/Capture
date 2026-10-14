@@ -27,6 +27,11 @@ public sealed record CaptureMaterializationSource(
     /// CapturePlanMaterializer, which extracts pages directly from the original PDF by page number and
     /// would otherwise pull the wrong pages once numbering no longer matches the source file.</summary>
     public IReadOnlyDictionary<int, int>? OriginalPageNumbers { get; init; }
+
+    /// <summary>Pages (by <see cref="RasterPage.PageNumber"/>) whose image was straightened or turned
+    /// — see CaptureProfile.StraightenPages. A document with any of them is built from the corrected
+    /// images rather than copied from the original PDF, which still has them crooked.</summary>
+    public IReadOnlySet<int> CorrectedPages { get; init; } = new HashSet<int>();
 }
 
 public sealed record CaptureMaterializationProgress(int CompletedDocuments, int TotalDocuments, string Message);
@@ -234,7 +239,8 @@ public sealed class CapturePlanMaterializer(
         // here with sourceIds.Count == 1, and without this check would hand it a PNG, which PdfPig's
         // xref/trailer parser rejects outright ("could not find any xref tables or streams..."). Only a
         // genuinely single-PDF-source document can safely skip the (image-decoding) mergedWriter path.
-        var isSingleSourcePdf = sourceIds.Count == 1 && ImportFormats.IsPdf(primarySource.SourcePath);
+        var isSingleSourcePdf = sourceIds.Count == 1 && ImportFormats.IsPdf(primarySource.SourcePath)
+            && !planned.SourcePages.Any(page => primarySource.CorrectedPages.Contains(page.PageNumber));
         var id = Guid.NewGuid();
         paths.EnsureCreated();
         Directory.CreateDirectory(paths.DocumentPagesDirectory(id));

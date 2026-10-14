@@ -155,6 +155,8 @@
         </StackPanel>
         <CheckBox Content="End each document at the end of its input file" IsChecked="{Binding Profile.FileIsDocumentBoundary}"/>
         <CheckBox Content="Export Ready documents automatically after import" IsChecked="{Binding Profile.AutoExportReadyDocuments}"/>
+        <CheckBox Content="Straighten crooked pages and turn upside-down ones" IsChecked="{Binding Profile.StraightenPages}"
+                  ToolTip.Tip="Before a scanned page is read, a tilt of up to 10° is levelled out, and a page that's upside down or sideways is turned the right way up. Pages with their own PDF text are left as they are."/>
         <CheckBox Content="Remove blank pages on ingestion" IsChecked="{Binding RemoveBlankPagesOnIngestion}"
                   ToolTip.Tip="Discards blank pages before any other ingestion work — OCR, rule evaluation, batch/document classification"/>
         <StackPanel Spacing="5" Margin="22,0,0,0" IsVisible="{Binding RemoveBlankPagesOnIngestion}">

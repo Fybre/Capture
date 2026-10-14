@@ -1,5 +1,21 @@
 [
   {
+    "version": "0.8.24",
+    "date": "2026-10-14",
+    "changes": [
+      "Crooked scans are straightened: before a scanned page is read, a tilt of up to 10° is levelled out, and a page that's upside down or sideways is turned the right way up. Straight pages read better, so barcodes, zones, AI and field values all benefit, and the saved file is straight too. On by default; turn it off per profile on the Overview tab.",
+      "Each document keeps a record of its exports — where it went, when, and what it produced, such as the Therefore document number or the file written, or why it failed. It's shown under Exports in the review panel, and over the status in the Table view.",
+      "If one of a document's exports fails, retrying sends only the ones that failed, so the Therefore document isn't created twice. A failed export now says why in the status bar.",
+      "Exported documents stay Exported, including in Trash, and Export says why it skipped any: already exported (Mark ready to send again), not ready, or no export set up. When nothing was exported, a message says so.",
+      "Settings opens straight away instead of waiting while scanners are found; the scanner list fills in a moment later.",
+      "Two settings — sending page images to the AI, and showing a TWAIN scanner's own settings window — were lost when Capture restarted. They're now kept.",
+      "Therefore export reads amounts and dates the way the field validated them: with a currency symbol, thousands separators, and the document type's locale (e.g. day-first dates).",
+      "Adding pages to a redacted document now marks its redactions as needing to be applied again, instead of still showing it as redacted.",
+      "Exports and AI calls have longer to finish (5 minutes) for large scans and slower models; Test connection gives up after 20 seconds.",
+      "More reliable redaction service, a partial AI model download no longer left behind, an unexpected error is shown instead of closing Capture, and with blank-page removal on, scanned PDF pages are read from the right page."
+    ]
+  },
+  {
     "version": "0.8.23",
     "date": "2026-10-14",
     "changes": [

@@ -83,7 +83,10 @@ public sealed class RestExportWriter : IExportWriter
             if (!response.IsSuccessStatusCode)
                 return new ExportResult(false, $"\"{definition.Name}\": REST endpoint returned {(int)response.StatusCode} {response.ReasonPhrase} — {responseBody}");
 
-            return new ExportResult(true, $"\"{definition.Name}\": posted to {definition.RestUrl}");
+            return new ExportResult(true, $"\"{definition.Name}\": posted to {definition.RestUrl}")
+            {
+                Reference = $"{definition.RestUrl} ({(int)response.StatusCode})"
+            };
         }
         catch (Exception ex)
         {

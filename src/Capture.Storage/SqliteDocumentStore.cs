@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace Capture.Storage;
 
-public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
+public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExportHistoryStore
 {
     private readonly IAppPaths _paths;
     private readonly string _connectionString;
@@ -104,7 +104,22 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             "CREATE INDEX IF NOT EXISTS ix_documents_content_hash ON documents(content_hash) WHERE content_hash IS NOT NULL;",
             "CREATE INDEX IF NOT EXISTS ix_documents_batch ON documents(batch_id, created_utc);",
             "CREATE INDEX IF NOT EXISTS ix_batches_lookup ON batches(capture_profile_id, input_channel, state);",
-            "CREATE INDEX IF NOT EXISTS ix_batches_folder ON batches(watch_folder_entry_id, created_utc);"
+            "CREATE INDEX IF NOT EXISTS ix_batches_folder ON batches(watch_folder_entry_id, created_utc);",
+            """
+            CREATE TABLE IF NOT EXISTS export_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              document_id TEXT NOT NULL,
+              export_id TEXT NOT NULL,
+              export_name TEXT NOT NULL,
+              export_type INTEGER NOT NULL,
+              utc TEXT NOT NULL,
+              success INTEGER NOT NULL,
+              reference TEXT,
+              message TEXT,
+              FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+            );
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_export_history_document ON export_history(document_id, utc);"
         };
 
         foreach (var sql in commands)
@@ -623,6 +638,14 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
             await deletePages.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        await using (var deleteHistory = connection.CreateCommand())
+        {
+            deleteHistory.Transaction = (SqliteTransaction)transaction;
+            deleteHistory.CommandText = "DELETE FROM export_history WHERE document_id = $id;";
+            deleteHistory.Parameters.AddWithValue("$id", documentId.ToString("D"));
+            await deleteHistory.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await using (var deleteDocument = connection.CreateCommand())
         {
             deleteDocument.Transaction = (SqliteTransaction)transaction;
@@ -711,6 +734,76 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore
         var folder = Path.GetDirectoryName(path);
         if (folder is not null && Directory.Exists(folder))
             Directory.Delete(folder, recursive: true);
+    }
+
+    public async Task AddAsync(Guid documentId, IReadOnlyList<ExportRecord> records, CancellationToken cancellationToken = default)
+    {
+        if (records.Count == 0)
+            return;
+
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var record in records)
+        {
+            await using var insert = connection.CreateCommand();
+            insert.Transaction = (SqliteTransaction)transaction;
+            insert.CommandText = """
+                INSERT INTO export_history (document_id, export_id, export_name, export_type, utc, success, reference, message)
+                VALUES ($document, $export, $name, $type, $utc, $success, $reference, $message);
+                """;
+            insert.Parameters.AddWithValue("$document", documentId.ToString("D"));
+            insert.Parameters.AddWithValue("$export", record.ExportId.ToString("D"));
+            insert.Parameters.AddWithValue("$name", record.ExportName);
+            insert.Parameters.AddWithValue("$type", (int)record.ExportType);
+            insert.Parameters.AddWithValue("$utc", record.Utc.ToString("O", CultureInfo.InvariantCulture));
+            insert.Parameters.AddWithValue("$success", record.Success ? 1 : 0);
+            insert.Parameters.AddWithValue("$reference", (object?)record.Reference ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$message", (object?)record.Message ?? DBNull.Value);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<ExportRecord>>> GetAsync(
+        IReadOnlyCollection<Guid> documentIds, CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<Guid, List<ExportRecord>>();
+        if (documentIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<ExportRecord>>();
+
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        // In chunks: SQLite caps how many parameters one statement can take.
+        foreach (var chunk in documentIds.Distinct().Chunk(500))
+        {
+            await using var command = connection.CreateCommand();
+            var names = chunk.Select((_, index) => $"$id{index}").ToList();
+            command.CommandText = $"""
+                SELECT document_id, export_id, export_name, export_type, utc, success, reference, message
+                FROM export_history
+                WHERE document_id IN ({string.Join(", ", names)})
+                ORDER BY utc DESC, id DESC;
+                """;
+            for (var index = 0; index < chunk.Length; index++)
+                command.Parameters.AddWithValue(names[index], chunk[index].ToString("D"));
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var documentId = Guid.Parse(reader.GetString(0));
+                if (!results.TryGetValue(documentId, out var list))
+                    results[documentId] = list = [];
+                list.Add(new ExportRecord(
+                    Guid.Parse(reader.GetString(1)),
+                    reader.GetString(2),
+                    (Capture.Core.Profiles.ExportType)reader.GetInt32(3),
+                    DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                    reader.GetInt32(5) != 0,
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+            }
+        }
+
+        return results.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<ExportRecord>)pair.Value);
     }
 
     private static void AddDocumentParameters(SqliteCommand command, CaptureDocument document)

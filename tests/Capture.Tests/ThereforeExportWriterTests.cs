@@ -136,6 +136,7 @@ public class ThereforeExportWriterTests
 
         Assert.True(result.Success);
         Assert.Contains("27911", result.Message);
+        Assert.Equal("Therefore document 27911", result.Reference);
     }
 
     [Fact]

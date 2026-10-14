@@ -51,6 +51,7 @@ public class CsvExportWriterTests
 
         Assert.True(result.Success, result.Message);
         var path = Path.Combine(root, "invoice.csv");
+        Assert.Equal(path, result.Reference);
         var lines = await File.ReadAllLinesAsync(path);
         Assert.Equal("InvoiceNo,Supplier", lines[0]);
         Assert.Equal("INV-001,\"Acme, Inc.\"", lines[1]);

@@ -72,7 +72,10 @@ public sealed class ThereforeExportWriter : IExportWriter
             };
 
             var result = await _client.CreateDocumentAsync(connection, request, cancellationToken).ConfigureAwait(false);
-            return new ExportResult(true, $"\"{definition.Name}\": created Therefore document #{result.DocNo}");
+            return new ExportResult(true, $"\"{definition.Name}\": created Therefore document #{result.DocNo}")
+            {
+                Reference = $"Therefore document {result.DocNo}"
+            };
         }
         catch (Exception ex)
         {
@@ -90,7 +93,10 @@ public sealed class ThereforeExportWriter : IExportWriter
                 && await _client.DocumentExistsAsync(connection, docNo, cancellationToken).ConfigureAwait(false))
             {
                 return new ExportResult(true,
-                    $"\"{definition.Name}\": created Therefore document #{docNo} (confirmed after a save/workflow-timing conflict)");
+                    $"\"{definition.Name}\": created Therefore document #{docNo} (confirmed after a save/workflow-timing conflict)")
+                {
+                    Reference = $"Therefore document {docNo}"
+                };
             }
 
             return new ExportResult(false, $"\"{definition.Name}\": {ex.Message}");

@@ -21,7 +21,10 @@ public sealed class CaptureWorkflowService(
     CapturePlanner planner,
     CapturePlanMaterializer materializer,
     IProfileApplicator? applicator = null,
-    IAiPageSeparator? aiSeparator = null)
+    IAiPageSeparator? aiSeparator = null,
+    IPageStraightener? straightener = null,
+    IImageRotator? rotator = null,
+    IOcrEngine? ocr = null)
 {
     private const int AnalysisDpi = 200;
 
@@ -258,6 +261,8 @@ public sealed class CaptureWorkflowService(
             }
 
             pagesFound += rasters.Count;
+            var correctedRasters = rasters.ToArray();
+            var correctedPages = new System.Collections.Concurrent.ConcurrentDictionary<int, byte>();
 
             // Each page's OCR/lattice build, barcode decode, zone extraction, and blank-page check are
             // independent of every other page — OCR in particular spawns its own Tesseract process per
@@ -280,13 +285,43 @@ public sealed class CaptureWorkflowService(
                     {
                         DocumentId = transientDocument.Id,
                         PageNumber = raster.PageNumber,
-                        SourcePageNumber = raster.PageNumber,
+                        // The page's place in the source file: with blank pages removed, PageNumber has
+                        // been renumbered, and a scanned PDF's page would otherwise be read from the
+                        // wrong page of the file.
+                        SourcePageNumber = originalPageNumbers is { } map && map.TryGetValue(raster.PageNumber, out var original)
+                            ? original
+                            : raster.PageNumber,
                         ImagePath = raster.ImagePath,
                         Width = raster.Width,
                         Height = raster.Height,
                         Dpi = raster.Dpi
                     };
                     var lattice = await latticeBuilder.BuildPageAsync(transientDocument, transientPage, ct, profile.OcrOptions).ConfigureAwait(false);
+                    if (profile.StraightenPages && lattice.Source != LatticeSource.PdfText
+                        && await StraightenAsync(raster, lattice, ct).ConfigureAwait(false) is { } straightened)
+                    {
+                        // Read again from the corrected image itself — for a scanned PDF too, whose
+                        // pages would otherwise be read from the uncorrected file.
+                        raster = straightened;
+                        correctedRasters[index] = straightened;
+                        correctedPages[raster.PageNumber] = 0;
+                        var imageDocument = new CaptureDocument
+                        {
+                            OriginalFileName = transientDocument.OriginalFileName,
+                            StoredPath = raster.ImagePath,
+                            Source = source
+                        };
+                        lattice = await latticeBuilder.BuildPageAsync(imageDocument, new DocumentPage
+                        {
+                            DocumentId = imageDocument.Id,
+                            PageNumber = raster.PageNumber,
+                            SourcePageNumber = raster.PageNumber,
+                            ImagePath = raster.ImagePath,
+                            Width = raster.Width,
+                            Height = raster.Height,
+                            Dpi = raster.Dpi
+                        }, ct, profile.OcrOptions).ConfigureAwait(false);
+                    }
 
                     var analyzedBarcodes = new List<AnalyzedBarcode>();
                     foreach (var rule in allRules.Where(rule => rule.Type == SeparationStrategyType.Barcode))
@@ -336,11 +371,12 @@ public sealed class CaptureWorkflowService(
                 inputId,
                 sourcePath,
                 source,
-                rasters,
+                correctedRasters,
                 latticeMap,
                 await ContentHashAsync(sourcePath, cancellationToken).ConfigureAwait(false))
             {
-                OriginalPageNumbers = originalPageNumbers
+                OriginalPageNumbers = originalPageNumbers,
+                CorrectedPages = correctedPages.Keys.ToHashSet()
             };
         }
 
@@ -349,6 +385,87 @@ public sealed class CaptureWorkflowService(
 
         return new AnalysisResult(analyzedInputs, materializationSources);
     }
+
+    // Below this tilt a page is left as it is: re-drawing it for a fraction of a degree only softens it.
+    private const double MinSkewDegrees = 0.4;
+
+    /// <summary>Straightens a tilted page and turns one that's upside down or sideways, rewriting
+    /// <paramref name="raster"/>'s image in place. Returns the corrected page, or null when it was fine.
+    /// Which way up reads best is only tried when the page read poorly, so an upright page costs one
+    /// tilt measurement and nothing more.</summary>
+    private async Task<RasterPage?> StraightenAsync(RasterPage raster, PageLattice lattice, CancellationToken cancellationToken)
+    {
+        if (straightener is null)
+            return null;
+
+        var changed = false;
+        var (width, height) = (raster.Width, raster.Height);
+        var skew = straightener.DetectSkew(raster.ImagePath);
+        if (Math.Abs(skew) >= MinSkewDegrees)
+        {
+            (width, height) = straightener.Rotate(raster.ImagePath, -skew);
+            changed = true;
+        }
+
+        if (rotator is not null && ocr is not null
+            && (lattice.Words.Count == 0 || LatticeQuality.IsPoorOcr(lattice.Words, 60))
+            && !blanks.IsBlank(raster.ImagePath, 1f))
+        {
+            var turn = await BestOrientationAsync(raster.ImagePath, changed ? null : lattice, cancellationToken).ConfigureAwait(false);
+            if (turn != 0)
+            {
+                (width, height) = rotator.Rotate(raster.ImagePath, turn);
+                changed = true;
+                // A sideways page couldn't be measured for tilt until it was turned.
+                if (turn != 180 && straightener.DetectSkew(raster.ImagePath) is var after && Math.Abs(after) >= MinSkewDegrees)
+                    (width, height) = straightener.Rotate(raster.ImagePath, -after);
+            }
+        }
+
+        return changed ? raster with { Width = width, Height = height } : null;
+    }
+
+    /// <summary>The clockwise turn (0, 90, 180 or 270) that makes the page read best. Upside-down or
+    /// sideways text comes back from OCR as low-confidence fragments, so the turn that reads as the most
+    /// confident real words wins — by a clear margin, or the page is left as it is.</summary>
+    private async Task<int> BestOrientationAsync(string imagePath, PageLattice? asIs, CancellationToken cancellationToken)
+    {
+        var scores = new Dictionary<int, int>
+        {
+            [0] = asIs is not null
+                ? ReadableCharacters(asIs.Words.Select(word => (word.Text, word.Confidence)))
+                : await ScoreAsync(imagePath, 0, cancellationToken).ConfigureAwait(false)
+        };
+        foreach (var turn in new[] { 180, 90, 270 })
+            scores[turn] = await ScoreAsync(imagePath, turn, cancellationToken).ConfigureAwait(false);
+
+        var best = scores.MaxBy(pair => pair.Value);
+        return best.Key != 0 && best.Value >= 40 && best.Value > scores[0] * 1.5 ? best.Key : 0;
+    }
+
+    private async Task<int> ScoreAsync(string imagePath, int turn, CancellationToken cancellationToken)
+    {
+        var copy = Path.Combine(Path.GetDirectoryName(imagePath)!, $"{Path.GetFileNameWithoutExtension(imagePath)}-turn{turn}{Path.GetExtension(imagePath)}");
+        try
+        {
+            File.Copy(imagePath, copy, overwrite: true);
+            if (turn != 0)
+                rotator!.Rotate(copy, turn);
+            var result = await ocr!.RecognizeAsync(copy, cancellationToken).ConfigureAwait(false);
+            return ReadableCharacters(result.Words.Select(word => (word.Text, word.Confidence)));
+        }
+        finally
+        {
+            try { File.Delete(copy); }
+            catch (IOException) { }
+        }
+    }
+
+    // Characters in confidently read words of three or more letters — what upright text has plenty of and
+    // turned text has almost none of.
+    internal static int ReadableCharacters(IEnumerable<(string Text, float Confidence)> words) =>
+        words.Where(word => word.Confidence >= 70 && word.Text.Count(char.IsLetter) >= 3)
+            .Sum(word => word.Text.Length);
 
     /// <summary>Asks the AI, page by page across every input, where documents start and what type each
     /// is. A file that's its own document always starts one on its first page. Without a configured AI

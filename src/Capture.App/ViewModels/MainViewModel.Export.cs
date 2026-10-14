@@ -6,6 +6,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Capture.App.Services;
+using Capture.Core.CaptureProfiles;
 using Capture.Core.Diagnostics;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
@@ -27,7 +28,7 @@ namespace Capture.App.ViewModels;
 
 public partial class MainViewModel
 {
-    private enum ExportOutcome { Exported, ExportedAndRemoved, Skipped, Failed }
+    private enum ExportOutcome { Exported, ExportedAndRemoved, AlreadyExported, NotReady, NoExport, Failed }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportAsync()
@@ -54,7 +55,9 @@ public partial class MainViewModel
             var exported = 0;
             var removed = 0;
             var failed = 0;
-            var skipped = 0;
+            var alreadyExported = 0;
+            var notReady = 0;
+            var noExport = 0;
             string? firstError = null;
             foreach (var row in rows)
             {
@@ -71,8 +74,14 @@ public partial class MainViewModel
                     case ExportOutcome.Failed:
                         failed++;
                         break;
-                    case ExportOutcome.Skipped:
-                        skipped++;
+                    case ExportOutcome.AlreadyExported:
+                        alreadyExported++;
+                        break;
+                    case ExportOutcome.NotReady:
+                        notReady++;
+                        break;
+                    case ExportOutcome.NoExport:
+                        noExport++;
                         break;
                 }
             }
@@ -100,14 +109,21 @@ public partial class MainViewModel
                 parts.Add($"exported and removed {removed}");
             if (failed > 0)
                 parts.Add($"{failed} failed — {firstError}");
-            if (skipped > 0)
-                parts.Add($"{skipped} skipped (not ready, or no export configured)");
+            if (alreadyExported > 0)
+                parts.Add($"{alreadyExported} already exported (Mark ready to send again)");
+            if (notReady > 0)
+                parts.Add($"{notReady} not ready");
+            if (noExport > 0)
+                parts.Add($"{noExport} with no export set up");
             StatusText = parts.Count == 0 ? "Nothing to export" : string.Join(", ", parts);
-            if (exported > 0 || removed > 0 || failed > 0)
-            {
-                StatusIsError = failed > 0;
-                if (failed > 0) _toasts.ShowError(StatusText); else _toasts.ShowSuccess(StatusText);
-            }
+            StatusIsError = failed > 0;
+            if (failed > 0)
+                _toasts.ShowError(StatusText);
+            else if (exported > 0 || removed > 0)
+                _toasts.ShowSuccess(StatusText);
+            else
+                // Nothing went anywhere — say why, rather than leaving the click looking ignored.
+                _toasts.ShowInfo($"Nothing exported: {StatusText}");
         }
         finally
         {
@@ -115,24 +131,58 @@ public partial class MainViewModel
         }
     }
 
+    // Kept even when an export failed, so the history shows the attempt and why.
+    private async Task RecordExportsAsync(DocumentRow row, DocumentTypeDefinition profile, IReadOnlyList<ExportResult> results)
+    {
+        if (results.Count == 0)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        var records = results.Select(result =>
+        {
+            var definition = profile.Exports.FirstOrDefault(export => export.Id == result.ExportId);
+            return new ExportRecord(
+                result.ExportId,
+                definition?.Name ?? "Export",
+                definition?.Type ?? ExportType.None,
+                now,
+                result.Success,
+                result.Reference,
+                result.Success ? null : result.Message);
+        }).ToList();
+        try
+        {
+            if (_exportHistory is not null)
+                await _exportHistory.AddAsync(row.Id, records).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // The export itself happened; failing to note it down mustn't turn it into a failure.
+            Trace.TraceError($"Could not record the export history for document {row.Id}: {ex}");
+        }
+        row.AddExportRecords(records);
+    }
+
     // Only a Ready document is eligible — one that's still NeedsReview, Queued, Processing, or Error
     // is skipped rather than exported with incomplete/unvalidated data. An already-Exported document is
-    // also skipped: re-running export is available per-document by selecting it and using Export, not
-    // implicitly folded into a bulk export-all pass.
+    // also skipped, and reported as such: Mark ready re-opens it for a deliberate second export.
     // Error: why it failed — the first failing export's message, which names that export.
     private async Task<(ExportOutcome Outcome, string? Error)> ExportDocumentAsync(DocumentRow row)
     {
         var document = row.Document;
+        if (document.Status == DocumentStatus.Exported)
+            return (ExportOutcome.AlreadyExported, null);
         if (document.Status != DocumentStatus.Ready)
-            return (ExportOutcome.Skipped, null);
+            return (ExportOutcome.NotReady, null);
 
         var profile = FindDocumentType(document.ProfileId);
         if (profile is null || profile.Exports.Count(item => item.Enabled) == 0)
-            return (ExportOutcome.Skipped, null);
+            return (ExportOutcome.NoExport, null);
 
         var batchFields = FindCaptureProfileForDocumentType(document.ProfileId)?.Batch.Fields ?? [];
         var results = await _exportRunner.RunAsync(
             profile, document, row.Indexes, batchFields, alreadyExported: document.CompletedExportIds).ConfigureAwait(true);
+        await RecordExportsAsync(row, profile, results).ConfigureAwait(true);
         if (results.FirstOrDefault(result => !result.Success) is { } failure)
         {
             // The ones that worked are remembered, so retrying only sends the ones that failed — a
@@ -146,6 +196,9 @@ public partial class MainViewModel
 
         document.CompletedExportIds.Clear();
         document.ExportedUtc = DateTimeOffset.UtcNow;
+        // Exported whether it stays in the inbox or goes to Trash — restored from Trash, it should still
+        // say it was exported rather than come back Ready to be sent again.
+        document.Status = DocumentStatus.Exported;
 
         if (_watchSettings.RemoveDocumentsAfterExport)
         {
@@ -156,7 +209,6 @@ public partial class MainViewModel
             return (ExportOutcome.ExportedAndRemoved, null);
         }
 
-        document.Status = DocumentStatus.Exported;
         await _store.UpdateAsync(document).ConfigureAwait(true);
         row.NotifyIndexes();
         return (ExportOutcome.Exported, null);

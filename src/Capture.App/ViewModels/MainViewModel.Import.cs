@@ -64,6 +64,16 @@ public partial class MainViewModel
             async (index, ct) => rows[index] = await CreateRowAsync(documents[index], batchValuesCache).ConfigureAwait(false))
             .ConfigureAwait(true);
 
+        if (_exportHistory is not null)
+        {
+            var history = await _exportHistory.GetAsync(rows.Select(row => row.Id).ToList()).ConfigureAwait(true);
+            foreach (var row in rows)
+            {
+                if (history.TryGetValue(row.Id, out var records))
+                    row.ExportRecords = records.Select(record => new ExportRecordRow(record)).ToList();
+            }
+        }
+
         var batchIds = rows.Select(row => row.Document.BatchId).Where(id => id is not null).Select(id => id!.Value).ToHashSet();
         _batchesById = await _store.GetBatchesAsync(batchIds).ConfigureAwait(true);
 
