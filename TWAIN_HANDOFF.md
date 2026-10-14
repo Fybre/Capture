@@ -89,7 +89,7 @@ All nine steps pass after the fixes below (commits after 59a2878). Listing takes
 
 - **Windows on ARM**: `dotnet run` builds arm64, which can't load the x64 `twaindsm.dll`/drivers
   (BadImageFormatException, swallowed by the composite → no scanners). TWAIN now reports itself
-  unavailable with the reason. Test with the x64 SDK: `"C:\Program Files\dotnetd\dotnet.exe" run
+  unavailable with the reason. Test with the x64 SDK: `"C:\Program Files\dotnet\x64\dotnet.exe" run
   --project tools/ScanProbe -a x64 -- list`. Shipped builds are win-x64, so they're fine on ARM.
 - **Canon "load more paper" panel** appeared even with NoUI; PowerScan avoids it by setting
   `CAP_INDICATORS = FALSE` (found in the Canon driver log: `C:\ProgramData\Canon Electronics\Scanner
