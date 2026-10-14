@@ -16,16 +16,16 @@ internal static class TiffPageReader
         Tiff.SetErrorHandler(new QuietErrors());
     }
 
-    /// <summary>True when the file starts with a TIFF signature ("II*\0" or "MM\0*"), whatever its
-    /// extension.</summary>
+    /// <summary>True when the file starts with a TIFF signature ("II*\0" or "MM\0*", or BigTIFF's
+    /// "II+\0" or "MM\0+"), whatever its extension.</summary>
     public static bool IsTiff(string path)
     {
         Span<byte> header = stackalloc byte[4];
         using var stream = File.OpenRead(path);
         if (stream.Read(header) < 4)
             return false;
-        return (header[0] == 'I' && header[1] == 'I' && header[2] == 42 && header[3] == 0)
-               || (header[0] == 'M' && header[1] == 'M' && header[2] == 0 && header[3] == 42);
+        return (header[0] == 'I' && header[1] == 'I' && header[2] is 42 or 43 && header[3] == 0)
+               || (header[0] == 'M' && header[1] == 'M' && header[2] == 0 && header[3] is 42 or 43);
     }
 
     /// <summary>Calls <paramref name="page"/> with each page's bitmap and resolution (dpi, or null when

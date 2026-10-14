@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.8.22",
+    "date": "2026-10-14",
+    "changes": [
+      "Network scanners: scanners macOS lists in Printers & Scanners — AirScan and other network scanners — now appear in Capture, not just USB ones. If a scanner says it's busy, close Image Capture or any other app that has it open.",
+      "A pass through the scanner now stays together as one document, like a multi-page PDF, unless the profile's rules or AI separation split it. Previously each scanned page became its own document.",
+      "Capture always asks whether to keep scanning: more pages are added to the document, or, if the pass was split into several documents, more documents go into the same batch.",
+      "Long scans: the status bar counts pages as they arrive, the scanner can take as long as it needs for a large stack, and if it jams or you cancel, the pages already scanned are kept and imported.",
+      "The status bar shows progress while importing: reading each page, sending pages to the AI for separation, and saving each document. Test capture shows the same.",
+      "AI separation can be given extra rules for a profile's batches — Additional guidance for the AI on the profile's Overview, e.g. \"a page titled TRANSMITTAL always starts a new document\". Check changes with Test capture: on the local model, extra wording can make splitting worse."
+    ]
+  },
+  {
     "version": "0.8.21",
     "date": "2026-10-13",
     "changes": [

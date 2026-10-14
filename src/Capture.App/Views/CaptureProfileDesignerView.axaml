@@ -143,6 +143,13 @@
           <NumericUpDown Value="{Binding AiSeparationMinConfidence}" Minimum="0" Maximum="100" Increment="5" FormatString="0" HorizontalAlignment="Left" Width="140"/>
           <TextBlock Text="The AI's split is still applied; the document goes to Needs review with the AI's reason, and you can fix it with Split here or by merging."
                      Classes="hint" TextWrapping="Wrap"/>
+          <TextBlock Text="Additional guidance for the AI (optional)" Classes="field-label"/>
+          <TextBox Text="{Binding AiSeparationGuidance}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MinHeight="64" MaxHeight="160" MaxLength="1500"
+                   Watermark="e.g. A page titled TRANSMITTAL always starts a new document. Lab results continue until the next patient name."/>
+          <TextBlock Text="{Binding AiSeparationGuidanceLength}" Classes="hint" HorizontalAlignment="Right"/>
+          <TextBlock Text="Sent with every page as extra rules. Describe what you know about these batches — what starts a document, what continues one. To describe a single document type, use its AI description instead. The local model is small and extra wording can make it split worse, so check every change with Test capture."
+                     Classes="hint" TextWrapping="Wrap"/>
           <TextBlock Text="{Binding AiSeparationWarning}" IsVisible="{Binding HasAiSeparationWarning}"
                      Foreground="{DynamicResource WarnBrush}" TextWrapping="Wrap"/>
         </StackPanel>

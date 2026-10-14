@@ -14,6 +14,26 @@ func printJSON(_ value: Any) {
     FileHandle.standardOutput.write("\n".data(using: .utf8)!)
 }
 
+// Scanners anywhere ImageCaptureCore can reach: attached by USB, shared from another Mac, and network
+// (AirScan/eSCL) scanners found over Bonjour — the ones Printers & Scanners lists. Browsing only
+// .local missed network scanners entirely.
+let scannerMask = ICDeviceTypeMask(rawValue:
+    ICDeviceTypeMask.scanner.rawValue
+    | ICDeviceLocationTypeMask.local.rawValue
+    | ICDeviceLocationTypeMask.shared.rawValue
+    | ICDeviceLocationTypeMask.bonjour.rawValue
+    | ICDeviceLocationTypeMask.remote.rawValue)!
+
+// A session that won't open because another app holds the scanner fails with -47 (busy), reported as
+// an unsigned code with no description.
+func describeSessionError(_ error: Error) -> String {
+    let code = (error as NSError).code
+    if UInt32(truncatingIfNeeded: code) == UInt32(bitPattern: -47) {
+        return "The scanner is in use by another app, such as Image Capture, Preview or Printers & Scanners. Close it and try again."
+    }
+    return error.localizedDescription
+}
+
 func fail(_ message: String) -> Never {
     printJSON(["error": message])
     exit(1)
@@ -26,14 +46,21 @@ final class DeviceLister: NSObject, NSApplicationDelegate, ICDeviceBrowserDelega
     var basics: [ObjectIdentifier: (id: String, name: String)] = [:]
     var provisional: [ObjectIdentifier: [String: Any]] = [:]
     var enumerationComplete = false
+    var browsedLongEnough = false
     var finished = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         browser.delegate = self
-        let mask = ICDeviceTypeMask.scanner.rawValue | ICDeviceLocationTypeMask.local.rawValue
-        browser.browsedDeviceTypeMask = ICDeviceTypeMask(rawValue: mask)!
+        browser.browsedDeviceTypeMask = scannerMask
         browser.start()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) { self.finishWithFallbacks() }
+        // Network scanners can be announced after USB ones, in a later batch, so keep browsing a
+        // little even once the first batch is in.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.browsedLongEnough = true
+            if self.basics.isEmpty { self.enumerationComplete = true }
+            self.maybeFinish()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { self.finishWithFallbacks() }
     }
 
     func deviceBrowser(_ browser: ICDeviceBrowser, didAdd device: ICDevice, moreComing: Bool) {
@@ -114,7 +141,7 @@ final class DeviceLister: NSObject, NSApplicationDelegate, ICDeviceBrowserDelega
     }
 
     func maybeFinish() {
-        guard enumerationComplete && pending.isEmpty else { return }
+        guard enumerationComplete && browsedLongEnough && pending.isEmpty else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.finish() }
     }
 
@@ -156,6 +183,7 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
     var pendingExitCode: Int32 = 0
     var finishing = false
     var scanScheduled = false
+    var pageTimeout: Double = 120
 
     init(targetDeviceId: String, requestedDpi: Int, outputPath: String, isGray: Bool,
          source: ICScannerFunctionalUnitType, wantsDuplex: Bool) {
@@ -169,10 +197,22 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         browser.delegate = self
-        let mask = ICDeviceTypeMask.scanner.rawValue | ICDeviceLocationTypeMask.local.rawValue
-        browser.browsedDeviceTypeMask = ICDeviceTypeMask(rawValue: mask)!
+        browser.browsedDeviceTypeMask = scannerMask
         browser.start()
         scheduleTimeout(seconds: 20, message: "Timed out waiting for the selected scanner to appear.")
+        watchForStop()
+    }
+
+    // Capture stops a scan by closing this helper's stdin (as it also closes if Capture quits): the
+    // scan is cancelled and the session closed properly instead of the helper being killed mid-scan.
+    // Pages already reported stay with Capture.
+    func watchForStop() {
+        DispatchQueue.global(qos: .utility).async {
+            while !FileHandle.standardInput.availableData.isEmpty {}
+            DispatchQueue.main.async {
+                self.finish(payload: ["stopped": true, "pages": self.pages], exitCode: 0)
+            }
+        }
     }
 
     func deviceBrowser(_ browser: ICDeviceBrowser, didAdd device: ICDevice, moreComing: Bool) {
@@ -192,7 +232,7 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
     }
 
     func device(_ device: ICDevice, didOpenSessionWithError error: Error?) {
-        if let error { finish(error: "Could not open a session with the scanner: \(error.localizedDescription)") }
+        if let error { finish(error: "Could not open a session with the scanner: \(describeSessionError(error))") }
     }
 
     func deviceDidBecomeReady(_ device: ICDevice) {
@@ -251,9 +291,10 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
         scanner.documentName = requestedURL.deletingPathExtension().lastPathComponent
         scanner.documentUTI = "public.png"
         scanner.transferMode = .fileBased
-        scheduleTimeout(
-            seconds: max(120, min(900, Double(effectiveDpi) * 0.5)),
-            message: "Timed out waiting for the scan to complete.")
+        // Waits for each page, not the whole pass, so a long stack through a feeder can take as long
+        // as it needs.
+        pageTimeout = max(120, min(900, Double(effectiveDpi) * 0.5))
+        scheduleTimeout(seconds: pageTimeout, message: "Timed out waiting for the scanner to send the next page.")
         scanner.requestScan()
     }
 
@@ -267,12 +308,16 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
             finish(error: "Could not decode the image returned by the scanner.")
             return
         }
-        pages.append([
+        let page: [String: Any] = [
             "path": url.path,
             "width": width,
             "height": height,
             "dpi": scanner.selectedFunctionalUnit.resolution
-        ])
+        ]
+        pages.append(page)
+        // Reported as it arrives, so Capture can show progress and keeps it whatever happens next.
+        printJSON(["page": page])
+        scheduleTimeout(seconds: pageTimeout, message: "Timed out waiting for the scanner to send the next page.")
     }
 
     func scannerDevice(_ scanner: ICScannerDevice, didCompleteScanWithError error: Error?) {
@@ -292,12 +337,10 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
+    // Pages already scanned were reported as they arrived and now belong to Capture, so a jam or
+    // timeout part-way through a stack doesn't lose them.
     func finish(error message: String) {
-        for page in pages {
-            if let path = page["path"] as? String { try? FileManager.default.removeItem(atPath: path) }
-        }
-        pages.removeAll()
-        finish(payload: ["error": message], exitCode: 1)
+        finish(payload: ["error": message, "pagesKept": pages.count], exitCode: 1)
     }
 
     func finish(payload: [String: Any], exitCode: Int32 = 0) {
@@ -307,7 +350,7 @@ final class Scanner: NSObject, NSApplicationDelegate, ICDeviceBrowserDelegate, I
         pendingPayload = payload
         pendingExitCode = exitCode
         if let scanner, scanner.hasOpenSession {
-            if exitCode != 0 { scanner.cancelScan() }
+            if exitCode != 0 || payload["stopped"] != nil { scanner.cancelScan() }
             scanner.requestCloseSession()
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { self.emitAndExit() }
         } else {

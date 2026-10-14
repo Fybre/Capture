@@ -35,6 +35,9 @@ public sealed class MacScanSource : IScanSource
             device.SupportsGrayscale)).ToList();
     }
 
+    /// <summary>Yields each page as the scanner sends it. If the scan then fails part-way — a jam, the
+    /// scanner going quiet — the pages already yielded are the caller's and the failure is thrown after
+    /// them. Cancelling asks the helper to stop the scan and close the scanner session cleanly.</summary>
     public async IAsyncEnumerable<ScannedPage> ScanAsync(
         ScanOptions options,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -44,31 +47,51 @@ public sealed class MacScanSource : IScanSource
 
         var outputPath = Path.Combine(Path.GetTempPath(), $"capture-scan-{Guid.NewGuid():N}.png");
         var transferredPaths = new HashSet<string>(StringComparer.Ordinal);
+        var colorArgument = options.ColorMode == ScanColorMode.Grayscale ? "gray" : "color";
+        var sourceArgument = options.Source == ScanSourceKind.Feeder ? "feeder" : "flatbed";
+        var duplexArgument = options.Duplex ? "duplex" : "simplex";
+        var psi = new ProcessStartInfo(HelperExecutablePath())
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            // The helper scans until its stdin closes, which is how a scan is stopped.
+            RedirectStandardInput = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in new[] { "scan", options.DeviceId, options.Dpi.ToString(), outputPath, colorArgument, sourceArgument, duplexArgument })
+            psi.ArgumentList.Add(argument);
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException("Could not start the macOS scan helper.");
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        string? error = null;
         try
         {
-            var colorArgument = options.ColorMode == ScanColorMode.Grayscale ? "gray" : "color";
-            var sourceArgument = options.Source == ScanSourceKind.Feeder ? "feeder" : "flatbed";
-            var duplexArgument = options.Duplex ? "duplex" : "simplex";
-            var (exitCode, stdout, stderr) = await RunAsync(
-                ["scan", options.DeviceId, options.Dpi.ToString(), outputPath, colorArgument, sourceArgument, duplexArgument],
-                cancellationToken).ConfigureAwait(false);
-            if (exitCode != 0)
-                throw new InvalidOperationException($"Scan failed: {DescribeError(stdout, stderr)}");
-
-            var result = JsonSerializer.Deserialize<ScanResult>(stdout, Json)
-                ?? throw new InvalidOperationException("The scan helper returned no result.");
-            foreach (var page in result.Pages)
+            while (await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                var message = ParseLine(line);
+                if (message?.Error is { Length: > 0 } text)
+                    error = text;
+                if (message?.Page is not { } page)
+                    continue;
                 transferredPaths.Add(page.Path); // ownership transfers with the yield
                 yield return new ScannedPage(page.Path, page.Width, page.Height, page.Dpi);
+            }
+
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            if (process.ExitCode != 0)
+            {
+                var stderr = (await stderrTask.ConfigureAwait(false)).Trim();
+                throw new InvalidOperationException(
+                    $"Scan failed: {error ?? (stderr.Length > 0 ? stderr : $"the scan helper exited with code {process.ExitCode}")}");
             }
         }
         finally
         {
-            // Once the helper completes successfully, yielded files belong to the caller. On any
-            // earlier failure/cancellation, reclaim all files created under this job's unique prefix.
-            // Delete failed or unconsumed pages, but not files already handed to the caller.
+            await StopAsync(process).ConfigureAwait(false);
+
+            // Delete pages the helper wrote that were never handed over — on cancellation, or a page
+            // still being written — but not files already yielded to the caller.
             var directory = Path.GetDirectoryName(outputPath) ?? Path.GetTempPath();
             var prefix = Path.GetFileNameWithoutExtension(outputPath);
             foreach (var path in Directory.EnumerateFiles(directory, prefix + "*.png"))
@@ -78,6 +101,41 @@ public sealed class MacScanSource : IScanSource
                 try { File.Delete(path); }
                 catch (IOException) { }
             }
+        }
+    }
+
+    // Closing stdin tells the helper to cancel the scan and close the session; it's killed only if it
+    // hasn't gone within a few seconds.
+    private static async Task StopAsync(Process process)
+    {
+        if (process.HasExited)
+            return;
+        try { process.StandardInput.Close(); }
+        catch (IOException) { }
+        using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        try
+        {
+            await process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    private static HelperLine? ParseLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<HelperLine>(line, Json);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -150,9 +208,10 @@ public sealed class MacScanSource : IScanSource
         public string? Error { get; set; }
     }
 
-    private sealed class ScanResult
+    private sealed class HelperLine
     {
-        public List<ScanPageResult> Pages { get; set; } = [];
+        public ScanPageResult? Page { get; set; }
+        public string? Error { get; set; }
     }
 
     private sealed class ScanPageResult

@@ -23,7 +23,11 @@ public static class AiSeparationPrompt
     private const int HeadChars = 500;
     private const int TailChars = 300;
 
-    public static string SystemMessage(IReadOnlyList<AiSeparationType> types)
+    /// <summary>The most of a profile's guidance sent: the local model has a 4k-token context to share
+    /// with the rules, the types and three page excerpts.</summary>
+    public const int MaxGuidanceChars = 1500;
+
+    public static string SystemMessage(IReadOnlyList<AiSeparationType> types, string? guidance = null)
     {
         var builder = new StringBuilder();
         builder.AppendLine("You are a document boundary detector. You analyse scanned pages from multi-document batches.");
@@ -53,8 +57,17 @@ public static class AiSeparationPrompt
         builder.AppendLine();
         builder.AppendLine("IMPORTANT — same template ≠ continuation: Many documents in a batch share identical letterheads, logos, or form layouts. Do NOT treat visual similarity alone as evidence of continuation. A shared template with differing content identifiers always means a new document.");
         builder.AppendLine();
+        // Keep this even though the catalog's Invoice and Remittance Advice descriptions say it too: on
+        // the local model, dropping it doubled the split errors on same-template invoices.
         builder.AppendLine("IMPORTANT — remittance slip on an invoice: Many invoices include a detachable remittance slip or payment advice section printed at the bottom of the same page. This does NOT make the page a remittance advice — it is still an invoice. Only classify a page as a remittance advice if the entire page is a standalone remittance/payment confirmation with no invoice charges or line items.");
         builder.AppendLine();
+        if (Guidance(guidance) is { } text)
+        {
+            builder.AppendLine("IMPORTANT — rules for this batch, from the user (follow them over the general rules above):");
+            builder.AppendLine(text);
+            builder.AppendLine();
+        }
+
         builder.AppendLine("Document types:");
         foreach (var type in types)
         {
@@ -68,11 +81,19 @@ public static class AiSeparationPrompt
         return builder.ToString();
     }
 
+    private static string? Guidance(string? guidance)
+    {
+        var text = guidance?.Trim().ReplaceLineEndings("\n");
+        if (string.IsNullOrEmpty(text))
+            return null;
+        return text.Length <= MaxGuidanceChars ? text : text[..MaxGuidanceChars].TrimEnd();
+    }
+
     /// <summary>The request for page <paramref name="index"/>. The first page, and a page that must start
     /// a document anyway, is only classified; every other page is judged against the page before it,
     /// with the next page as extra context.</summary>
     public static AiSeparationRequest ForPage(
-        IReadOnlyList<AiSeparationPage> pages, int index, IReadOnlyList<AiSeparationType> types, bool includeImages)
+        IReadOnlyList<AiSeparationPage> pages, int index, IReadOnlyList<AiSeparationType> types, bool includeImages, string? guidance = null)
     {
         var page = pages[index];
         var classifyOnly = index == 0 || page.ForceNew;
@@ -100,7 +121,7 @@ public static class AiSeparationPrompt
             parts.Add(new AiPromptPart("\nIs the CURRENT PAGE the start of a new document, and what type of document does it belong to?"));
         }
 
-        return new AiSeparationRequest(SystemMessage(types), parts, classifyOnly);
+        return new AiSeparationRequest(SystemMessage(types, guidance), parts, classifyOnly);
     }
 
     private static void AddPage(List<AiPromptPart> parts, AiSeparationPage page, bool includeImages)

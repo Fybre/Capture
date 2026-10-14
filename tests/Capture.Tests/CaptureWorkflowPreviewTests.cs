@@ -273,12 +273,14 @@ public sealed class CaptureWorkflowPreviewTests
     {
         public IReadOnlyList<AiSeparationPage> Pages { get; private set; } = [];
         public IReadOnlyList<AiSeparationType> Types { get; private set; } = [];
+        public string? Guidance { get; private set; }
         public bool IsConfigured => true;
 
         public Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
-            IReadOnlyList<AiSeparationPage> pages, IReadOnlyList<AiSeparationType>? types, CancellationToken cancellationToken = default)
+            IReadOnlyList<AiSeparationPage> pages, IReadOnlyList<AiSeparationType>? types, string? guidance = null, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
         {
             Pages = pages;
+            Guidance = guidance;
             Types = types;
             return Task.FromResult<IReadOnlyList<AiPageVerdict>>(verdicts);
         }

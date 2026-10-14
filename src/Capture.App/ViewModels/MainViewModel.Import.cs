@@ -21,6 +21,7 @@ using Capture.Core.Scripting;
 using Capture.Core.Store;
 using Capture.Core.Watch;
 using Capture.Export;
+using Capture.Pdf;
 using Capture.Scanner;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -261,10 +262,17 @@ public partial class MainViewModel
                 StatusText = $"Processing {accepted.Count} file(s) with {profile.Name}…";
                 var channel = watchFolderEntry is null ? "manual" : $"watch:{watchFolderEntry.Id:N}";
                 var automated = watchFolderEntry is not null;
+                // Created here, on the UI thread, so reports from the workflow's background work land
+                // back on it.
+                var stage = new Progress<string>(text => StatusText = text);
+                var saving = new Progress<CaptureMaterializationProgress>(report =>
+                    StatusText = $"Saving document {report.CompletedDocuments} of {report.TotalDocuments}…");
                 var result = await _captureWorkflow.ExecuteAsync(
                     profile, accepted, source, channel,
                     startNewBatch: automated,
-                    closeBatchWhenFinished: automated).ConfigureAwait(true);
+                    closeBatchWhenFinished: automated,
+                    progress: saving,
+                    status: stage).ConfigureAwait(true);
                 materializedDocuments = result.Materialized.Documents;
                 if (!automated)
                     await RefreshManualBatchStateAsync().ConfigureAwait(true);
@@ -354,15 +362,25 @@ public partial class MainViewModel
         return Convert.ToHexString(hash);
     }
 
+    // The scanner hands back one image per page; they're combined into one multi-page TIFF so the pass
+    // imports as a single file. Imported as separate files, the profile's "End each document at the end
+    // of its input file" made every page its own document (and kept AI separation from seeing them).
     private async Task<IReadOnlyList<CaptureDocument>> ImportScannedPagesAsync(IReadOnlyList<ScannedPageInfo> pages, DocumentSource source)
     {
+        var folder = Path.Combine(Path.GetTempPath(), $"capture-scan-{Guid.NewGuid():N}");
         try
         {
             StatusText = "Importing scanned pages…";
-            return await ImportPathsAsync(pages.Select(page => page.ImagePath).ToList(), source, manageBusy: false).ConfigureAwait(true);
+            Directory.CreateDirectory(folder);
+            var scanPath = Path.Combine(folder, $"Scan {DateTime.Now:yyyy-MM-dd HH.mm.ss}.tif");
+            await Task.Run(() => TiffPageWriter.Write(pages.Select(page => (page.ImagePath, page.Dpi)).ToList(), scanPath)).ConfigureAwait(true);
+            return await ImportPathsAsync([scanPath], source, manageBusy: false).ConfigureAwait(true);
         }
         finally
         {
+            try { Directory.Delete(folder, recursive: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+
             if (!_watchProcessing && _watchQueue.Count > 0)
                 _ = ProcessWatchQueueAsync();
         }

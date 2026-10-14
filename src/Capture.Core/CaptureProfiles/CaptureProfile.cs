@@ -38,6 +38,10 @@ public sealed class CaptureProfile
     /// flagged for review with the AI's reason.</summary>
     public int AiSeparationMinConfidence { get; set; } = 70;
 
+    /// <summary>Extra rules for the AI about this profile's documents, added to its separation rules —
+    /// e.g. "a TRANSMITTAL cover sheet always starts a new document".</summary>
+    public string? AiSeparationGuidance { get; set; }
+
     /// <summary>When to send scanned pages to an external OCR service instead of, or after, the built-in
     /// engine. Pages with a real PDF text layer never need OCR.</summary>
     public ExternalOcrMode ExternalOcr { get; set; }

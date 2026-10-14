@@ -23,9 +23,13 @@ public interface IAiPageSeparator
     /// <summary>One verdict per page, in the same order. Never throws for a single page's failure: that
     /// page gets confidence 0 and an "AI failed" reason, and continues the previous document. With
     /// <paramref name="types"/> null the AI only splits: it's shown no types, its verdicts carry none, and
-    /// pages that must start a document aren't sent at all.</summary>
+    /// pages that must start a document aren't sent at all. <paramref name="guidance"/> is the profile's
+    /// own extra rules for the AI, if any. <paramref name="progress"/> gets the number of pages done so
+    /// far, after each one.</summary>
     Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
         IReadOnlyList<AiSeparationPage> pages,
         IReadOnlyList<AiSeparationType>? types,
+        string? guidance = null,
+        IProgress<int>? progress = null,
         CancellationToken cancellationToken = default);
 }

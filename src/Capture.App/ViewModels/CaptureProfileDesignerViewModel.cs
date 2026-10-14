@@ -326,6 +326,24 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         }
     }
 
+    /// <summary>The profile's extra rules for the AI, sent with every page.</summary>
+    public string? AiSeparationGuidance
+    {
+        get => Profile.AiSeparationGuidance;
+        set
+        {
+            var text = string.IsNullOrWhiteSpace(value) ? null : value;
+            if (Profile.AiSeparationGuidance == text) return;
+            Profile.AiSeparationGuidance = text;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(AiSeparationGuidanceLength));
+            RefreshDirtyState();
+        }
+    }
+
+    public string AiSeparationGuidanceLength =>
+        $"{Profile.AiSeparationGuidance?.Trim().Length ?? 0} / {AiSeparationPrompt.MaxGuidanceChars}";
+
     /// <summary>Why AI separation won't work as set up — AI turned off or missing in Settings, or no
     /// document types for it to choose between.</summary>
     public string AiSeparationWarning =>
@@ -1046,7 +1064,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasTestCaptureResults));
         TestCaptureSuggestedTypes = string.Empty;
         TestCaptureSummary = "Analysing files…";
-        var preview = await _workflow!.PreviewWithIndexesAsync(Profile, files, DocumentSource.Import);
+        var preview = await _workflow!.PreviewWithIndexesAsync(
+            Profile, files, DocumentSource.Import, stage: new Progress<string>(text => TestCaptureSummary = text));
         var plan = preview.Plan;
         var documentCount = plan.Batches.Sum(batch => batch.Documents.Count);
         var pageCount = plan.Batches.SelectMany(batch => batch.Documents).Sum(document => document.SourcePages.Count);

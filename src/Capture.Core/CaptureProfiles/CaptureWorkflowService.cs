@@ -33,7 +33,8 @@ public sealed class CaptureWorkflowService(
         bool startNewBatch = false,
         bool closeBatchWhenFinished = false,
         IProgress<CaptureMaterializationProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? status = null)
     {
         if (!profile.Enabled)
             throw new InvalidOperationException("This capture profile is disabled.");
@@ -42,7 +43,7 @@ public sealed class CaptureWorkflowService(
         var scratch = CreateScratch("capture-plan-");
         try
         {
-            var analysis = await AnalyzeAsync(profile, sourcePaths, source, scratch, cancellationToken).ConfigureAwait(false);
+            var analysis = await AnalyzeAsync(profile, sourcePaths, source, scratch, cancellationToken, status).ConfigureAwait(false);
             var plan = planner.Plan(profile, analysis.Inputs);
             var result = await materializer.MaterializeAsync(
                 profile, plan, analysis.Sources, progress, inputChannel,
@@ -83,7 +84,8 @@ public sealed class CaptureWorkflowService(
         CaptureProfile profile,
         IReadOnlyList<string> sourcePaths,
         DocumentSource source,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? stage = null)
     {
         if (applicator is null)
             throw new InvalidOperationException("Index preview is unavailable.");
@@ -93,7 +95,7 @@ public sealed class CaptureWorkflowService(
         var scratch = CreateScratch("capture-preview-");
         try
         {
-            var analysis = await AnalyzeAsync(profile, sourcePaths, source, scratch, cancellationToken).ConfigureAwait(false);
+            var analysis = await AnalyzeAsync(profile, sourcePaths, source, scratch, cancellationToken, stage).ConfigureAwait(false);
             var plan = planner.Plan(profile, analysis.Inputs);
             var previewBatches = new List<CapturePreviewBatch>(plan.Batches.Count);
 
@@ -208,9 +210,12 @@ public sealed class CaptureWorkflowService(
         IReadOnlyList<string> sourcePaths,
         DocumentSource source,
         string scratch,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<string>? status = null)
     {
         var analyzedInputs = new List<AnalyzedInput>();
+        var pagesRead = 0;
+        var pagesFound = 0;
         var materializationSources = new Dictionary<string, CaptureMaterializationSource>(StringComparer.Ordinal);
         var allRules = new[] { profile.Batch.StartRules }
             .Concat(profile.DocumentTypes.SelectMany(type => new[] { type.StartRules, type.RecognitionRules }))
@@ -251,6 +256,8 @@ public sealed class CaptureWorkflowService(
                 rasters = renumbered;
                 originalPageNumbers = mapping;
             }
+
+            pagesFound += rasters.Count;
 
             // Each page's OCR/lattice build, barcode decode, zone extraction, and blank-page check are
             // independent of every other page — OCR in particular spawns its own Tesseract process per
@@ -305,6 +312,7 @@ public sealed class CaptureWorkflowService(
                         .Where(rule => blanks.IsBlank(raster.ImagePath, rule.BlankInkPercent))
                         .Select(rule => rule.Id)
                         .ToHashSet();
+                    status?.Report($"Reading page {Interlocked.Increment(ref pagesRead)} of {pagesFound}…");
                     pageResults[index] = (raster.PageNumber, lattice, new AnalyzedPage(
                         inputId,
                         raster.PageNumber,
@@ -337,7 +345,7 @@ public sealed class CaptureWorkflowService(
         }
 
         if (profile.AiSeparation)
-            analyzedInputs = await AddAiVerdictsAsync(profile, analyzedInputs, materializationSources, cancellationToken).ConfigureAwait(false);
+            analyzedInputs = await AddAiVerdictsAsync(profile, analyzedInputs, materializationSources, cancellationToken, status).ConfigureAwait(false);
 
         return new AnalysisResult(analyzedInputs, materializationSources);
     }
@@ -350,7 +358,8 @@ public sealed class CaptureWorkflowService(
         CaptureProfile profile,
         List<AnalyzedInput> inputs,
         IReadOnlyDictionary<string, CaptureMaterializationSource> sources,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<string>? status = null)
     {
         if (aiSeparator is not { IsConfigured: true } || inputs.All(input => input.Pages.Count == 0))
             return inputs;
@@ -374,11 +383,21 @@ public sealed class CaptureWorkflowService(
             }
         }
 
-        var verdicts = await aiSeparator.AnalyzeAsync(pages, CapturePlanner.AiTypes(profile), cancellationToken).ConfigureAwait(false);
+        status?.Report($"Sending pages to the AI to separate documents… 0 of {pages.Count}");
+        var aiProgress = status is null ? null : new InlineProgress<int>(done =>
+            status.Report($"Sending pages to the AI to separate documents… {done} of {pages.Count}"));
+        var verdicts = await aiSeparator.AnalyzeAsync(
+            pages, CapturePlanner.AiTypes(profile), profile.AiSeparationGuidance, aiProgress, cancellationToken).ConfigureAwait(false);
         var next = 0;
         return inputs
             .Select(input => input with { Pages = input.Pages.Select(page => page with { Ai = verdicts[next++] }).ToList() })
             .ToList();
+    }
+
+    // Passes each report straight on: the caller's own Progress<T> already moves it to the UI thread.
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     private string CreateScratch(string prefix)

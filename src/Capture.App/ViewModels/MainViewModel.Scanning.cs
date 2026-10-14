@@ -29,6 +29,13 @@ public partial class MainViewModel
 {
     private sealed record ScannedPageInfo(string ImagePath, int Width, int Height, int Dpi);
 
+    /// <summary>One pass through the scanner. <see cref="Interruption"/> is set when it ended early —
+    /// stopped, jammed, timed out — after some pages had arrived; those pages are still imported.</summary>
+    private sealed record ScanPass(List<ScannedPageInfo> Pages, string? Interruption)
+    {
+        public bool Interrupted => Interruption is not null;
+    }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CancelScanCommand))]
     private bool _isScanning;
@@ -75,6 +82,9 @@ public partial class MainViewModel
         var cancellationToken = _scanCancellation.Token;
         StatusIsError = false;
         var appendTargetDocumentId = initialAppendTargetDocumentId;
+        // Set when the first pass split into several documents: later passes are captured as new
+        // documents into that pass's batch instead of being appended to one document.
+        Guid? continueBatchId = null;
         try
         {
             var device = await ResolveScanDeviceAsync(cancellationToken).ConfigureAwait(true);
@@ -83,7 +93,8 @@ public partial class MainViewModel
 
             while (true)
             {
-                var scannedPages = await RunOneScanPassAsync(device, cancellationToken).ConfigureAwait(true);
+                var pass = await RunOneScanPassAsync(device, cancellationToken).ConfigureAwait(true);
+                var scannedPages = pass.Pages;
                 if (scannedPages.Count == 0)
                     break;
 
@@ -92,20 +103,31 @@ public partial class MainViewModel
                     if (appendTargetDocumentId is { } targetId)
                     {
                         StatusText = "Appending scanned pages to the document…";
-                        await AppendScannedPagesAsync(targetId, scannedPages, cancellationToken).ConfigureAwait(true);
+                        // Not cancellable: these pages are already scanned, and a stopped scan keeps them.
+                        await AppendScannedPagesAsync(targetId, scannedPages, CancellationToken.None).ConfigureAwait(true);
                         StatusText = $"Appended {scannedPages.Count} page(s) to the document";
+                        StatusIsError = false;
+                    }
+                    else if (continueBatchId is { } batchId)
+                    {
+                        var documents = await ImportScannedPagesAsync(scannedPages, DocumentSource.Scan).ConfigureAwait(true);
+                        foreach (var document in documents.Where(document => document.BatchId != batchId))
+                            await MoveDocumentToBatchAsync(document.Id, batchId).ConfigureAwait(true);
+                        StatusText = $"Scanned {documents.Count} document(s) into the batch";
                         StatusIsError = false;
                     }
                     else
                     {
                         // A multi-page ADF/feeder scan becomes one multi-page document (or several, if
-                        // the capture profile splits on separator pages) — the same way a multi-page PDF
-                        // or TIFF import already does — rather than one document per physical page.
+                        // the capture profile's rules or AI split it) — the same way a multi-page PDF or
+                        // TIFF import does — rather than one document per physical page.
                         var documents = await ImportScannedPagesAsync(scannedPages, DocumentSource.Scan).ConfigureAwait(true);
-                        // Only offer to keep appending when this scan resolved unambiguously to one
-                        // document — if boundary rules split it into several (or produced none), there's
-                        // no single target left to grow, so a next pass would just be independent.
-                        appendTargetDocumentId = documents.Count == 1 ? documents[0].Id : null;
+                        // One document: later passes grow it. Several: later passes add documents to
+                        // the same batch.
+                        if (documents.Count == 1)
+                            appendTargetDocumentId = documents[0].Id;
+                        else if (documents.Count > 1)
+                            continueBatchId = documents[^1].BatchId;
                     }
                 }
                 finally
@@ -113,13 +135,21 @@ public partial class MainViewModel
                     DeleteScannedPageFiles(scannedPages);
                 }
 
-                if (appendTargetDocumentId is null || _dialogs.Host is not { } host)
+                if (pass.Interrupted)
+                {
+                    ReportInterruptedScan(pass);
+                    break;
+                }
+
+                if ((appendTargetDocumentId is null && continueBatchId is null) || _dialogs.Host is not { } host)
                     break;
 
                 var continueScanning = await _confirm.ConfirmAsync(
                     host,
                     "Continue scanning?",
-                    "Scan another page and append it to this document, or finish here?",
+                    appendTargetDocumentId is not null
+                        ? "Scan more pages and add them to this document, or finish here?"
+                        : "Scan more documents into this batch, or finish here?",
                     confirmText: "Continue scanning",
                     cancelText: "Finish").ConfigureAwait(true);
                 if (!continueScanning)
@@ -161,7 +191,8 @@ public partial class MainViewModel
 
             while (true)
             {
-                var scannedPages = await RunOneScanPassAsync(device, cancellationToken).ConfigureAwait(true);
+                var pass = await RunOneScanPassAsync(device, cancellationToken).ConfigureAwait(true);
+                var scannedPages = pass.Pages;
                 if (scannedPages.Count == 0)
                     break;
 
@@ -178,6 +209,12 @@ public partial class MainViewModel
                 finally
                 {
                     DeleteScannedPageFiles(scannedPages);
+                }
+
+                if (pass.Interrupted)
+                {
+                    ReportInterruptedScan(pass);
+                    break;
                 }
 
                 if (_dialogs.Host is not { } host)
@@ -222,7 +259,10 @@ public partial class MainViewModel
         return null;
     }
 
-    private async Task<List<ScannedPageInfo>> RunOneScanPassAsync(ScanDevice device, CancellationToken cancellationToken)
+    // Pages are collected as the scanner sends them, with a running count in the status bar. A pass
+    // that ends early — Cancel, a jam, the scanner going quiet — keeps the pages that arrived; with none,
+    // the failure or cancellation is thrown as before.
+    private async Task<ScanPass> RunOneScanPassAsync(ScanDevice device, CancellationToken cancellationToken)
     {
         var colorMode = _watchSettings.ScanGrayscale ? ScanColorMode.Grayscale : ScanColorMode.Color;
         var sourceKind = _watchSettings.ScanSource == ScanInputSource.Feeder
@@ -233,10 +273,22 @@ public partial class MainViewModel
         IsScanning = true;
         StatusText = $"Scanning from {device.Name}…";
         var scannedPages = new List<ScannedPageInfo>();
+        string? interruption = null;
         try
         {
             await foreach (var page in _scanSource.ScanAsync(options, cancellationToken).ConfigureAwait(true))
+            {
                 scannedPages.Add(new ScannedPageInfo(page.FilePath, page.Width, page.Height, page.Dpi));
+                StatusText = $"Scanning from {device.Name}… {scannedPages.Count} page(s)";
+            }
+        }
+        catch (OperationCanceledException) when (scannedPages.Count > 0)
+        {
+            interruption = "Scan stopped";
+        }
+        catch (Exception ex) when (scannedPages.Count > 0 && ex is not OperationCanceledException)
+        {
+            interruption = ex.Message;
         }
         finally
         {
@@ -246,7 +298,13 @@ public partial class MainViewModel
         if (scannedPages.Count == 0)
             StatusText = "Scan produced no pages";
 
-        return scannedPages;
+        return new ScanPass(scannedPages, interruption);
+    }
+
+    private void ReportInterruptedScan(ScanPass pass)
+    {
+        StatusText = $"{pass.Interruption} — the {pass.Pages.Count} page(s) scanned before that were imported";
+        StatusIsError = pass.Interruption != "Scan stopped";
     }
 
     private async Task<CaptureDocument> AppendScannedPagesAsync(

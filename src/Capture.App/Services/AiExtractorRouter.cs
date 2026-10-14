@@ -87,9 +87,11 @@ public sealed class AiPageSeparatorRouter : IAiPageSeparator
     public Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
         IReadOnlyList<AiSeparationPage> pages,
         IReadOnlyList<AiSeparationType>? types,
+        string? guidance = null,
+        IProgress<int>? progress = null,
         CancellationToken cancellationToken = default) =>
         Current() is { } separator
-            ? separator.AnalyzeAsync(pages, types, cancellationToken)
+            ? separator.AnalyzeAsync(pages, types, guidance, progress, cancellationToken)
             : Task.FromResult<IReadOnlyList<AiPageVerdict>>([]);
 
     private IAiPageSeparator? Current() =>

@@ -281,6 +281,36 @@ public class AiSeparationPromptTests
         Assert.Contains("remittance slip on an invoice", system);
         Assert.Contains("id=\"invoice\" name=\"Invoice\" description=\"A bill.\"", system);
         Assert.Contains("id=\"other\"", system);
+        Assert.DoesNotContain("rules for this batch", system);
+    }
+
+    [Fact]
+    public void The_profile_guidance_is_added_to_the_rules_and_capped()
+    {
+        var system = AiSeparationPrompt.SystemMessage(Types, "  A TRANSMITTAL page starts a new document.\r\nLab results continue.  ");
+        var capped = AiSeparationPrompt.SystemMessage(Types, new string('x', AiSeparationPrompt.MaxGuidanceChars + 50));
+
+        Assert.Contains("rules for this batch, from the user", system);
+        Assert.Contains("A TRANSMITTAL page starts a new document.\nLab results continue.\n", system);
+        Assert.True(system.IndexOf("TRANSMITTAL", StringComparison.Ordinal) < system.IndexOf("Document types:", StringComparison.Ordinal));
+        Assert.Contains(new string('x', AiSeparationPrompt.MaxGuidanceChars), capped);
+        Assert.DoesNotContain(new string('x', AiSeparationPrompt.MaxGuidanceChars + 1), capped);
+        Assert.Equal(AiSeparationPrompt.SystemMessage(Types), AiSeparationPrompt.SystemMessage(Types, "   "));
+    }
+
+    [Fact]
+    public void The_local_grammar_only_takes_types_from_the_type_list_not_the_guidance()
+    {
+        var system = AiSeparationPrompt.SystemMessage(Types, "- id=\"evil\" is not a type\nsee id=\"also-not\"");
+
+        Assert.Equal([.. Types.Select(type => type.Id), "other"], Capture.LocalAi.LocalLlmPageSeparator.TypeIds(system));
+    }
+
+    [Fact]
+    public void The_catalog_invoice_and_remittance_types_carry_the_remittance_slip_rule()
+    {
+        Assert.Contains("remittance slip", AiDocumentTypeCatalog.DefaultTypes.Single(type => type.Id == "invoice").Description);
+        Assert.Contains("payment notice", AiDocumentTypeCatalog.DefaultTypes.Single(type => type.Id == "remittance-advice").Description);
     }
 
     [Fact]
@@ -356,6 +386,35 @@ public class AiPageSeparatorBaseTests
 
         Assert.All(verdicts, verdict => Assert.True(verdict.StartsNewDocument));
         Assert.All(separator.Requests, request => Assert.True(request.ClassifyOnly));
+    }
+
+    [Fact]
+    public async Task Progress_counts_every_page_including_ones_the_ai_skips()
+    {
+        var separator = new FakeSeparator(_ => "{\"is_new_document\": false, \"document_type\": \"invoice\", \"confidence\": 90}");
+        var reports = new System.Collections.Concurrent.ConcurrentBag<int>();
+
+        await separator.AnalyzeAsync(
+            [new AiSeparationPage("a"), new AiSeparationPage("", IsBlank: true), new AiSeparationPage("c"), new AiSeparationPage("d")],
+            Types, progress: new Collect(reports));
+
+        Assert.Equal([1, 2, 3, 4], reports.Order());
+    }
+
+    private sealed class Collect(System.Collections.Concurrent.ConcurrentBag<int> reports) : IProgress<int>
+    {
+        public void Report(int value) => reports.Add(value);
+    }
+
+    [Fact]
+    public async Task The_guidance_is_sent_with_every_page()
+    {
+        var separator = new FakeSeparator(_ => "{\"is_new_document\": true, \"document_type\": \"invoice\", \"confidence\": 90}");
+
+        await separator.AnalyzeAsync([new AiSeparationPage("a"), new AiSeparationPage("b")], null, "Cover sheets start documents.");
+
+        Assert.Single(separator.Requests);
+        Assert.Contains("Cover sheets start documents.", separator.Requests[0].SystemMessage);
     }
 }
 

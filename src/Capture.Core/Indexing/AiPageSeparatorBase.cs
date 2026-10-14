@@ -18,6 +18,8 @@ public abstract class AiPageSeparatorBase : IAiPageSeparator
     public async Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
         IReadOnlyList<AiSeparationPage> pages,
         IReadOnlyList<AiSeparationType>? types,
+        string? guidance = null,
+        IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var results = new AiPageVerdict[pages.Count];
@@ -29,6 +31,8 @@ public abstract class AiPageSeparatorBase : IAiPageSeparator
         // the answer's type is dropped: on the local model, asking "is this a new document?" alone
         // merged unrelated documents far more often than asking it to identify the page as well.
         var promptTypes = types ?? [];
+        var done = 0;
+        void PageDone() => progress?.Report(Interlocked.Increment(ref done));
         using var gate = new SemaphoreSlim(Math.Max(1, MaxParallel));
         await Task.WhenAll(pages.Select(async (page, index) =>
         {
@@ -36,6 +40,7 @@ public abstract class AiPageSeparatorBase : IAiPageSeparator
             if (page.IsBlank)
             {
                 results[index] = new AiPageVerdict(mustStart, null, 100, "Blank page.");
+                PageDone();
                 return;
             }
 
@@ -43,13 +48,14 @@ public abstract class AiPageSeparatorBase : IAiPageSeparator
             if (types is null && mustStart)
             {
                 results[index] = new AiPageVerdict(true, null, 100, "First page.");
+                PageDone();
                 return;
             }
 
             await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var request = AiSeparationPrompt.ForPage(pages, index, promptTypes, includeImages);
+                var request = AiSeparationPrompt.ForPage(pages, index, promptTypes, includeImages, guidance);
                 var raw = await CompleteAsync(request, cancellationToken).ConfigureAwait(false);
                 var verdict = AiSeparationPrompt.Parse(raw, promptTypes);
                 if (types is null)
@@ -63,6 +69,7 @@ public abstract class AiPageSeparatorBase : IAiPageSeparator
             finally
             {
                 gate.Release();
+                PageDone();
             }
         })).ConfigureAwait(false);
 

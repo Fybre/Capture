@@ -24,13 +24,14 @@ public sealed class LocalLlmPageSeparator : AiPageSeparatorBase
     protected override Task<string> CompleteAsync(AiSeparationRequest request, CancellationToken cancellationToken) =>
         _model.CompleteAsync(request.SystemMessage, request.UserText, Grammar(TypeIds(request.SystemMessage)), MaxTokens, cancellationToken);
 
-    // The type ids are listed in the system message as id="…"; reading them back keeps the grammar in
-    // step with the prompt without passing the type list separately.
-    private static IReadOnlyList<string> TypeIds(string systemMessage)
+    // The type ids are listed in the system message as lines starting - id="…"; reading them back keeps
+    // the grammar in step with the prompt without passing the type list separately. Only lines after
+    // the "Document types:" heading count, so the profile's guidance above it can't add a type.
+    internal static IReadOnlyList<string> TypeIds(string systemMessage)
     {
         var ids = new List<string>();
-        const string marker = "- id=\"";
-        var at = 0;
+        const string marker = "\n- id=\"";
+        var at = Math.Max(0, systemMessage.LastIndexOf("\nDocument types:", StringComparison.Ordinal));
         while ((at = systemMessage.IndexOf(marker, at, StringComparison.Ordinal)) >= 0)
         {
             at += marker.Length;
