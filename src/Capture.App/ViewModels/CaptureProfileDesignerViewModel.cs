@@ -68,6 +68,14 @@ public sealed partial class CaptureDesignerNode : ObservableObject
     [ObservableProperty] private string _label;
     public CaptureDesignerSection Section { get; }
     public DocumentTypeDefinition? DocumentType { get; }
+
+    /// <summary>Why this section couldn't be shown for editing; it's marked in the navigation and
+    /// explained at the top of the section, and its saved settings are left as they were.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLoadError))]
+    private string? _loadError;
+
+    public bool HasLoadError => LoadError is not null;
 }
 
 public sealed record ThereforeConnectionChoice(Guid Id, string Name);
@@ -143,12 +151,27 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         _ai = ai;
         _help = help;
         foreach (var set in BuiltInRedactionSets.All) RedactionSets.Add(set);
-        BatchRules = Editor(profile.Batch.StartRules, "Starts a new batch", allowNone: true, defaultSeparatorKind: CaptureSeparatorKind.Batch);
-        BatchFields = CreateFieldEditor(
-            profile.Batch.Fields,
-            BatchRules.Strategies,
-            "Batch-start rule",
-            isBatchScope: true);
+        _loading = true;
+        try
+        {
+            BatchRules = Editor(profile.Batch.StartRules, "Starts a new batch", allowNone: true, defaultSeparatorKind: CaptureSeparatorKind.Batch);
+            BatchFields = CreateFieldEditor(
+                profile.Batch.Fields,
+                BatchRules.Strategies,
+                "Batch-start rule",
+                isBatchScope: true);
+            BatchScripts = CreateScriptEditor(profile.Batch.Scripts, profile.Batch.SharedScriptSource,
+                "Batch", BatchFields, ScriptScopeKind.Batch);
+        }
+        catch (Exception ex)
+        {
+            // Never lock someone out of their profile: open it with the batch section shown empty and
+            // marked, and leave the saved batch settings untouched (see Flush).
+            _loadErrors[BatchErrorKey] = DescribeLoadError("the batch settings", ex);
+            BatchRules = Editor(new RuleSet { MatchMode = SeparationMatchMode.None }, "Starts a new batch", allowNone: true, defaultSeparatorKind: CaptureSeparatorKind.Batch);
+            BatchFields = CreateFieldEditor([], BatchRules.Strategies, "Batch-start rule", isBatchScope: true);
+            BatchScripts = CreateScriptEditor([], string.Empty, "Batch", BatchFields, ScriptScopeKind.Batch);
+        }
         BatchRules.SelectionChanged = () => SelectRuleForDrawing(SampleZoneTarget.BatchRule, BatchRules);
         BatchRules.StrategyChanged = OnRuleChanged;
         BatchFields.SelectionChanged = () => SelectFieldForDrawing(BatchFields);
@@ -158,12 +181,32 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
             foreach (var export in DocumentExports)
                 export.RefreshBatchFieldOptions(BatchFields.Fields);
         };
-        BatchScripts = CreateScriptEditor(profile.Batch.Scripts, profile.Batch.SharedScriptSource,
-            "Batch", BatchFields, ScriptScopeKind.Batch);
         RefreshNavigation();
         _selectedNode = Navigation[0];
+        _loading = false;
         RefreshEnablementIssues();
         _savedSnapshot = JsonSerializer.Serialize(Profile);
+    }
+
+    private const string BatchErrorKey = "batch";
+
+    // Sections that couldn't be loaded, by BatchErrorKey or document type id — kept here rather than
+    // only on the nodes, which RefreshNavigation rebuilds.
+    private readonly Dictionary<string, string> _loadErrors = [];
+
+    // Set while editors are being built, when the profile and the editors don't match yet — a dirty
+    // check then would copy one into the other.
+    private bool _loading;
+
+    public string? SectionLoadError => SelectedNode?.LoadError;
+    public bool HasSectionLoadError => SectionLoadError is not null;
+
+    private static string DescribeLoadError(string what, Exception ex)
+    {
+        System.Diagnostics.Trace.TraceError($"Could not load {what} for editing: {ex}");
+        return $"Capture couldn't load {what} for editing ({ex.GetType().Name}: {ex.Message}). They're kept as saved and " +
+            "won't be changed when you save; everything else in this profile can be edited as usual. " +
+            "Export the profile to keep a copy, and report the problem with the activity log.";
     }
 
     /// <summary>True if the profile's working state (after flushing the currently edited section back
@@ -178,7 +221,20 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isDirty;
 
-    private void RefreshDirtyState() => IsDirty = HasUnsavedChanges();
+    private void RefreshDirtyState()
+    {
+        if (_loading)
+            return;
+        try
+        {
+            IsDirty = HasUnsavedChanges();
+        }
+        catch (Exception ex)
+        {
+            // Only the unsaved-changes marker depends on this; it mustn't take the designer down.
+            System.Diagnostics.Trace.TraceError($"Could not check the profile for unsaved changes: {ex}");
+        }
+    }
 
     public CaptureProfile Profile { get; }
     public ObservableCollection<CaptureDesignerNode> Navigation { get; } = [];
@@ -608,6 +664,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     partial void OnSelectedNodeChanged(CaptureDesignerNode? value)
     {
         if (value?.DocumentType is { } type) LoadDocument(type);
+        OnPropertyChanged(nameof(SectionLoadError));
+        OnPropertyChanged(nameof(HasSectionLoadError));
         RefreshEnablementIssues();
         OnPropertyChanged(nameof(IsOverviewSelected));
         OnPropertyChanged(nameof(IsBatchSelected));
@@ -1306,6 +1364,21 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
 
     public IReadOnlyList<string> Validate()
     {
+        try
+        {
+            return ValidateCore();
+        }
+        catch (Exception ex)
+        {
+            // Something in the saved profile the checks didn't expect — say so rather than refusing to
+            // open or save it.
+            System.Diagnostics.Trace.TraceError($"Could not check capture profile '{Profile.Name}': {ex}");
+            return [$"Capture couldn't check this profile for problems ({ex.GetType().Name}: {ex.Message}). A section marked ⚠ on the left may be the cause."];
+        }
+    }
+
+    private IReadOnlyList<string> ValidateCore()
+    {
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(Profile.Name)) errors.Add("Profile name is required.");
         if (Profile.DocumentTypes.Count == 0) errors.Add("Add at least one document type.");
@@ -1394,6 +1467,8 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
     private void Flush()
     {
         FlushSelectedDocument();
+        if (_loadErrors.ContainsKey(BatchErrorKey))
+            return;
         Profile.Batch.StartRules = ToRuleSet(BatchRules);
         Profile.Batch.Fields = BatchFields.ToModels();
         Profile.Batch.Scripts = BatchScripts.ToModels();
@@ -1434,6 +1509,56 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
 
     private void LoadDocument(DocumentTypeDefinition type)
     {
+        // The previous type's editors go first, so nothing can write them into this type while its own
+        // are being built.
+        _loading = true;
+        RecognitionRules = null;
+        DocumentStartRules = null;
+        DocumentFields = null;
+        DocumentScripts = null;
+        DocumentExports.Clear();
+        try
+        {
+            BuildDocumentEditors(type);
+            _loadErrors.Remove(type.Id.ToString());
+        }
+        catch (Exception ex)
+        {
+            // Left without editors, FlushSelectedDocument doesn't touch this type, so its saved
+            // settings survive; the section says what went wrong instead.
+            RecognitionRules = null;
+            DocumentStartRules = null;
+            DocumentFields = null;
+            DocumentScripts = null;
+            DocumentExports.Clear();
+            _loadErrors[type.Id.ToString()] = DescribeLoadError($"document type \"{type.Name}\"", ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+        ApplyLoadErrors();
+        OnPropertyChanged(nameof(HasNoDocumentExports));
+        OnPropertyChanged(nameof(RecognitionRules));
+        OnPropertyChanged(nameof(DocumentStartRules));
+        OnPropertyChanged(nameof(DocumentFields));
+        OnPropertyChanged(nameof(DocumentScripts));
+        OnPropertyChanged(nameof(DocumentExports));
+    }
+
+    private void ApplyLoadErrors()
+    {
+        foreach (var node in Navigation)
+        {
+            var key = node.Section == CaptureDesignerSection.Batch ? BatchErrorKey : node.DocumentType?.Id.ToString();
+            node.LoadError = key is not null && _loadErrors.TryGetValue(key, out var error) ? error : null;
+        }
+        OnPropertyChanged(nameof(SectionLoadError));
+        OnPropertyChanged(nameof(HasSectionLoadError));
+    }
+
+    private void BuildDocumentEditors(DocumentTypeDefinition type)
+    {
         RecognitionRules = Editor(type.RecognitionRules, "Identify document type");
         DocumentStartRules = Editor(type.StartRules, "Detect first page of a new document");
         DocumentFields = CreateFieldEditor(
@@ -1457,12 +1582,6 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         DocumentExports.Clear();
         foreach (var export in type.Exports)
             DocumentExports.Add(new ExportDefinitionRow(export, DocumentFields.Fields, BatchFields.Fields));
-        OnPropertyChanged(nameof(HasNoDocumentExports));
-        OnPropertyChanged(nameof(RecognitionRules));
-        OnPropertyChanged(nameof(DocumentStartRules));
-        OnPropertyChanged(nameof(DocumentFields));
-        OnPropertyChanged(nameof(DocumentScripts));
-        OnPropertyChanged(nameof(DocumentExports));
     }
 
     private void RefreshNavigation(Guid? selectType = null)
@@ -1472,6 +1591,7 @@ public partial class CaptureProfileDesignerViewModel : ViewModelBase
         Navigation.Add(new("Batch", CaptureDesignerSection.Batch));
         foreach (var type in Profile.DocumentTypes) Navigation.Add(new(type.Name, CaptureDesignerSection.DocumentType, type));
         Navigation.Add(new("Test Capture", CaptureDesignerSection.TestCapture));
+        ApplyLoadErrors();
 
         ProfileNodes.Clear();
         DocumentTypeNodes.Clear();

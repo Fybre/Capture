@@ -35,7 +35,15 @@
       <TextBlock Grid.Row="0" Text="CAPTURE PROFILE" Classes="eyebrow" Margin="0,0,0,8"/>
       <ListBox Grid.Row="1" ItemsSource="{Binding ProfileNodes}" SelectedItem="{Binding SelectedNode, Mode=OneWay}"
                SelectionChanged="OnNavListSelectionChanged">
-        <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="4"/></DataTemplate></ListBox.ItemTemplate>
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Label}" Padding="4"/>
+              <TextBlock Text="⚠" Foreground="{DynamicResource CriticalBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,0"
+                         IsVisible="{Binding HasLoadError}" ToolTip.Tip="{Binding LoadError}"/>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
       </ListBox>
 
       <Border Grid.Row="2" Height="1" Background="{DynamicResource BorderBrush1}" Margin="0,12,0,10"/>
@@ -47,10 +55,12 @@
                SelectionChanged="OnNavListSelectionChanged">
         <ListBox.ItemTemplate>
           <DataTemplate>
-            <Grid ColumnDefinitions="Auto,*">
+            <Grid ColumnDefinitions="Auto,Auto,*">
               <TextBlock Grid.Column="0" Classes="drag-handle hint" Text="⋮⋮" Cursor="Hand"
                          VerticalAlignment="Center" Margin="0,0,6,0" ToolTip.Tip="Drag to reorder"/>
               <TextBlock Grid.Column="1" Text="{Binding Label}" Padding="4"/>
+              <TextBlock Grid.Column="2" Text="⚠" Foreground="{DynamicResource CriticalBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,0"
+                         IsVisible="{Binding HasLoadError}" ToolTip.Tip="{Binding LoadError}"/>
             </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>
@@ -85,7 +95,15 @@
            doesn't belong grouped with either section above. -->
       <ListBox Grid.Row="7" ItemsSource="{Binding UtilityNodes}" SelectedItem="{Binding SelectedNode, Mode=OneWay}"
                SelectionChanged="OnNavListSelectionChanged">
-        <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Padding="4"/></DataTemplate></ListBox.ItemTemplate>
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Label}" Padding="4"/>
+              <TextBlock Text="⚠" Foreground="{DynamicResource CriticalBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,0"
+                         IsVisible="{Binding HasLoadError}" ToolTip.Tip="{Binding LoadError}"/>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
       </ListBox>
     </Grid>
 
@@ -319,6 +337,12 @@
 
     <ScrollViewer Grid.Column="4" Margin="12,0,0,0" IsVisible="{Binding IsBatchSelected}">
       <StackPanel Spacing="12">
+        <Border IsVisible="{Binding HasSectionLoadError}" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource CriticalBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
+          <StackPanel Spacing="4">
+            <TextBlock Text="This section couldn't be loaded" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding SectionLoadError}" TextWrapping="Wrap" Classes="hint"/>
+          </StackPanel>
+        </Border>
         <TextBlock Text="Batch setup" Classes="h1"/><views:RuleSetEditorView DataContext="{Binding BatchRules}"/>
         <StackPanel Spacing="5" IsVisible="{Binding BatchRules.RulesEnabled}">
           <TextBlock Text="When a batch starts" Classes="field-label"/>
@@ -339,6 +363,12 @@
 
     <ScrollViewer Grid.Column="4" Margin="12,0,0,0" IsVisible="{Binding IsDocumentSelected}">
       <StackPanel Spacing="12">
+        <Border IsVisible="{Binding HasSectionLoadError}" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource CriticalBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
+          <StackPanel Spacing="4">
+            <TextBlock Text="This section couldn't be loaded" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding SectionLoadError}" TextWrapping="Wrap" Classes="hint"/>
+          </StackPanel>
+        </Border>
         <TextBlock Text="Document type setup" Classes="h1"/><TextBlock Text="Name" Classes="field-label"/><TextBox Text="{Binding DocumentTypeName}"/>
         <TextBlock Text="Ready when confidence is at least (%)" Classes="field-label"/><NumericUpDown Value="{Binding SelectedDocumentType.AutoReadyThreshold}" Minimum="0" Maximum="100"/>
         <StackPanel Spacing="6" IsVisible="{Binding AiClassifies}">

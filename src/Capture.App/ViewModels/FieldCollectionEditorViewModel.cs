@@ -59,12 +59,12 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
             .Where(kind => isBatchScope || kind != FieldKind.BatchSeparatorValue)
             .ToList();
         foreach (var field in fields ?? [])
-        {
-            var row = new FieldRow(field, isBatchScope);
-            Watch(row);
-            Fields.Add(row);
-        }
+            Fields.Add(new FieldRow(field, isBatchScope));
         RepartitionByHidden();
+        // Watched only once the list is in order, so building it never reports a field change to an
+        // owner that's still being set up itself.
+        foreach (var row in Fields)
+            Watch(row);
         RefreshValueSourceOptions();
     }
 
@@ -373,6 +373,9 @@ public partial class FieldCollectionEditorViewModel : ViewModelBase
             SyncSelectedValueSource();
         if (args.PropertyName == nameof(FieldRow.Hidden))
             RepartitionByHidden();
+        // Where the "hidden" divider is drawn — display only, nothing in the profile changed.
+        if (args.PropertyName == nameof(FieldRow.IsFirstHidden))
+            return;
         _fieldChanged?.Invoke(row, args.PropertyName);
     };
     private void NotifyCommands()

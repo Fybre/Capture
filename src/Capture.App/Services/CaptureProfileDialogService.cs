@@ -211,13 +211,26 @@ public sealed class CaptureProfileDialogService(
     {
         var designer = new CaptureProfileDesignerWindow { ConfirmService = confirm };
         dialogs.Host = designer;
-        var viewModel = new CaptureProfileDesignerViewModel(
-            profile, store, workflow, dialogs,
-            paths, pdfs, images, latticeBuilder, barcodes, blanks, applicator,
-            scriptEditor, designer, scriptRunner, redactionEntitySets, piiDetector,
-            thereforeCategoryPicker, ai, help, confirm, toasts, watchStore);
-        designer.DataContext = viewModel;
-        await viewModel.InitializeAsync();
+        CaptureProfileDesignerViewModel viewModel;
+        try
+        {
+            // A section that can't be loaded opens marked with its error (see the view model); this
+            // only catches what's left, so the reason is at least clear.
+            viewModel = new CaptureProfileDesignerViewModel(
+                profile, store, workflow, dialogs,
+                paths, pdfs, images, latticeBuilder, barcodes, blanks, applicator,
+                scriptEditor, designer, scriptRunner, redactionEntitySets, piiDetector,
+                thereforeCategoryPicker, ai, help, confirm, toasts, watchStore);
+            designer.DataContext = viewModel;
+            await viewModel.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceError($"Could not open capture profile '{profile.Name}': {ex}");
+            dialogs.Host = owner;
+            toasts.ShowError($"Couldn't open '{profile.Name}' ({ex.Message}). Nothing in it was changed — use Export to keep a copy.");
+            return;
+        }
         toasts.AttachHost(designer);
         try { await designer.ShowDialog(owner); }
         finally { toasts.DetachHost(designer); dialogs.Host = owner; }
