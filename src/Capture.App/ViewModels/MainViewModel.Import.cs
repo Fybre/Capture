@@ -328,11 +328,14 @@ public partial class MainViewModel
         var exported = 0;
         var failed = 0;
         var left = 0;
+        string? firstError = null;
         foreach (var document in imported)
         {
             var row = Documents.FirstOrDefault(item => item.Id == document.Id);
             if (row is null) continue;
-            switch (await ExportDocumentAsync(row).ConfigureAwait(true))
+            var (outcome, error) = await ExportDocumentAsync(row).ConfigureAwait(true);
+            firstError ??= error;
+            switch (outcome)
             {
                 case ExportOutcome.Exported:
                 case ExportOutcome.ExportedAndRemoved:
@@ -349,7 +352,8 @@ public partial class MainViewModel
 
         RefreshBatchAccents();
         RefreshDocumentGroups();
-        return $"Auto-export finished: {exported} exported, {left} not exported, {failed} failed";
+        return $"Auto-export finished: {exported} exported, {left} not exported, {failed} failed"
+            + (firstError is null ? string.Empty : $" — {firstError}");
     }
 
     /// <summary>SHA-256 (hex) of a source file's raw bytes, streamed rather than loaded fully into memory

@@ -118,47 +118,16 @@ public sealed class JsonWatchSettingsStore : IWatchSettingsStore
         // A caller holding settings in the old form (e.g. restored from an older backup) still saves
         // its Therefore connection.
         settings.MigrateLegacyTherefore();
-        var toSave = new WatchSettings
+        // Every setting is copied, then the secrets swapped for their protected form. Listing the
+        // settings by hand here meant a newly added one (page images for AI, the TWAIN driver window)
+        // only lasted until the app was restarted.
+        var toSave = Clone(settings);
+        toSave.AiApiKey = Protect("AiApiKey", settings.AiApiKey);
+        foreach (var connection in toSave.Connections)
         {
-            WatchFolders = settings.WatchFolders,
-            HasCompletedFirstRunSetup = settings.HasCompletedFirstRunSetup,
-            StartView = settings.StartView,
-            Theme = settings.Theme,
-            InboxOrder = settings.InboxOrder,
-            DebugMode = settings.DebugMode,
-            CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup,
-            AllowFieldScripts = settings.AllowFieldScripts,
-            AiEndpoint = settings.AiEndpoint,
-            AiApiKey = Protect("AiApiKey", settings.AiApiKey),
-            AiModel = settings.AiModel,
-            AiMaxDocumentChars = settings.AiMaxDocumentChars,
-            AiProvider = settings.AiProvider,
-            LocalAiMaxDocumentChars = settings.LocalAiMaxDocumentChars,
-            LastCaptureProfileId = settings.LastCaptureProfileId,
-            AutoDeleteExportedDocuments = settings.AutoDeleteExportedDocuments,
-            AutoDeleteExportedDocumentsAfterDays = settings.AutoDeleteExportedDocumentsAfterDays,
-            RemoveDocumentsAfterExport = settings.RemoveDocumentsAfterExport,
-            TrashRetentionDays = settings.TrashRetentionDays,
-            DuplicateImportBehavior = settings.DuplicateImportBehavior,
-            Connections = settings.Connections.Select(connection => new ConnectionDefinition
-            {
-                Id = connection.Id,
-                Name = connection.Name,
-                Type = connection.Type,
-                BaseUrl = connection.BaseUrl,
-                TenantName = connection.TenantName,
-                AuthMethod = connection.AuthMethod,
-                Username = connection.Username,
-                Password = Protect(SecretAccount(connection, "Password"), connection.Password),
-                Token = Protect(SecretAccount(connection, "Token"), connection.Token),
-                ApiKeyHeader = connection.ApiKeyHeader
-            }).ToList(),
-            ScanDpi = settings.ScanDpi,
-            ScanGrayscale = settings.ScanGrayscale,
-            ScanSource = settings.ScanSource,
-            ScanDuplex = settings.ScanDuplex,
-            ScanPreferredDeviceId = settings.ScanPreferredDeviceId
-        };
+            connection.Password = Protect(SecretAccount(connection, "Password"), connection.Password);
+            connection.Token = Protect(SecretAccount(connection, "Token"), connection.Token);
+        }
         await LatticeJson.WriteJsonAsync(_paths.SettingsPath, toSave, LatticeJson.Options, cancellationToken).ConfigureAwait(false);
 
         // The caller's settings object already holds the current (unprotected) values — toSave only

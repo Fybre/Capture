@@ -28,7 +28,8 @@ public sealed class ProfileExportRunner
         CaptureDocument document,
         IReadOnlyList<IndexValue> indexValues,
         IReadOnlyList<IndexField>? batchFields = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<Guid>? alreadyExported = null)
     {
         // BeforeExport/AfterExport scripts operate on a clone, never the caller's own list — mutating
         // a value here reshapes only what gets written out, not the stored/reviewed document (unlike
@@ -37,20 +38,23 @@ public sealed class ProfileExportRunner
         await RunScriptsAsync(profile, document, snapshot, ScriptTrigger.BeforeExport, cancellationToken).ConfigureAwait(false);
 
         var results = new List<ExportResult>();
-        foreach (var definition in profile.Exports.Where(item => item.Enabled))
+        // Exports that already succeeded for this document, on an earlier try that another export
+        // failed, aren't sent again.
+        foreach (var definition in profile.Exports.Where(item => item.Enabled && alreadyExported?.Contains(item.Id) != true))
         {
             if (!_writers.TryGetValue(definition.Type, out var writer))
             {
-                results.Add(new ExportResult(false, $"\"{definition.Name}\": no exporter registered for {definition.Type}"));
+                results.Add(new ExportResult(false, $"\"{definition.Name}\": no exporter registered for {definition.Type}") { ExportId = definition.Id });
                 continue;
             }
 
             Trace.TraceInformation($"Export \"{definition.Name}\" ({definition.Type}) starting for document {document.Id}");
             var context = new ExportDocumentContext(document, profile.Fields, snapshot)
             {
-                BatchFields = batchFields ?? []
+                BatchFields = batchFields ?? [],
+                Locale = profile.Locale
             };
-            var result = await writer.ExportAsync(definition, context, cancellationToken).ConfigureAwait(false);
+            var result = await writer.ExportAsync(definition, context, cancellationToken).ConfigureAwait(false) with { ExportId = definition.Id };
             Trace.TraceInformation(result.Success
                 ? $"Export \"{definition.Name}\" succeeded for document {document.Id}: {result.Message}"
                 : $"Export \"{definition.Name}\" failed for document {document.Id}: {result.Message}");

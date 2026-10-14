@@ -11,19 +11,18 @@ public static class IndexFormat
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var culture = Culture(locale);
         return format switch
         {
-            FieldFormat.Integer => long.TryParse(value, NumberStyles.Integer, culture, out _)
+            FieldFormat.Integer => TryParseInteger(value, locale, out _)
                 ? null
                 : "Not an integer",
-            FieldFormat.Money => decimal.TryParse(value, NumberStyles.Number | NumberStyles.AllowCurrencySymbol, culture, out _)
+            FieldFormat.Money => TryParseMoney(value, locale, out _)
                 ? null
                 : "Not a money amount",
-            FieldFormat.Date => DateTime.TryParse(value, culture, DateTimeStyles.AllowWhiteSpaces, out _)
+            FieldFormat.Date => TryParseDate(value, locale, out _)
                 ? null
                 : "Not a date",
-            FieldFormat.DateTime => DateTime.TryParse(value, culture, DateTimeStyles.AllowWhiteSpaces, out _)
+            FieldFormat.DateTime => TryParseDate(value, locale, out _)
                 ? null
                 : "Not a date/time",
             FieldFormat.Boolean => TryParseBoolean(value, out _)
@@ -51,6 +50,17 @@ public static class IndexFormat
 
         return DocumentStatus.Ready;
     }
+
+    // Validation and export read values with these, so a value that validates is one that exports.
+
+    public static bool TryParseInteger(string? value, string? locale, out long result) =>
+        long.TryParse(value, NumberStyles.Integer, Culture(locale), out result);
+
+    public static bool TryParseMoney(string? value, string? locale, out decimal result) =>
+        decimal.TryParse(value, NumberStyles.Number | NumberStyles.AllowCurrencySymbol, Culture(locale), out result);
+
+    public static bool TryParseDate(string? value, string? locale, out DateTime result) =>
+        DateTime.TryParse(value, Culture(locale), DateTimeStyles.AllowWhiteSpaces, out result);
 
     private static CultureInfo Culture(string? locale)
     {

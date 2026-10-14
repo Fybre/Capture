@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Capture.App.Hosting;
 using Capture.App.Services;
 using Capture.App.ViewModels;
@@ -29,6 +31,21 @@ public partial class App : Application
             .BuildServiceProvider();
 
         var paths = services.GetRequiredService<IAppPaths>();
+
+        // An error nothing else caught — in a button's command, or a drag-and-drop or menu handler —
+        // would otherwise close Capture with nothing logged. It's logged and shown instead.
+        var toasts = services.GetRequiredService<IToastService>();
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            Trace.TraceError($"Unhandled error: {e.Exception}");
+            toasts.ShowError($"Something went wrong: {e.Exception.Message}");
+            e.Handled = true;
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Trace.TraceError($"Unobserved background error: {e.Exception}");
+            e.SetObserved();
+        };
 
         // Applied synchronously, before the window is created, so the first frame already renders in
         // the user's saved theme — MainViewModel.InitializeAsync (which loads the rest of WatchSettings

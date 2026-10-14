@@ -240,6 +240,29 @@ public class ThereforeExportWriterTests
         Assert.Equal(19.99m, data.GetProperty("DataValue").GetDecimal());
     }
 
+    // Money fields validate with a currency symbol and thousands separators allowed, so export has to
+    // read them the same way rather than sending the text to a money field.
+    [Fact]
+    public void Money_field_reads_a_currency_symbol_and_thousands_separator()
+    {
+        var element = Serialize(ThereforeExportWriter.BuildIndexDataItem(Mapping(ThereforeFieldType.Money), "$1,234.50", "en-AU"));
+
+        Assert.Equal(1234.50m, element.GetProperty("MoneyIndexData").GetProperty("DataValue").GetDecimal());
+    }
+
+    [Fact]
+    public void Money_and_date_fields_use_the_document_types_locale()
+    {
+        var money = Serialize(ThereforeExportWriter.BuildIndexDataItem(Mapping(ThereforeFieldType.Money), "1.234,50", "de-DE"));
+        var date = System.Text.Json.JsonSerializer.Serialize(
+            ThereforeExportWriter.BuildIndexDataItem(Mapping(ThereforeFieldType.Date), "03/04/2026", "en-AU"),
+            new System.Text.Json.JsonSerializerOptions { Converters = { new Capture.Therefore.WcfDateTimeJsonConverter() } });
+
+        Assert.Equal(1234.50m, money.GetProperty("MoneyIndexData").GetProperty("DataValue").GetDecimal());
+        // 3 April (day first in en-AU), sent as WCF "/Date(ms)/".
+        Assert.Contains($"/Date({new DateTimeOffset(2026, 4, 3, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds()})/", date);
+    }
+
     [Fact]
     public void Money_field_with_an_unparseable_value_falls_back_to_string()
     {

@@ -65,6 +65,21 @@ public class ProfileExportRunnerTests
     }
 
     [Fact]
+    public async Task Skips_exports_that_already_succeeded_and_tags_each_result_with_its_export()
+    {
+        var writer = new FakeExportWriter();
+        var runner = new ProfileExportRunner([writer]);
+        var done = new ExportDefinition { Enabled = true, Type = ExportType.Csv };
+        var retry = new ExportDefinition { Enabled = true, Type = ExportType.Csv };
+        var profile = new DocumentTypeDefinition { Exports = [done, retry] };
+
+        var results = await runner.RunAsync(profile, MakeDocument(), [], alreadyExported: [done.Id]);
+
+        Assert.Equal(1, writer.CallCount);
+        Assert.Equal(retry.Id, Assert.Single(results).ExportId);
+    }
+
+    [Fact]
     public async Task A_definition_with_no_registered_writer_fails_without_blocking_others()
     {
         var writer = new FakeExportWriter();

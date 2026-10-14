@@ -67,6 +67,12 @@ public sealed class CaptureDocument
     /// bytes again creates a new id and therefore remains detectable as a genuine duplicate import.</summary>
     public Guid? SourceImportId { get; set; }
 
+    /// <summary>The exports (ExportDefinition ids) that have succeeded for this document while another of
+    /// its exports keeps failing. A retry skips them, so a Therefore document isn't created twice
+    /// because a CSV export alongside it failed. Cleared once every export has succeeded, so exporting
+    /// the document again later sends everything.</summary>
+    public List<Guid> CompletedExportIds { get; set; } = [];
+
     /// <summary>When this document was last successfully exported (any export destination), regardless
     /// of whether it currently shows <see cref="DocumentStatus.Exported"/> — a document removed after
     /// export (<c>WatchSettings.RemoveDocumentsAfterExport</c>) is soft-deleted rather than left at that

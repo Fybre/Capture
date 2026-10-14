@@ -25,9 +25,10 @@ public sealed class LocalAiModelDownloader : ILocalAiModelDownloader
         Directory.CreateDirectory(_paths.LocalAiModelsDirectory);
         var tempPath = _paths.LocalAiModelPath + ".tmp";
 
-        using (var response = await _http.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                   .ConfigureAwait(false))
+        try
         {
+            using var response = await _http.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             var totalBytes = response.Content.Headers.ContentLength;
 
@@ -44,6 +45,13 @@ public sealed class LocalAiModelDownloader : ILocalAiModelDownloader
                 if (totalBytes is > 0)
                     onProgress(Math.Clamp((double)readTotal / totalBytes.Value, 0, 1));
             }
+        }
+        catch
+        {
+            // A cancelled or failed download would otherwise leave up to 2 GB behind.
+            try { File.Delete(tempPath); }
+            catch (IOException) { }
+            throw;
         }
 
         // Only replace a previous file, or land the first one, once the download is fully complete —

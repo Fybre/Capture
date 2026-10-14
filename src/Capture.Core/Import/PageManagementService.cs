@@ -313,6 +313,11 @@ public sealed class PageManagementService : IPageManagementService
             document.ErrorMessage = null;
             document.RedactedPath = null;
             document.RedactionError = null;
+            // The redacted copy was just deleted, so the document can't still say it's redacted: an
+            // export set to use the redacted copy when there is one would quietly send the original.
+            // Its redactions are kept and need applying again, as after a merge.
+            var candidates = await _redactionCandidates.GetAsync(document.Id, cancellationToken).ConfigureAwait(false);
+            document.RedactionStatus = candidates.Count > 0 ? RedactionStatus.PendingReview : RedactionStatus.None;
             // The appended bytes no longer represent the original single scan/import occurrence.
             document.ContentHash = null;
             document.SourceImportId = null;

@@ -115,6 +115,29 @@ public class CaptureBackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_sample_entry_climbing_out_of_the_samples_folder_is_not_written()
+    {
+        var source = new Install(TempFolder());
+        var profile = await SeedAsync(source);
+        var zip = Path.Combine(TempFolder(), "backup.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(zip)!);
+        await source.Backup.CreateAsync(zip, BackupParts.All, includeCredentials: false, appVersion: null);
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Update))
+        {
+            var entry = archive.CreateEntry($"capture-profiles/{profile.Id:N}/samples/../../{profile.Id:N}-x/evil.txt");
+            await using var stream = entry.Open();
+            await stream.WriteAsync("evil"u8.ToArray());
+        }
+
+        var target = new Install(TempFolder());
+        await target.Backup.RestoreAsync(await target.Backup.ReadAsync(zip));
+
+        var outside = Path.Combine(Path.GetDirectoryName(target.Paths.CaptureProfileDirectory(profile.Id))!, $"{profile.Id:N}-x", "evil.txt");
+        Assert.False(File.Exists(outside));
+        Assert.Single(await target.Profiles.GetAllAsync());
+    }
+
+    [Fact]
     public async Task Without_credentials_the_file_holds_no_secrets_and_restoring_keeps_current_ones()
     {
         var source = new Install(TempFolder());

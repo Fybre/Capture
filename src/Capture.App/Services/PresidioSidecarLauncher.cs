@@ -40,6 +40,7 @@ public sealed class PresidioSidecarLauncher : IDisposable
     /// (see the timeout comments below) shouldn't require restarting the app to ever work.</summary>
     public async Task<string?> GetBaseUrlAsync(CancellationToken cancellationToken = default)
     {
+        ForgetIfExited();
         if (_baseUrl is not null)
             return _baseUrl;
         if (_disposed)
@@ -48,6 +49,7 @@ public sealed class PresidioSidecarLauncher : IDisposable
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            ForgetIfExited();
             if (_baseUrl is not null)
                 return _baseUrl;
             if (_disposed)
@@ -63,6 +65,19 @@ public sealed class PresidioSidecarLauncher : IDisposable
         finally
         {
             _gate.Release();
+        }
+    }
+
+    // A sidecar that has died (crashed, killed from outside) is started again on the next call rather
+    // than every later redaction failing to connect for the rest of the session.
+    private void ForgetIfExited()
+    {
+        if (_process is { HasExited: true })
+        {
+            Trace.TraceWarning($"Presidio sidecar exited (code {_process.ExitCode}); it will be started again.");
+            _process.Dispose();
+            _process = null;
+            _baseUrl = null;
         }
     }
 
@@ -97,6 +112,10 @@ public sealed class PresidioSidecarLauncher : IDisposable
             return null;
         }
 
+        // Both pipes have to keep being read: once a pipe's buffer fills (Python and spaCy log warnings
+        // to stderr), the sidecar blocks on its next write and redaction stops answering.
+        _ = DrainAsync(process.StandardError, "stderr");
+
         int port;
         try
         {
@@ -119,17 +138,29 @@ public sealed class PresidioSidecarLauncher : IDisposable
             return null;
         }
 
+        _ = DrainAsync(process.StandardOutput, "stdout");
         var baseUrl = $"http://127.0.0.1:{port}";
-        _process = process;
         ReportStatus("Presidio is loading its detection model…");
 
-        if (!await WaitForHealthyAsync(baseUrl, cancellationToken).ConfigureAwait(false))
+        bool healthy;
+        try
+        {
+            healthy = await WaitForHealthyAsync(baseUrl, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            throw;
+        }
+
+        if (!healthy)
         {
             ReportStatus("Presidio's detection model failed to finish loading in time.");
             TryKill(process);
-            _process = null;
             return null;
         }
+
+        _process = process;
 
         ReportStatus("Presidio ready.");
         return baseUrl;
@@ -152,11 +183,28 @@ public sealed class PresidioSidecarLauncher : IDisposable
             {
                 // Not listening yet — retry until the deadline.
             }
+            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // This attempt's own 5 s timeout, while the model is still loading — retry.
+            }
 
             await Task.Delay(200, cancellationToken).ConfigureAwait(false);
         }
 
         return false;
+    }
+
+    private static async Task DrainAsync(StreamReader reader, string name)
+    {
+        try
+        {
+            while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
+                Trace.TraceInformation($"Presidio {name}: {line}");
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The process ended.
+        }
     }
 
     private static void TryKill(Process process)

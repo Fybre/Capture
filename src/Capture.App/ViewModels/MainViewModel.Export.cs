@@ -55,9 +55,12 @@ public partial class MainViewModel
             var removed = 0;
             var failed = 0;
             var skipped = 0;
+            string? firstError = null;
             foreach (var row in rows)
             {
-                switch (await ExportDocumentAsync(row).ConfigureAwait(true))
+                var (outcome, error) = await ExportDocumentAsync(row).ConfigureAwait(true);
+                firstError ??= error;
+                switch (outcome)
                 {
                     case ExportOutcome.Exported:
                         exported++;
@@ -96,7 +99,7 @@ public partial class MainViewModel
             if (removed > 0)
                 parts.Add($"exported and removed {removed}");
             if (failed > 0)
-                parts.Add($"{failed} failed");
+                parts.Add($"{failed} failed — {firstError}");
             if (skipped > 0)
                 parts.Add($"{skipped} skipped (not ready, or no export configured)");
             StatusText = parts.Count == 0 ? "Nothing to export" : string.Join(", ", parts);
@@ -116,21 +119,32 @@ public partial class MainViewModel
     // is skipped rather than exported with incomplete/unvalidated data. An already-Exported document is
     // also skipped: re-running export is available per-document by selecting it and using Export, not
     // implicitly folded into a bulk export-all pass.
-    private async Task<ExportOutcome> ExportDocumentAsync(DocumentRow row)
+    // Error: why it failed — the first failing export's message, which names that export.
+    private async Task<(ExportOutcome Outcome, string? Error)> ExportDocumentAsync(DocumentRow row)
     {
         var document = row.Document;
         if (document.Status != DocumentStatus.Ready)
-            return ExportOutcome.Skipped;
+            return (ExportOutcome.Skipped, null);
 
         var profile = FindDocumentType(document.ProfileId);
         if (profile is null || profile.Exports.Count(item => item.Enabled) == 0)
-            return ExportOutcome.Skipped;
+            return (ExportOutcome.Skipped, null);
 
         var batchFields = FindCaptureProfileForDocumentType(document.ProfileId)?.Batch.Fields ?? [];
-        var results = await _exportRunner.RunAsync(profile, document, row.Indexes, batchFields).ConfigureAwait(true);
-        if (results.Any(result => !result.Success))
-            return ExportOutcome.Failed;
+        var results = await _exportRunner.RunAsync(
+            profile, document, row.Indexes, batchFields, alreadyExported: document.CompletedExportIds).ConfigureAwait(true);
+        if (results.FirstOrDefault(result => !result.Success) is { } failure)
+        {
+            // The ones that worked are remembered, so retrying only sends the ones that failed — a
+            // second try mustn't create the Therefore document again.
+            document.CompletedExportIds.AddRange(results.Where(result => result.Success).Select(result => result.ExportId));
+            await _store.UpdateAsync(document).ConfigureAwait(true);
+            var done = profile.Exports.Where(export => document.CompletedExportIds.Contains(export.Id)).Select(export => $"\"{export.Name}\"").ToList();
+            return (ExportOutcome.Failed, $"{document.OriginalFileName}: {failure.Message}"
+                + (done.Count == 0 ? string.Empty : $" ({string.Join(", ", done)} already done — won't be sent again)"));
+        }
 
+        document.CompletedExportIds.Clear();
         document.ExportedUtc = DateTimeOffset.UtcNow;
 
         if (_watchSettings.RemoveDocumentsAfterExport)
@@ -139,12 +153,12 @@ public partial class MainViewModel
             await _store.SoftDeleteAsync(document.Id).ConfigureAwait(true);
             Documents.Remove(row);
             SelectedDocuments.Remove(row);
-            return ExportOutcome.ExportedAndRemoved;
+            return (ExportOutcome.ExportedAndRemoved, null);
         }
 
         document.Status = DocumentStatus.Exported;
         await _store.UpdateAsync(document).ConfigureAwait(true);
         row.NotifyIndexes();
-        return ExportOutcome.Exported;
+        return (ExportOutcome.Exported, null);
     }
 }

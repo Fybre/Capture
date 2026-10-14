@@ -44,7 +44,10 @@ public static class ServiceConfiguration
         services.AddSingleton<IExternalOcrEngine, AzureDocumentIntelligenceOcr>();
         services.AddSingleton<IOcrOptionsResolver, CaptureProfileOcrOptionsResolver>();
         services.AddSingleton<ILatticeBuilder, LatticeBuilder>();
-        services.AddSingleton(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(90) });
+        // Long enough for a Therefore export of a large scan (the whole PDF goes in one request) and a
+        // reasoning model reading page images. Quick checks set their own shorter limits — see
+        // ConnectionRequests.TestAsync and AiEndpointTester.
+        services.AddSingleton(_ => new HttpClient { Timeout = TimeSpan.FromMinutes(5) });
         services.AddSingleton<OpenAiExtractor>();
         services.AddSingleton<LocalLlmExtractor>();
         services.AddSingleton<IAiExtractor, AiExtractorRouter>();

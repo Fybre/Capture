@@ -52,7 +52,7 @@ public sealed class ThereforeExportWriter : IExportWriter
             var valuesByField = context.IndexValues.ToDictionary(value => value.FieldId, value => value.Value);
             var items = definition.ThereforeFieldMappings
                 .Where(IsConfigured)
-                .Select(mapping => BuildIndexDataItem(mapping, ResolveValue(mapping, valuesByField)))
+                .Select(mapping => BuildIndexDataItem(mapping, ResolveValue(mapping, valuesByField), context.Locale))
                 .ToList();
 
             List<ThereforeStream>? streams = null;
@@ -97,18 +97,20 @@ public sealed class ThereforeExportWriter : IExportWriter
         }
     }
 
-    internal static object BuildIndexDataItem(ThereforeFieldMapping mapping, string value)
+    /// <param name="locale">The document type's locale: values are read the way the field validated
+    /// them, e.g. "$1,234.50" or a day-first date.</param>
+    internal static object BuildIndexDataItem(ThereforeFieldMapping mapping, string value, string? locale = null)
     {
         var fieldName = string.IsNullOrEmpty(mapping.IndexDataFieldName) ? mapping.Caption : mapping.IndexDataFieldName;
         return (ThereforeFieldType)mapping.FieldType switch
         {
-            ThereforeFieldType.Int => long.TryParse(value, out var intValue)
+            ThereforeFieldType.Int => IndexFormat.TryParseInteger(value, locale, out var intValue)
                 ? ThereforeIndexData.Int(mapping.FieldNo, fieldName, intValue)
                 : ThereforeIndexData.String(mapping.FieldNo, fieldName, value),
-            ThereforeFieldType.Money => decimal.TryParse(value, out var moneyValue)
+            ThereforeFieldType.Money => IndexFormat.TryParseMoney(value, locale, out var moneyValue)
                 ? ThereforeIndexData.Money(mapping.FieldNo, fieldName, moneyValue)
                 : ThereforeIndexData.String(mapping.FieldNo, fieldName, value),
-            ThereforeFieldType.Date => DateTime.TryParse(value, out var dateValue)
+            ThereforeFieldType.Date => IndexFormat.TryParseDate(value, locale, out var dateValue)
                 ? ThereforeIndexData.Date(mapping.FieldNo, fieldName, dateValue)
                 : ThereforeIndexData.String(mapping.FieldNo, fieldName, value),
             ThereforeFieldType.Logical => ThereforeIndexData.Logical(mapping.FieldNo, fieldName, IsTruthy(value)),

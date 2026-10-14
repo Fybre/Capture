@@ -67,10 +67,17 @@ public static class ConnectionRequests
         return target;
     }
 
+    internal static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(20);
+
     /// <summary>Checks a connection signs in: Therefore asks for a connection token; REST requests the
     /// base address, where any answer other than a sign-in refusal or server error counts as reached.</summary>
     public static async Task<(bool Ok, string Message)> TestAsync(HttpClient http, ConnectionDefinition connection, CancellationToken cancellationToken = default)
     {
+        // A wrong address can leave a request waiting on nothing; a test should say so quickly rather
+        // than sit out the shared client's long limit (meant for exports).
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(TestTimeout);
+        cancellationToken = limit.Token;
         try
         {
             var isTherefore = connection.Type == ConnectionType.Therefore;
@@ -101,7 +108,7 @@ public static class ConnectionRequests
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or JsonException or UriFormatException)
         {
-            return (false, ex is TaskCanceledException ? "The server didn't answer in time." : ex.Message);
+            return (false, ex is TaskCanceledException ? $"The server didn't answer within {TestTimeout.TotalSeconds:0} seconds." : ex.Message);
         }
     }
 

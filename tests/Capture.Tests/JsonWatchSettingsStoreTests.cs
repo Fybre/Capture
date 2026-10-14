@@ -76,6 +76,29 @@ public class JsonWatchSettingsStoreTests
         Assert.Equal(Path.Combine(paths.Root, "settings.json"), paths.SettingsPath);
     }
 
+    // Read back by a second store, so it comes from the file rather than the first store's cache.
+    [Fact]
+    public async Task Writes_every_setting_to_the_file()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "capture-watch-settings-" + Guid.NewGuid().ToString("N")));
+        var settings = new WatchSettings
+        {
+            AiSendPageImages = false,
+            ScanShowDriverSettings = true,
+            ScanDpi = 300,
+            Connections = [new ConnectionDefinition { Name = "Archive", Type = ConnectionType.Therefore, TenantName = "acme", Username = "jo", Password = "secret" }]
+        };
+        await new JsonWatchSettingsStore(paths, new NullOsCredentialStore()).SaveAsync(settings);
+
+        var loaded = await new JsonWatchSettingsStore(paths, new NullOsCredentialStore()).LoadAsync();
+
+        Assert.Equal(
+            System.Text.Json.JsonSerializer.Serialize(settings),
+            System.Text.Json.JsonSerializer.Serialize(loaded));
+        Assert.False(loaded.AiSendPageImages);
+        Assert.True(loaded.ScanShowDriverSettings);
+    }
+
     [Fact]
     public async Task Hands_the_ai_api_key_to_the_credential_store_and_reads_it_back()
     {

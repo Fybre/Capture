@@ -392,6 +392,26 @@ public class PageManagementServiceTests
     }
 
     [Fact]
+    public async Task AppendPagesAsync_marks_a_redacted_document_as_needing_its_redactions_applied_again()
+    {
+        var env = await TestEnv.CreateAsync();
+        var document = await env.CreateDocumentAsync(pageCount: 1, isPdf: true);
+        var redacted = Path.Combine(Path.GetDirectoryName(document.StoredPath)!, "redacted.pdf");
+        await File.WriteAllTextAsync(redacted, "%PDF redacted");
+        document.RedactionStatus = RedactionStatus.Applied;
+        document.RedactedPath = redacted;
+        await env.Store.SaveAsync(document, await env.Store.GetPagesAsync(document.Id));
+        await env.RedactionCandidates.SaveAsync(document.Id,
+            [new RedactionCandidate { PageNumber = 1, Label = "PERSON", Width = 0.1f, Height = 0.1f }]);
+
+        var result = await env.Service.AppendPagesAsync(document.Id, env.CreateRasterPages(count: 1, markerOffset: 40));
+
+        Assert.False(File.Exists(redacted));
+        Assert.Null(result.RedactedPath);
+        Assert.Equal(RedactionStatus.PendingReview, (await env.Store.GetAsync(document.Id))!.RedactionStatus);
+    }
+
+    [Fact]
     public async Task AppendPagesAsync_leaves_existing_page_files_untouched()
     {
         var env = await TestEnv.CreateAsync();

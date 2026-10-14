@@ -279,12 +279,14 @@ public sealed class CaptureBackupService(
             if (Directory.Exists(samples))
                 Directory.Delete(samples, recursive: true);
             var folder = $"{ProfilesFolder}{profile.Id:N}/";
+            // With the separator: "…/samples-x" starts with "…/samples" too.
+            var samplesRoot = Path.GetFullPath(samples) + Path.DirectorySeparatorChar;
             foreach (var entry in archive.Entries.Where(entry =>
                          entry.FullName.StartsWith(folder + SamplesFolder + "/", StringComparison.Ordinal) && entry.Name.Length > 0))
             {
                 var target = Path.GetFullPath(Path.Combine(directory, entry.FullName[folder.Length..]));
-                if (!target.StartsWith(Path.GetFullPath(directory), StringComparison.Ordinal))
-                    continue; // never write outside the profile's folder
+                if (!target.StartsWith(samplesRoot, StringComparison.Ordinal))
+                    continue; // never write outside the profile's samples folder (an entry named "samples/../../x")
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 entry.ExtractToFile(target, overwrite: true);
             }
