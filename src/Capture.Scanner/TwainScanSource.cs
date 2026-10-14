@@ -167,6 +167,14 @@ public sealed class TwainScanSource : IScanSource, IDisposable
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            if (job.Error is null && !job.StopRequested && options.Source == ScanSourceKind.Feeder
+                && await Task.Run(() => FeederLoaded(session)).ConfigureAwait(false) == true)
+            {
+                // NTwain ends the transfers without an error event when the driver reports a jam or a
+                // double feed, so the paper left behind is the only sign the stack wasn't finished.
+                job.Error = "The scanner stopped before the feeder was empty. Check for a paper jam or two sheets fed together, then scan the rest.";
+            }
+
             if (job.Error is { } error)
                 throw new InvalidOperationException(error);
         }
@@ -242,6 +250,9 @@ public sealed class TwainScanSource : IScanSource, IDisposable
 
         if (feeder)
         {
+            // Checked up front: NTwain reports a driver's "no paper" as an empty scan, not an error.
+            if (FeederLoaded(session) == false)
+                throw new InvalidOperationException("There's no paper in the scanner's feeder.");
             caps.CAP_AUTOFEED.Set(TW_BOOL.True);
             if (options.Duplex && !caps.CAP_DUPLEXENABLED.Set(TW_BOOL.True).IsSuccess)
                 throw new InvalidOperationException("The selected scanner can't scan both sides.");
@@ -264,6 +275,23 @@ public sealed class TwainScanSource : IScanSource, IDisposable
         var enabled = session.EnableSource(options.ShowDriverSettings ? SourceEnableOption.ShowUI : SourceEnableOption.NoUI);
         if (!enabled.IsSuccess)
             throw new InvalidOperationException($"The scanner didn't start: {Describe(enabled)}");
+    }
+
+    // Whether the feeder has paper in it, or null when the driver can't tell.
+    private static bool? FeederLoaded(TwainAppSession session)
+    {
+        try
+        {
+            var loaded = session.Caps.CAP_FEEDERLOADED;
+            if (!loaded.Supports.HasFlag(TWQC.GETCURRENT))
+                return null;
+            var current = loaded.GetCurrent();
+            return current.Count == 0 ? null : current[0] == TW_BOOL.True;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     // Stops a scan: before transfers start the source is just disabled; during them the next transfer
