@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.8.23",
+    "date": "2026-10-14",
+    "changes": [
+      "Windows: WIA scanners now appear in Capture — previously none were listed, so Scan had nothing to scan from. This includes scanners using the driver Windows installs itself, such as a Canon LiDE over USB, which now show their flatbed and resolutions, and their pages are saved compressed rather than as large uncompressed images."
+    ]
+  },
+  {
     "version": "0.8.22",
     "date": "2026-10-14",
     "changes": [

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using SkiaSharp;
 
 namespace Capture.Scanner;
 
@@ -89,8 +90,24 @@ public sealed class WiaScanSource : IScanSource
             device = deviceInfo.Connect();
             dynamic? flatbed = FindItem(device, ScanSourceKind.Flatbed, allowFallback: false);
             dynamic? feeder = FindItem(device, ScanSourceKind.Feeder, allowFallback: false);
+            dynamic? single = null;
             try
             {
+                if (flatbed is null && feeder is null)
+                {
+                    // WIA 1.0-style drivers (and Windows' own eSCL driver, e.g. a Canon LiDE over
+                    // USB) have one uncategorised item; what it can do is on the device instead.
+                    // Scanning uses that item for the flatbed.
+                    single = FindItem(device, ScanSourceKind.Flatbed, allowFallback: true);
+                    var capabilities = TryGetPropertyValue(device.Properties, "Document Handling Capabilities") is { } value
+                        ? Convert.ToInt32(value)
+                        : WiaSourceFlatbed;
+                    IReadOnlyList<int> singleDpis = single is null ? [] : AllowedIntValues(single.Properties, WiaIpsXres);
+                    return new ScanDevice(id, name, singleDpis,
+                        SupportsFlatbed: single is not null && (capabilities & WiaSourceFlatbed) != 0,
+                        SupportsFeeder: false);
+                }
+
                 var resolutionItem = flatbed ?? feeder;
                 IReadOnlyList<int> dpis = resolutionItem is null
                     ? []
@@ -102,6 +119,7 @@ public sealed class WiaScanSource : IScanSource
             {
                 Release(flatbed);
                 Release(feeder);
+                Release(single);
             }
         }
         catch (Exception)
@@ -169,8 +187,32 @@ public sealed class WiaScanSource : IScanSource
 
             // TIFF can carry every sheet/side returned by an ADF; SkiaImagePageImporter expands its
             // frames into individual pages. Flatbed stays PNG to avoid an unnecessary container.
-            imageFile = item.Transfer(feederScan ? WiaFormatTiff : WiaFormatPng);
-            imageFile.SaveFile(outputPath);
+            var format = feederScan ? WiaFormatTiff : WiaFormatPng;
+            imageFile = item.Transfer(format);
+            if (string.Equals(Convert.ToString(imageFile.FormatID), format, StringComparison.OrdinalIgnoreCase))
+            {
+                imageFile.SaveFile(outputPath);
+            }
+            else
+            {
+                // Some drivers (Windows' eSCL driver, for one) only send BMP whatever is asked for;
+                // re-encode it as PNG rather than keep an uncompressed bitmap under the wrong name.
+                var rawPath = Path.ChangeExtension(outputPath, ".raw");
+                try
+                {
+                    imageFile.SaveFile(rawPath);
+                    outputPath = Path.ChangeExtension(outputPath, ".png");
+                    using var bitmap = SKBitmap.Decode(rawPath)
+                        ?? throw new InvalidOperationException("The scanner sent an image Capture can't read.");
+                    using var output = File.Create(outputPath);
+                    if (!bitmap.Encode(output, SKEncodedImageFormat.Png, 90))
+                        throw new InvalidOperationException("Could not save the scanned page.");
+                }
+                finally
+                {
+                    File.Delete(rawPath);
+                }
+            }
             var width = Convert.ToInt32(imageFile.Width);
             var height = Convert.ToInt32(imageFile.Height);
             var actualDpi = Convert.ToInt32(imageFile.HorizontalResolution);
@@ -227,7 +269,7 @@ public sealed class WiaScanSource : IScanSource
             try
             {
                 if (string.Equals((string)property.Name, name, StringComparison.OrdinalIgnoreCase))
-                    return property.get_Value();
+                    return property.Value;
             }
             finally
             {
@@ -285,8 +327,7 @@ public sealed class WiaScanSource : IScanSource
             {
                 if ((int)property.PropertyID != propertyId)
                     continue;
-                object boxed = value;
-                property.set_Value(ref boxed);
+                property.Value = value;
                 return;
             }
             finally
@@ -314,7 +355,7 @@ public sealed class WiaScanSource : IScanSource
                     }
                 }
                 catch (Exception) { }
-                return (Convert.ToInt32(property.get_Value()) & flag) != 0;
+                return (Convert.ToInt32(property.Value) & flag) != 0;
             }
             finally
             {
@@ -332,8 +373,7 @@ public sealed class WiaScanSource : IScanSource
             {
                 if (!string.Equals((string)property.Name, name, StringComparison.OrdinalIgnoreCase))
                     continue;
-                object boxed = value;
-                property.set_Value(ref boxed);
+                property.Value = value;
                 return;
             }
             finally

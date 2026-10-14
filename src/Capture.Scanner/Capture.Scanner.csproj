@@ -2,4 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Re-encodes WIA transfers that come back as BMP. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
+  </ItemGroup>
 </Project>
