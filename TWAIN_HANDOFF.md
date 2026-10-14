@@ -83,6 +83,27 @@ networking that reaches the scanner, .NET 8 SDK.
 - **Threading**: NTwain's events arrive on its transfer thread. `TwainAppSession` is created once
   and kept for the app's lifetime.
 
+## Test results — Windows 11 on ARM VM, Canon R50 over the network (2026-10-14)
+
+All nine steps pass after the fixes below (commits after 59a2878). Listing takes ~1–3 s.
+
+- **Windows on ARM**: `dotnet run` builds arm64, which can't load the x64 `twaindsm.dll`/drivers
+  (BadImageFormatException, swallowed by the composite → no scanners). TWAIN now reports itself
+  unavailable with the reason. Test with the x64 SDK: `"C:\Program Files\dotnetd\dotnet.exe" run
+  --project tools/ScanProbe -a x64 -- list`. Shipped builds are win-x64, so they're fine on ARM.
+- **Canon "load more paper" panel** appeared even with NoUI; PowerScan avoids it by setting
+  `CAP_INDICATORS = FALSE` (found in the Canon driver log: `C:\ProgramData\Canon Electronics\Scanner
+  drivers\log\*.dat`, UTF-16 with every byte inverted). Now set unless the driver window is shown.
+- **NTwain 4 ignores failed native transfers** (`HandleTransferResult` has a TODO): NOMEDIA, PAPERJAM,
+  PAPERDOUBLEFEED and INTERLOCK (cover open) end the scan as a success. Worked around with
+  `CAP_FEEDERLOADED` before (empty feeder / cover open → error) and after (paper left → jam message).
+- Stop after N: STOPFEEDER is sent at once, but the R50 has already fed ~4 more sheets; those are
+  delivered and kept (correct — they've gone through).
+- Another program (PowerScan) holding the scanner → OpenDS fails with BADDEST; now explained.
+- Settings offered Flatbed for the R50 when it was picked as the first device with no saved scanner;
+  fixed in SettingsViewModel and in the main window's scan.
+- No WIA scanner was available on this VM, so "WIA still works" wasn't checked.
+
 ## Before merging
 
 - Update `HelpWindow.axaml` (Scanning section: TWAIN scanners, the driver-settings option) and add a
