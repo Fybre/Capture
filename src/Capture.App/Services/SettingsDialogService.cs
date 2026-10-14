@@ -33,6 +33,7 @@ public sealed class SettingsDialogService : ISettingsDialogService
         }
         finally
         {
+            viewModel.CancelScanListing();
             _toasts.DetachHost(dialog);
         }
         return new SettingsDialogResult(viewModel.Saved, viewModel.DocumentsChanged);

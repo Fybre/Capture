@@ -484,7 +484,8 @@
                         <TextBlock Text="Scanner" Classes="field-label" />
                         <ComboBox ItemsSource="{Binding ScanDevices}"
                                   SelectedItem="{Binding SelectedScanDevice}"
-                                  PlaceholderText="No scanner detected"
+                                  PlaceholderText="{Binding ScanDevicePlaceholder}"
+                                  IsEnabled="{Binding !IsListingScanners}"
                                   HorizontalAlignment="Stretch">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="scanner:ScanDevice">
@@ -492,8 +493,12 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+                        <TextBlock Text="Looking for scanners…"
+                                   IsVisible="{Binding ShowListingScannersHint}"
+                                   Classes="hint" />
                         <TextBlock Text="Resolution (DPI)" Classes="field-label" />
                         <ComboBox ItemsSource="{Binding ScanDpiOptions}"
+                                  IsEnabled="{Binding !IsListingScanners}"
                                   SelectedItem="{Binding ScanDpi}"
                                   HorizontalAlignment="Stretch" />
                         <TextBlock Text="Higher DPI captures more detail but scans slower and produces a larger file — 200 is a good default for text documents."
@@ -501,6 +506,7 @@
                                    Classes="hint" />
                         <TextBlock Text="Source" Classes="field-label" />
                         <ComboBox ItemsSource="{Binding ScanSourceOptions}"
+                                  IsEnabled="{Binding !IsListingScanners}"
                                   SelectedItem="{Binding SelectedScanSource}"
                                   HorizontalAlignment="Stretch" />
                         <CheckBox Content="Scan both sides (duplex)"

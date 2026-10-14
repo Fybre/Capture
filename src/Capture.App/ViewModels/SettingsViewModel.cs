@@ -435,22 +435,14 @@ public partial class SettingsViewModel : ViewModelBase
 
         await LoadRedactionSetsAsync();
 
-        // The device's capability probe (native helper subprocess + ImageCaptureCore) can be slow,
-        // incomplete, or time out to restrictive fallback values — see RefreshScanCapabilities. None
-        // of that should be allowed to silently overwrite the DPI/source/duplex the user explicitly
-        // saved just because this one probe didn't confirm them.
-        _restoringSettings = true;
-        try
-        {
-            await RefreshScanDevicesAsync();
-        }
-        finally
-        {
-            _restoringSettings = false;
-        }
+        // Listing scanners takes seconds (a 2 s network browse on macOS, opening every TWAIN driver on
+        // Windows), so the window opens without waiting for it: the saved choices show until the list
+        // arrives.
+        ShowSavedScanChoices();
+        _ = ListScanDevicesAsync(restoringSettings: true);
     }
 
-    // See InitializeAsync's call to RefreshScanDevicesAsync.
+    // See ListScanDevicesAsync.
     private bool _restoringSettings;
 
     // --- Scanning -----------------------------------------------------------------------------------
@@ -492,31 +484,136 @@ public partial class SettingsViewModel : ViewModelBase
     // async call, so on first InitializeAsync SelectedScanDevice can't be resolved from it yet).
     private string? _pendingScanDeviceId;
 
-    [RelayCommand]
-    private async Task RefreshScanDevicesAsync()
+    /// <summary>True while the scanner list is being fetched; the scanner choices are disabled until it
+    /// arrives.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScanDevicePlaceholder))]
+    [NotifyPropertyChangedFor(nameof(ShowListingScannersHint))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshScanDevicesCommand))]
+    private bool _isListingScanners;
+
+    public string ScanDevicePlaceholder => IsListingScanners ? "Looking for scanners…" : "No scanner detected";
+
+    // On Refresh the current scanner stays shown, so the empty box's placeholder can't say why it's greyed out.
+    public bool ShowListingScannersHint => IsListingScanners && SelectedScanDevice is not null;
+
+    private CancellationTokenSource? _scanListing;
+
+    // Set while the device list is swapped for a new one, when the ComboBox briefly clears its
+    // selection: that isn't a choice of "no scanner", so the DPI/source shouldn't be reset to suit it.
+    private bool _replacingScanDevices;
+
+    [RelayCommand(CanExecute = nameof(CanRefreshScanDevices))]
+    private Task RefreshScanDevicesAsync() => ListScanDevicesAsync(restoringSettings: false);
+
+    private bool CanRefreshScanDevices() => !IsListingScanners;
+
+    /// <summary>Stops a scanner listing still running, when the window closes.</summary>
+    public void CancelScanListing() => _scanListing?.Cancel();
+
+    // The saved DPI and source, shown on their own until the scanner list says what else is possible.
+    private void ShowSavedScanChoices()
+    {
+        ScanDpiOptions.Clear();
+        ScanDpiOptions.Add(ScanDpi);
+        ScanSourceOptions.Clear();
+        ScanSourceOptions.Add(SelectedScanSource);
+        OnPropertyChanged(nameof(ScanDpi));
+        OnPropertyChanged(nameof(SelectedScanSource));
+    }
+
+    private async Task ListScanDevicesAsync(bool restoringSettings)
     {
         if (!_scanSource.IsAvailable)
             return;
 
-        var previousId = SelectedScanDevice?.Id ?? _pendingScanDeviceId;
-        ScanDevices.Clear();
+        _scanListing?.Cancel();
+        var listing = _scanListing = new CancellationTokenSource();
+        IsListingScanners = true;
         try
         {
-            foreach (var device in await _scanSource.ListDevicesAsync())
-                ScanDevices.Add(device);
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Could not list scanners: {ex.Message}";
-            StatusIsError = true;
-            return;
-        }
+            IReadOnlyList<ScanDevice> devices;
+            try
+            {
+                devices = await _scanSource.ListDevicesAsync(listing.Token);
+            }
+            catch (OperationCanceledException) when (listing.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (listing.IsCancellationRequested)
+                    return;
+                StatusText = $"Could not list scanners: {ex.Message}";
+                StatusIsError = true;
+                return;
+            }
 
-        SelectedScanDevice = ScanDevices.FirstOrDefault(device => device.Id == previousId) ?? ScanDevices.FirstOrDefault();
-        _pendingScanDeviceId = null;
+            // Closed, or a newer listing (Refresh, a restored backup) took over.
+            if (listing.IsCancellationRequested)
+                return;
+
+            // Restoring (opening, or after a backup is restored) selects the saved scanner, not the one
+            // shown before; Refresh keeps the one shown.
+            var previousId = restoringSettings
+                ? _pendingScanDeviceId ?? SelectedScanDevice?.Id
+                : SelectedScanDevice?.Id ?? _pendingScanDeviceId;
+            _replacingScanDevices = true;
+            try
+            {
+                ScanDevices.Clear();
+                foreach (var device in devices)
+                    ScanDevices.Add(device);
+            }
+            finally
+            {
+                _replacingScanDevices = false;
+            }
+
+            // The device's capability probe (native helper subprocess + ImageCaptureCore, or a TWAIN
+            // driver) can be incomplete, or fall back to restrictive values — see RefreshScanCapabilities.
+            // None of that should silently overwrite the DPI/source/duplex the user explicitly saved.
+            _restoringSettings = restoringSettings;
+            try
+            {
+                var selected = ScanDevices.FirstOrDefault(device => device.Id == previousId) ?? ScanDevices.FirstOrDefault();
+                if (selected == SelectedScanDevice)
+                {
+                    // No change to raise OnSelectedScanDeviceChanged — the same device listed again, or
+                    // none. With none found on opening, the saved choices stay as they are.
+                    if (selected is not null || !restoringSettings)
+                        RefreshScanCapabilities(selected);
+                }
+                else
+                {
+                    SelectedScanDevice = selected;
+                }
+            }
+            finally
+            {
+                _restoringSettings = false;
+            }
+            _pendingScanDeviceId = null;
+        }
+        finally
+        {
+            if (_scanListing == listing)
+            {
+                IsListingScanners = false;
+                _scanListing = null;
+            }
+            listing.Dispose();
+        }
     }
 
-    partial void OnSelectedScanDeviceChanged(ScanDevice? value) => RefreshScanCapabilities(value);
+    partial void OnSelectedScanDeviceChanged(ScanDevice? value)
+    {
+        OnPropertyChanged(nameof(ShowListingScannersHint));
+        if (value is null && _replacingScanDevices)
+            return;
+        RefreshScanCapabilities(value);
+    }
 
     partial void OnSelectedScanSourceChanged(ScanSourceKind value)
     {
@@ -525,7 +622,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanScanDuplex));
     }
 
-    // While restoring saved settings (see InitializeAsync) for the saved device, its capability probe is trusted
+    // While restoring saved settings (see ListScanDevicesAsync) for the saved device, its capability probe is trusted
     // to EXPAND what's shown as available, but never to silently overturn what the user explicitly
     // saved — the probe (a native helper subprocess + ImageCaptureCore) can be slow, report an
     // incomplete capability set, or fall back to restrictive defaults on timeout, and none of that
@@ -808,7 +905,8 @@ public partial class SettingsViewModel : ViewModelBase
             ScanSource = SelectedScanSource == ScanSourceKind.Feeder ? ScanInputSource.Feeder : ScanInputSource.Flatbed,
             ScanDuplex = ScanDuplex,
             ScanShowDriverSettings = ScanShowDriverSettings,
-            ScanPreferredDeviceId = SelectedScanDevice?.Id
+            // Saved before the scanner list arrives: keep the saved scanner.
+            ScanPreferredDeviceId = SelectedScanDevice?.Id ?? _pendingScanDeviceId
         };
         return true;
     }
