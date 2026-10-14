@@ -3,6 +3,10 @@
     "version": "0.8.23",
     "date": "2026-10-14",
     "changes": [
+      "Windows: TWAIN scanners. Production document scanners such as Canon imageFORMULA, Ricoh/Fujitsu fi, Kodak Alaris and Epson DS now appear in Settings ▸ Scanning once their TWAIN driver is installed, alongside WIA scanners — each labelled (TWAIN) or (WIA). Feeder, duplex, colour or greyscale and resolution are set from Capture; pages are counted as they arrive, and stopping a scan keeps the pages already scanned.",
+      "TWAIN scanners can show the manufacturer's own settings window before each scan, for options Capture doesn't set itself: tick Show the scanner's own settings before each scan in Settings ▸ Scanning.",
+      "TWAIN scanners give clear messages when the feeder is empty, the scanner's cover is open, a scan stops before the feeder is empty (a jam or two sheets fed together), or another program is using the scanner.",
+      "Settings no longer offers Flatbed for a scanner that only has a feeder when it's chosen automatically.",
       "Windows: WIA scanners now appear in Capture — previously none were listed, so Scan had nothing to scan from. This includes scanners using the driver Windows installs itself, such as a Canon LiDE over USB, which now show their flatbed and resolutions, and their pages are saved compressed rather than as large uncompressed images."
     ]
   },
