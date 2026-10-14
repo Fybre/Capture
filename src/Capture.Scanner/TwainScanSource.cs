@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading.Channels;
 using NTwain;
@@ -26,8 +27,24 @@ public sealed class TwainScanSource : IScanSource, IDisposable
     private ScanJob? _job;
 
     /// <summary>TWAIN needs the 64-bit data source manager, which scanner drivers install (Windows
-    /// doesn't ship it).</summary>
-    public bool IsAvailable => OperatingSystem.IsWindows() && DsmInstalled();
+    /// doesn't ship it), built for this process's architecture: TWAIN drivers are x64, so on Windows
+    /// on ARM only the x64 build (running emulated) can use them.</summary>
+    public bool IsAvailable => OperatingSystem.IsWindows() && UnavailableReason is null;
+
+    /// <summary>Why <see cref="IsAvailable"/> is false, or null when TWAIN can be used.</summary>
+    public string? UnavailableReason
+    {
+        get
+        {
+            if (DsmPath() is not { } path)
+                return "twaindsm.dll (the TWAIN data source manager, installed by scanner drivers) wasn't found.";
+            var dsm = PeArchitecture(path);
+            return dsm is null || dsm == RuntimeInformation.ProcessArchitecture
+                ? null
+                : $"{path} is {dsm} but Capture is running as {RuntimeInformation.ProcessArchitecture}; "
+                  + $"TWAIN drivers can only be used by a {dsm} build of Capture.";
+        }
+    }
 
     public async Task<IReadOnlyList<ScanDevice>> ListDevicesAsync(CancellationToken cancellationToken = default)
     {
@@ -367,11 +384,32 @@ public sealed class TwainScanSource : IScanSource, IDisposable
         var code => $"the driver reported {code} ({status.RC})."
     };
 
-    private static bool DsmInstalled()
+    // The DSM the loader would pick: next to the app first, then System32.
+    private static string? DsmPath() =>
+        new[] { AppContext.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.System) }
+            .Select(folder => Path.Combine(folder, "twaindsm.dll"))
+            .FirstOrDefault(File.Exists);
+
+    // The machine type in a DLL's PE header, or null if it can't be read (then loading is left to try).
+    private static Architecture? PeArchitecture(string path)
     {
-        var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
-        return File.Exists(Path.Combine(system, "twaindsm.dll"))
-               || File.Exists(Path.Combine(AppContext.BaseDirectory, "twaindsm.dll"));
+        try
+        {
+            using var reader = new BinaryReader(File.OpenRead(path));
+            reader.BaseStream.Position = 0x3C;
+            reader.BaseStream.Position = reader.ReadInt32() + 4;
+            return reader.ReadUInt16() switch
+            {
+                0x014C => Architecture.X86,
+                0x8664 => Architecture.X64,
+                0xAA64 => Architecture.Arm64,
+                _ => null
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     public void Dispose()

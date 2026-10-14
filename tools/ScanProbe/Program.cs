@@ -1,6 +1,7 @@
 // ScanProbe: tries Capture's Windows scanner sources (WIA and TWAIN) outside the app, printing what
 // each step does, for testing scanner drivers. See tools/ScanProbe/README.md.
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Capture.Scanner;
 using NTwain;
 using NTwain.Data;
@@ -43,9 +44,24 @@ static CompositeScanSource Sources() =>
 
 static async Task<int> ListAsync()
 {
-    Console.WriteLine($"Process: {(Environment.Is64BitProcess ? "64" : "32")}-bit");
+    Console.WriteLine($"Process: {RuntimeInformation.ProcessArchitecture}");
     Console.WriteLine($"WIA available: {new WiaScanSource().IsAvailable}");
-    Console.WriteLine($"TWAIN available (twaindsm.dll found): {new TwainScanSource().IsAvailable}");
+    var twain = new TwainScanSource();
+    Console.WriteLine($"TWAIN available: {twain.IsAvailable}{(twain.UnavailableReason is { } reason ? $" ({reason})" : "")}");
+    // The combined list below hides a source that fails, so list each on its own first.
+    foreach (var (label, source) in new (string, IScanSource)[] { ("WIA", new WiaScanSource()), ("TWAIN", twain) })
+    {
+        if (!source.IsAvailable)
+            continue;
+        try
+        {
+            Console.WriteLine($"{label}: {(await source.ListDevicesAsync()).Count} device(s)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{label}: listing FAILED: {ex.GetBaseException().Message}");
+        }
+    }
     var watch = Stopwatch.StartNew();
     var devices = await Sources().ListDevicesAsync();
     Console.WriteLine($"{devices.Count} device(s) in {watch.Elapsed.TotalSeconds:0.0}s:");
