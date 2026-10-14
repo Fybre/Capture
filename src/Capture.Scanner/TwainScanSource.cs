@@ -76,12 +76,14 @@ public sealed class TwainScanSource : IScanSource, IDisposable
     }
 
     // Opens the source briefly to ask what it can do. A driver that won't open (scanner off, network
-    // scanner unreachable) is still listed, with default capabilities; scanning reports the problem.
+    // scanner unreachable, in use by another program) is still listed, offering every option, since
+    // most TWAIN scanners are feeder scanners; scanning reports the problem or the unsupported setting.
     private static ScanDevice ReadCapabilities(TwainAppSession session, TWIdentityWrapper source, string name)
     {
         var id = IdPrefix + name;
+        var unknown = new ScanDevice(id, name, SupportsFlatbed: true, SupportsFeeder: true, SupportsDuplex: true);
         if (!session.OpenSource(source).IsSuccess)
-            return new ScanDevice(id, name);
+            return unknown;
         try
         {
             var caps = session.Caps;
@@ -102,7 +104,7 @@ public sealed class TwainScanSource : IScanSource, IDisposable
         }
         catch (Exception)
         {
-            return new ScanDevice(id, name);
+            return unknown;
         }
         finally
         {
@@ -199,7 +201,10 @@ public sealed class TwainScanSource : IScanSource, IDisposable
 
         var opened = session.OpenSource(source);
         if (!opened.IsSuccess)
-            throw new InvalidOperationException($"Could not open the scanner: {Describe(opened)}");
+            throw new InvalidOperationException(opened.ConditionCode is TWCC.BADDEST or TWCC.BUMMER or TWCC.DENIED
+                // What Canon's driver reports for a network scanner held by another program.
+                ? "Could not open the scanner: it may be in use by another program (close other scanning software and try again), or it isn't reachable."
+                : $"Could not open the scanner: {Describe(opened)}");
 
         _job = job;
         try
@@ -250,6 +255,11 @@ public sealed class TwainScanSource : IScanSource, IDisposable
         caps.ICAP_YRESOLUTION.Set((TW_FIX32)(float)options.Dpi);
         // Every page in the feeder, not just one.
         caps.CAP_XFERCOUNT.Set((short)-1);
+        // Without the driver window, no driver UI either: with indicators on, Canon drivers show a
+        // "load more paper" panel when the feeder empties and wait on it (the app asks "Continue
+        // scanning?" itself). IRIS PowerScan does the same.
+        if (!options.ShowDriverSettings)
+            caps.CAP_INDICATORS.Set(TW_BOOL.False);
 
         var enabled = session.EnableSource(options.ShowDriverSettings ? SourceEnableOption.ShowUI : SourceEnableOption.NoUI);
         if (!enabled.IsSuccess)
