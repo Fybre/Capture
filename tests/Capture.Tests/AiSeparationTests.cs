@@ -291,7 +291,7 @@ public class AiSeparationPromptTests
         var capped = AiSeparationPrompt.SystemMessage(Types, new string('x', AiSeparationPrompt.MaxGuidanceChars + 50));
 
         Assert.Contains("rules for this batch, from the user", system);
-        Assert.Contains("A TRANSMITTAL page starts a new document.\nLab results continue.\n", system);
+        Assert.Contains($"A TRANSMITTAL page starts a new document.{Environment.NewLine}Lab results continue.{Environment.NewLine}", system);
         Assert.True(system.IndexOf("TRANSMITTAL", StringComparison.Ordinal) < system.IndexOf("Document types:", StringComparison.Ordinal));
         Assert.Contains(new string('x', AiSeparationPrompt.MaxGuidanceChars), capped);
         Assert.DoesNotContain(new string('x', AiSeparationPrompt.MaxGuidanceChars + 1), capped);

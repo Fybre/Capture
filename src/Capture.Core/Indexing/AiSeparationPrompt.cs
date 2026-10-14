@@ -83,7 +83,7 @@ public static class AiSeparationPrompt
 
     private static string? Guidance(string? guidance)
     {
-        var text = guidance?.Trim().ReplaceLineEndings("\n");
+        var text = guidance?.Trim().ReplaceLineEndings();
         if (string.IsNullOrEmpty(text))
             return null;
         return text.Length <= MaxGuidanceChars ? text : text[..MaxGuidanceChars].TrimEnd();
