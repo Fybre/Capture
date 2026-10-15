@@ -321,7 +321,10 @@ public partial class MainViewModel
         var rasterPages = scannedPages
             .Select((page, index) => new RasterPage(index + 1, page.ImagePath, page.Width, page.Height, page.Dpi))
             .ToList();
+        var timer = System.Diagnostics.Stopwatch.StartNew();
         var updated = await _pageManagement.AppendPagesAsync(targetDocumentId, rasterPages, cancellationToken).ConfigureAwait(true);
+        await _events.RecordAsync(DocumentEvent.ByUser(targetDocumentId, DocumentEventKind.Pages,
+            $"Added {rasterPages.Count} scanned page(s) at the end", duration: timer.Elapsed), CancellationToken.None).ConfigureAwait(true);
         await ReloadDocumentsAsync().ConfigureAwait(true);
         if (IsPreviewMode)
             SelectedDocument = Documents.FirstOrDefault(row => row.Id == updated.Id);

@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace Capture.Storage;
 
-public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExportHistoryStore
+public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExportHistoryStore, IDocumentEventStore
 {
     private readonly IAppPaths _paths;
     private readonly string _connectionString;
@@ -119,7 +119,19 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExpo
               FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
             );
             """,
-            "CREATE INDEX IF NOT EXISTS ix_export_history_document ON export_history(document_id, utc);"
+            "CREATE INDEX IF NOT EXISTS ix_export_history_document ON export_history(document_id, utc);",
+            """
+            CREATE TABLE IF NOT EXISTS document_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              document_id TEXT NOT NULL,
+              utc TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              actor TEXT NOT NULL,
+              message TEXT NOT NULL,
+              detail TEXT
+            );
+            """,
+            "CREATE INDEX IF NOT EXISTS ix_document_events_document ON document_events(document_id, id);"
         };
 
         foreach (var sql in commands)
@@ -133,6 +145,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExpo
         // by an earlier build of this same prototype still needs to remain usable while it is running.
         await EnsureColumnAsync(connection, "documents", "source_import_id", "TEXT", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "documents", "exported_utc", "TEXT", cancellationToken).ConfigureAwait(false);
+        await EnsureColumnAsync(connection, "document_events", "duration_ms", "INTEGER", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "documents", "review_note", "TEXT", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "documents", "completed_exports", "TEXT", cancellationToken).ConfigureAwait(false);
         await EnsureColumnAsync(connection, "batches", "display_number", "INTEGER", cancellationToken).ConfigureAwait(false);
@@ -641,7 +654,7 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExpo
         await using (var deleteHistory = connection.CreateCommand())
         {
             deleteHistory.Transaction = (SqliteTransaction)transaction;
-            deleteHistory.CommandText = "DELETE FROM export_history WHERE document_id = $id;";
+            deleteHistory.CommandText = "DELETE FROM export_history WHERE document_id = $id; DELETE FROM document_events WHERE document_id = $id;";
             deleteHistory.Parameters.AddWithValue("$id", documentId.ToString("D"));
             await deleteHistory.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -762,6 +775,61 @@ public sealed class SqliteDocumentStore : IDocumentStore, IOpenBatchStore, IExpo
             await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddEventsAsync(IReadOnlyList<DocumentEvent> events, CancellationToken cancellationToken = default)
+    {
+        if (events.Count == 0)
+            return;
+
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var documentEvent in events)
+        {
+            await using var insert = connection.CreateCommand();
+            insert.Transaction = (SqliteTransaction)transaction;
+            insert.CommandText = """
+                INSERT INTO document_events (document_id, utc, kind, actor, message, detail, duration_ms)
+                VALUES ($document, $utc, $kind, $actor, $message, $detail, $duration);
+                """;
+            insert.Parameters.AddWithValue("$document", documentEvent.DocumentId.ToString("D"));
+            insert.Parameters.AddWithValue("$utc", documentEvent.Utc.ToString("O", CultureInfo.InvariantCulture));
+            insert.Parameters.AddWithValue("$kind", documentEvent.Kind.ToString());
+            insert.Parameters.AddWithValue("$actor", documentEvent.Actor);
+            insert.Parameters.AddWithValue("$message", documentEvent.Message);
+            insert.Parameters.AddWithValue("$detail", (object?)documentEvent.Detail ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$duration", documentEvent.Duration is { } duration ? (long)Math.Round(duration.TotalMilliseconds) : DBNull.Value);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<DocumentEvent>> GetEventsAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT utc, kind, message, actor, detail, duration_ms
+            FROM document_events
+            WHERE document_id = $document
+            ORDER BY id;
+            """;
+        command.Parameters.AddWithValue("$document", documentId.ToString("D"));
+        var events = new List<DocumentEvent>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            events.Add(new DocumentEvent(
+                documentId,
+                DateTimeOffset.Parse(reader.GetString(0), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                // A kind from a newer build reads as a plain step rather than failing the whole history.
+                Enum.TryParse<DocumentEventKind>(reader.GetString(1), out var kind) ? kind : DocumentEventKind.Processing,
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : TimeSpan.FromMilliseconds(reader.GetInt64(5))));
+        }
+        return events;
     }
 
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<ExportRecord>>> GetAsync(

@@ -162,6 +162,48 @@ public sealed class CaptureMaterializationLifecycleTests
     }
 
     [Fact]
+    public async Task Materialization_starts_each_documents_history()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "capture-history-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var sourcePdf = Path.Combine(root, "stack.pdf");
+            await File.WriteAllTextAsync(sourcePdf, "pdf placeholder");
+            var paths = new AppPaths(Path.Combine(root, "app"));
+            var documents = new SqliteDocumentStore(paths);
+            await documents.InitializeAsync();
+            var type = new DocumentTypeDefinition { Name = "Invoice" };
+            var profile = new CaptureProfile { Name = "Accounts", DefaultDocumentTypeId = type.Id, DocumentTypes = [type] };
+            var plannedDocument = new PlannedDocument(Guid.NewGuid(), type, [new SourcePage("input-1", 1)], [],
+                Decisions: ["Page 1: no rule matched, so it's a Invoice (the fallback type)."]);
+            var plan = new CapturePlan([new PlannedBatch(Guid.NewGuid(), true, [], [plannedDocument])], [], []);
+            var source = new CaptureMaterializationSource(
+                "input-1", sourcePdf, DocumentSource.Import,
+                [new RasterPage(1, sourcePdf, 100, 100, 200)],
+                new Dictionary<int, PageLattice> { [1] = new() { PageNumber = 1, PixelWidth = 100, PixelHeight = 100, Dpi = 200 } });
+            var materializer = new CapturePlanMaterializer(
+                paths, documents, new JsonIndexValueStore(paths), new JsonLatticeStore(paths),
+                new ProfileApplicator(new FixedBarcodeDecoder()), new RecordingSubsetWriter(), new CopyMergedWriter(),
+                events: documents);
+
+            var result = await materializer.MaterializeAsync(
+                profile, plan, new Dictionary<string, CaptureMaterializationSource> { [source.Id] = source }, inputChannel: "manual");
+
+            var history = await documents.GetEventsAsync(Assert.Single(result.Documents).Id);
+            Assert.Equal("Imported stack.pdf (1 page)", history[0].Message);
+            Assert.Equal("Split off and typed as Invoice", history[1].Message);
+            Assert.Equal("Page 1: no rule matched, so it's a Invoice (the fallback type).", history[1].Detail);
+            Assert.Contains(history, item => item.Kind == DocumentEventKind.Review);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Materialization_extracts_a_batch_barcode_from_a_removed_separator_page()
     {
         var root = Path.Combine(Path.GetTempPath(), "capture-consumed-batch-barcode-" + Guid.NewGuid().ToString("N"));

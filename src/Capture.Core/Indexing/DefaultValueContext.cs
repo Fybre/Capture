@@ -18,4 +18,8 @@ public sealed class DefaultValueContext
     public string? DocumentType { get; init; }
     public IReadOnlyList<ScriptTriggerMatchInfo> TriggerMatches { get; init; } = [];
     public IReadOnlyList<Capture.Core.Models.IndexValue>? BatchValues { get; init; }
+
+    /// <summary>Filled with what reading the fields involved (AI, failures), when the caller wants it
+    /// for the document's history.</summary>
+    public ExtractionReport? Report { get; init; }
 }

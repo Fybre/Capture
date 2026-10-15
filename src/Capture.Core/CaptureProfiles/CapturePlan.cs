@@ -53,7 +53,9 @@ public sealed record PlannedDocument(
     IReadOnlyList<SourcePage> SourcePages,
     IReadOnlyList<RuleMatch> BoundaryMatches,
     IReadOnlyList<string>? ReviewReasons = null,
-    string? AiSuggestedType = null);
+    string? AiSuggestedType = null,
+    IReadOnlyList<string>? Decisions = null,
+    string? AiProvider = null);
 
 public sealed record ProcessingDiagnostic(string Code, string Message, SourcePage? Page = null);
 

@@ -134,7 +134,9 @@ public partial class MainViewModel
         IsBusy = true;
         try
         {
+            var timer = Stopwatch.StartNew();
             var updated = await _pageManagement.RotatePagesAsync(row.Id, pageNumbers, degreesClockwise).ConfigureAwait(true);
+            var took = timer.Elapsed;
             // RefreshDocumentRowInPlaceAsync's own reload (via LoadSelectedDocumentAsync) always resets
             // the preview to page 1 when this is the document on screen — pass the rotated page through
             // as the reload's target instead of defaulting to page 1 and jumping afterward: a separate
@@ -142,6 +144,7 @@ public partial class MainViewModel
             // fire-and-forget thumbnail decoding, cancelling it mid-flight and leaving blank thumbnails.
             await RefreshDocumentRowInPlaceAsync(row, updated, pageNumbers.Min()).ConfigureAwait(true);
             RefreshDocumentGroups();
+            await RecordAsync(row, DocumentEventKind.Pages, $"Rotated {Pages(pageNumbers)} {degreesClockwise}°", duration: took).ConfigureAwait(true);
             StatusText = pageNumbers.Count == 1
                 ? $"Rotated 1 page {degreesClockwise}°"
                 : $"Rotated {pageNumbers.Count} pages {degreesClockwise}°";
@@ -197,9 +200,12 @@ public partial class MainViewModel
         IsBusy = true;
         try
         {
+            var timer = Stopwatch.StartNew();
             var updated = await _pageManagement.DeletePagesAsync(row.Id, pageNumbers).ConfigureAwait(true);
+            var took = timer.Elapsed;
             await RefreshDocumentRowInPlaceAsync(row, updated).ConfigureAwait(true);
             RefreshDocumentGroups();
+            await RecordAsync(row, DocumentEventKind.Pages, $"Deleted {Pages(pageNumbers)}", duration: took).ConfigureAwait(true);
             StatusText = pageNumbers.Count == 1 ? "Deleted 1 page" : $"Deleted {pageNumbers.Count} pages";
             StatusIsError = false;
             _toasts.ShowInfo($"{StatusText} — click to undo", onClick: () => _ = UndoDeletePagesAsync(
@@ -264,6 +270,7 @@ public partial class MainViewModel
             if (SelectedDocument == row)
                 await LoadSelectedDocumentAsync(row).ConfigureAwait(true);
             RefreshDocumentGroups();
+            await RecordAsync(row, DocumentEventKind.Pages, $"Undid deleting {Pages(deletedOldNumbers)}").ConfigureAwait(true);
             StatusText = "Restored deleted page(s)";
             StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
@@ -312,10 +319,20 @@ public partial class MainViewModel
         IsBusy = true;
         try
         {
+            var splitAfter = CurrentPageNumber - 1;
+            var originalName = row.Document.OriginalFileName;
+            var timer = Stopwatch.StartNew();
             var (first, second) = await _pageManagement.SplitDocumentAsync(row.Id, CurrentPageNumber).ConfigureAwait(true);
             var firstIndexError = await TryReindexAfterPageSplitAsync(first).ConfigureAwait(true);
             var secondIndexError = await TryReindexAfterPageSplitAsync(second).ConfigureAwait(true);
+            var took = timer.Elapsed;
             var secondRow = await CreateRowAsync(second).ConfigureAwait(true);
+            await CopyHistoryAsync(row.Id, secondRow).ConfigureAwait(true);
+            await RecordAsync(row, DocumentEventKind.Pages,
+                $"Split after page {splitAfter}: the remaining {second.PageCount} page(s) became a new document",
+                "Both documents' fields were read again.", took).ConfigureAwait(true);
+            await RecordAsync(secondRow, DocumentEventKind.Pages,
+                $"Split off {originalName}: its pages from {splitAfter + 1} on").ConfigureAwait(true);
             var insertIndex = Documents.IndexOf(row) + 1;
             Documents.Insert(Math.Clamp(insertIndex, 0, Documents.Count), secondRow);
             await RefreshDocumentRowInPlaceAsync(row, first).ConfigureAwait(true);
@@ -367,6 +384,7 @@ public partial class MainViewModel
         {
             var merged = await _pageManagement.MergeDocumentsAsync([first.Id, second.Id]).ConfigureAwait(true);
             Documents.Remove(second);
+            await RecordAsync(first, DocumentEventKind.Pages, "Undid the split — joined back into one document").ConfigureAwait(true);
             await RefreshDocumentRowInPlaceAsync(first, merged).ConfigureAwait(true);
             if (SelectedDocument == first || SelectedDocument == second)
             {
@@ -504,8 +522,13 @@ public partial class MainViewModel
         IsBusy = true;
         try
         {
+            var timer = Stopwatch.StartNew();
             var updated = await _pageManagement.ReorderPagesAsync(row.Id, newOrder).ConfigureAwait(true);
+            var took = timer.Elapsed;
             await RefreshDocumentRowInPlaceAsync(row, updated).ConfigureAwait(true);
+            await RecordAsync(row, DocumentEventKind.Pages, toPageNumber is { } before
+                ? $"Moved page {fromPageNumber} to before page {before}"
+                : $"Moved page {fromPageNumber} to the end", duration: took).ConfigureAwait(true);
             StatusText = "Reordered pages";
             _toasts.ShowInfo($"{StatusText} — click to undo", onClick: () => _ = UndoReorderPagesAsync(row, undoOrder));
         }
@@ -531,6 +554,7 @@ public partial class MainViewModel
         {
             var restored = await _pageManagement.ReorderPagesAsync(row.Id, undoOrder).ConfigureAwait(true);
             await RefreshDocumentRowInPlaceAsync(row, restored).ConfigureAwait(true);
+            await RecordAsync(row, DocumentEventKind.Pages, "Undid a page move").ConfigureAwait(true);
             if (SelectedDocument == row)
                 await LoadSelectedDocumentAsync(row).ConfigureAwait(true);
             StatusText = "Undid page reorder";

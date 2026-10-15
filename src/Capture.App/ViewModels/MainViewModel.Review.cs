@@ -140,12 +140,15 @@ public partial class MainViewModel
 
     private IndexValueRow CreateReviewRow(DocumentRow document, IndexValue value, bool isBatch)
     {
+        // The value last written to the history, so a run of keystrokes records as one change from it.
+        var recorded = value.Value;
         var row = new IndexValueRow(value, document.ConfidenceThreshold, document.Locale, _scripts?.IsAvailable ?? false, isBatch)
         {
             Changed = () =>
             {
                 _ = PersistReviewAsync(document);
                 _ = RecalculateAfterEditAsync(document, isBatch);
+                TrackFieldEdit(document, value, isBatch, () => recorded, now => recorded = now);
             },
             Description = FieldDescription(document.Document.ProfileId, value.FieldId, value.FieldName, isBatch),
             OptionsFor = name => document.Indexes
@@ -346,9 +349,12 @@ public partial class MainViewModel
             };
 
             var sharedSource = isBatchField ? captureProfile!.Batch.SharedScriptSource : profile!.SharedScriptSource;
+            var scriptTimer = Stopwatch.StartNew();
             var result = await _scripts.RunProfileScriptAsync(script, context, sharedSource: sharedSource).ConfigureAwait(true);
+            var scriptTime = scriptTimer.Elapsed;
             if (!result.Success)
             {
+                await RecordAsync(documentRow, DocumentEventKind.Error, $"Button \"{field.Name}\" failed", result.ErrorMessage, scriptTime).ConfigureAwait(true);
                 Trace.TraceError($"Button script \"{field.Name}\" failed: {result.ErrorMessage}");
                 StatusText = $"Script failed: {result.ErrorMessage}";
                 StatusIsError = true;
@@ -357,6 +363,7 @@ public partial class MainViewModel
             }
 
             await PersistReviewAsync(documentRow).ConfigureAwait(true);
+            await RecordAsync(documentRow, DocumentEventKind.Script, $"Ran button \"{field.Name}\"", duration: scriptTime).ConfigureAwait(true);
             // A button script can write to any field, not just its own — refresh every currently
             // visible row's cached display state rather than tracking which ones actually changed.
             foreach (var visibleRow in ReviewBatchIndexes.Concat(ReviewDocumentIndexes))
@@ -452,12 +459,17 @@ public partial class MainViewModel
                 continue;
             }
 
+            var before = match.Value;
             match.Value = sourceValue.Value;
             match.IsManual = true;
             match.Confidence = 100;
             match.ValidationError = IndexFormat.Validate(match.Value, match.Format, target.Locale);
             await PersistReviewAsync(target).ConfigureAwait(true);
             applied++;
+            if (!string.Equals(before, match.Value, StringComparison.Ordinal))
+                await RecordAsync(target, DocumentEventKind.Edit,
+                    $"Changed {match.FieldName}, copied from {source.Document.OriginalFileName}",
+                    ChangeDetail(match, before, match.Value)).ConfigureAwait(true);
         }
 
         StatusText = applied > 0

@@ -612,6 +612,27 @@ public class ProfileApplicatorTests
     }
 
     [Fact]
+    public async Task The_report_says_which_ai_filled_which_fields_and_what_failed()
+    {
+        var supplier = new IndexField { Name = "Supplier", Kind = FieldKind.Ai };
+        var total = new IndexField { Name = "Total", Kind = FieldKind.Ai };
+        var documentType = new DocumentTypeDefinition { Fields = [supplier, total] };
+        var lattices = new[] { new PageLattice { PageNumber = 1, Words = [Word("Acme", 0.2f, 0.3f)] } };
+
+        var report = new ExtractionReport();
+        await new ProfileApplicator(ai: new FakeAiExtractor { [supplier.Id] = new AiExtractedValue("Acme", 90) })
+            .ApplyAsync(documentType, lattices, new DefaultValueContext { Report = report });
+        Assert.StartsWith("AI (AI) filled 1 of 2 AI field(s): Supplier — ", Assert.Single(report.Notes));
+        Assert.Matches(@" — \d+ ms$", report.Notes[0]);
+        Assert.Empty(report.Problems);
+
+        var failed = new ExtractionReport();
+        await new ProfileApplicator(ai: new FakeAiExtractor { Failure = new HttpRequestException("429 Too Many Requests") })
+            .ApplyAsync(documentType, lattices, new DefaultValueContext { Report = failed });
+        Assert.Equal(["AI extraction failed: 429 Too Many Requests"], failed.Problems);
+    }
+
+    [Fact]
     public async Task Ai_field_locates_a_money_answer_despite_the_source_texts_currency_formatting()
     {
         var field = new IndexField { Name = "InvoiceTotal", Kind = FieldKind.Ai };

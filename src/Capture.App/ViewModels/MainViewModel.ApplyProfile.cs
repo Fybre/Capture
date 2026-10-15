@@ -44,6 +44,7 @@ public partial class MainViewModel
             foreach (var row in rows)
             {
                 var document = row.Document;
+                var rowTimer = System.Diagnostics.Stopwatch.StartNew();
                 var oldBatchId = document.BatchId;
                 var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
                 var lattices = await LoadLatticesAsync(document.Id, pages).ConfigureAwait(true);
@@ -65,6 +66,7 @@ public partial class MainViewModel
                 document.BatchId = targetBatch.Id;
 
                 IReadOnlyList<IndexValue> values = [];
+                var report = new ExtractionReport();
                 if (type is not null)
                 {
                     var batchNumber = await _store.GetBatchNumberAsync(targetBatch.Id).ConfigureAwait(true);
@@ -78,7 +80,8 @@ public partial class MainViewModel
                             DocumentNumber = documentNumber,
                             ScriptScope = ScriptScopeKind.Document,
                             DocumentType = type.Name,
-                            BatchValues = batchValues
+                            BatchValues = batchValues,
+                            Report = report
                         },
                         pages: pages,
                         document: document).ConfigureAwait(true);
@@ -101,6 +104,9 @@ public partial class MainViewModel
                 row.SetBatchIndexes(batchValues);
                 row.SetDocumentIndexes(values);
                 PlaceInBatch(row, targetBatch.Id);
+                await RecordAsync(row, DocumentEventKind.Review,
+                    type is not null ? $"Applied profile {profile.Name}: typed as {type.Name}" : $"Applied profile {profile.Name}: no document type matched",
+                    ReadAgainDetail("Its fields were read again, replacing the earlier values.", report), rowTimer.Elapsed).ConfigureAwait(true);
             }
 
             RefreshBatchAccents();
@@ -140,6 +146,9 @@ public partial class MainViewModel
         return profile?.DocumentTypes ?? [];
     }
 
+    private static string ReadAgainDetail(string what, ExtractionReport report) =>
+        string.Join("\n", new[] { what }.Concat(report.Notes).Concat(report.Problems.Select(problem => $"Problem: {problem}")));
+
     public bool IsCurrentDocumentType(DocumentTypeDefinition type) => SelectedDocument?.Document.ProfileId == type.Id;
 
     /// <summary>Re-files the selected document under another document type of its profile: its fields
@@ -154,6 +163,8 @@ public partial class MainViewModel
         try
         {
             var document = row.Document;
+            var typeTimer = System.Diagnostics.Stopwatch.StartNew();
+            var previousType = row.ProfileName;
             var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
             var lattices = await LoadLatticesAsync(document.Id, pages).ConfigureAwait(true);
             var previous = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
@@ -166,6 +177,7 @@ public partial class MainViewModel
                 documentNumber = await _store.GetDocumentNumberInBatchAsync(batchId, document.Id).ConfigureAwait(true);
             }
 
+            var report = new ExtractionReport();
             var values = await _profileApplicator.ApplyAsync(
                 type,
                 lattices,
@@ -175,7 +187,8 @@ public partial class MainViewModel
                     DocumentNumber = documentNumber,
                     ScriptScope = ScriptScopeKind.Document,
                     DocumentType = type.Name,
-                    BatchValues = batchValues
+                    BatchValues = batchValues,
+                    Report = report
                 },
                 pages: pages,
                 document: document).ConfigureAwait(true);
@@ -192,6 +205,9 @@ public partial class MainViewModel
             row.ProfileName = type.Name;
             row.SetDocumentIndexes(values);
             row.NotifyIndexes();
+            await RecordAsync(row, DocumentEventKind.Review,
+                string.IsNullOrWhiteSpace(previousType) ? $"Changed type to {type.Name}" : $"Changed type from {previousType} to {type.Name}",
+                ReadAgainDetail("Its fields were read again for the new type, keeping values typed by hand into fields of the same name.", report), typeTimer.Elapsed).ConfigureAwait(true);
             RefreshDocumentGroups();
             if (SelectedDocument == row)
             {

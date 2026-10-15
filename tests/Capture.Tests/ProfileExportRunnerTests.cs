@@ -77,6 +77,7 @@ public class ProfileExportRunnerTests
 
         Assert.Equal(1, writer.CallCount);
         Assert.Equal(retry.Id, Assert.Single(results).ExportId);
+        Assert.NotNull(results[0].Elapsed);
     }
 
     [Fact]

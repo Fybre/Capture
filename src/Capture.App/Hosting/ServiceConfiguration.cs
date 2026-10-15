@@ -33,6 +33,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IDocumentStore, SqliteDocumentStore>();
         services.AddSingleton<IOpenBatchStore>(sp => (SqliteDocumentStore)sp.GetRequiredService<IDocumentStore>());
         services.AddSingleton<IExportHistoryStore>(sp => (SqliteDocumentStore)sp.GetRequiredService<IDocumentStore>());
+        services.AddSingleton<IDocumentEventStore>(sp => (SqliteDocumentStore)sp.GetRequiredService<IDocumentStore>());
         services.AddSingleton<OpenBatchService>();
         services.AddSingleton<ILatticeStore, JsonLatticeStore>();
         services.AddSingleton<IPdfRasterizer, PdfiumRasterizer>();

@@ -183,6 +183,13 @@ public partial class MainViewModel
         var results = await _exportRunner.RunAsync(
             profile, document, row.Indexes, batchFields, alreadyExported: document.CompletedExportIds).ConfigureAwait(true);
         await RecordExportsAsync(row, profile, results).ConfigureAwait(true);
+        foreach (var result in results)
+        {
+            var name = profile.Exports.FirstOrDefault(export => export.Id == result.ExportId)?.Name ?? "export";
+            await (result.Success
+                ? RecordAsync(row, DocumentEventKind.Export, $"Exported to {name}", result.Reference, result.Elapsed)
+                : RecordAsync(row, DocumentEventKind.Error, $"Export to {name} failed", result.Message, result.Elapsed)).ConfigureAwait(true);
+        }
         if (results.FirstOrDefault(result => !result.Success) is { } failure)
         {
             // The ones that worked are remembered, so retrying only sends the ones that failed — a
@@ -204,6 +211,7 @@ public partial class MainViewModel
         {
             await _store.UpdateAsync(document).ConfigureAwait(true);
             await _store.SoftDeleteAsync(document.Id).ConfigureAwait(true);
+            await RecordAsync(row, DocumentEventKind.Lifecycle, "Moved to Trash after export").ConfigureAwait(true);
             Documents.Remove(row);
             SelectedDocuments.Remove(row);
             return (ExportOutcome.ExportedAndRemoved, null);

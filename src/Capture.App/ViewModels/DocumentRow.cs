@@ -60,6 +60,29 @@ public sealed partial class DocumentRow : ObservableObject
     public void AddExportRecords(IEnumerable<ExportRecord> records) =>
         ExportRecords = records.Select(record => new ExportRecordRow(record)).Reverse().Concat(ExportRecords).ToList();
 
+    /// <summary>The document's history, newest first — loaded when the document is opened for review.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHistory))]
+    private IReadOnlyList<DocumentEventRow> _history = [];
+
+    public bool HasHistory => History.Count > 0;
+
+    private bool _historyLoaded;
+
+    public void SetHistory(IEnumerable<DocumentEvent> events)
+    {
+        History = events.Select(item => new DocumentEventRow(item)).Reverse().ToList();
+        _historyLoaded = true;
+    }
+
+    /// <summary>Shows new steps straight away once the history is on screen; before then they're read
+    /// with the rest when it's opened.</summary>
+    public void AddHistory(IEnumerable<DocumentEvent> events)
+    {
+        if (_historyLoaded)
+            History = events.Select(item => new DocumentEventRow(item)).Reverse().Concat(History).ToList();
+    }
+
     public string FileName => Document.OriginalFileName;
 
     public int PageCount => Document.PageCount;

@@ -76,7 +76,9 @@ public sealed class ProfileApplicator : IProfileApplicator
     {
         var results = ExtractAll(fields, locale, lattices, pages, batchSeparatorValue);
         ApplyBoundaryValues(fields, results, existingValues, locale);
-        var aiProblem = await FillAiAsync(fields, locale, lattices, results, cancellationToken).ConfigureAwait(false);
+        var aiProblem = await FillAiAsync(fields, locale, lattices, results, context?.Report, cancellationToken).ConfigureAwait(false);
+        if (aiProblem is not null)
+            context?.Report?.Problems.Add(aiProblem);
         await FillFieldScriptsAsync(fields, sharedScriptSource, profileName, locale, results, lattices, context, document, cancellationToken).ConfigureAwait(false);
         await RunProfileScriptsAsync(fields, scripts, sharedScriptSource, profileName, locale, results, lattices, context, document, ScriptTrigger.AfterFieldsPopulated, cancellationToken).ConfigureAwait(false);
         ApplyDefaults(fields, profileName, locale, results, context, existingValues, pages?.Count ?? lattices.Count);
@@ -198,6 +200,7 @@ public sealed class ProfileApplicator : IProfileApplicator
         string? locale,
         IReadOnlyList<PageLattice> lattices,
         List<IndexValue> results,
+        ExtractionReport? report,
         CancellationToken cancellationToken)
     {
         var aiFields = fields.Where(field => field.Kind == FieldKind.Ai).ToList();
@@ -207,6 +210,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             return "AI isn't set up — choose a provider in Settings ▸ AI extraction.";
 
         IReadOnlyDictionary<Guid, AiExtractedValue> extracted;
+        var timer = Stopwatch.StartNew();
         try
         {
             extracted = await _ai.ExtractAsync(DocumentText.FromLattices(lattices), aiFields, cancellationToken)
@@ -218,6 +222,10 @@ public sealed class ProfileApplicator : IProfileApplicator
             return $"AI extraction failed: {ex.Message}";
         }
 
+        var answered = aiFields.Where(field => extracted.TryGetValue(field.Id, out var hit) && !string.IsNullOrWhiteSpace(hit.Value)).ToList();
+        report?.Notes.Add($"AI ({_ai.Name}) filled {answered.Count} of {aiFields.Count} AI field(s)"
+            + (answered.Count > 0 ? $": {string.Join(", ", answered.Select(field => field.Name))}" : string.Empty)
+            + $" — {DocumentEvent.FormatDuration(timer.Elapsed)}");
         foreach (var field in aiFields)
         {
             if (!extracted.TryGetValue(field.Id, out var hit))
@@ -280,6 +288,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             if (!result.Success)
             {
                 Trace.TraceError($"Field script \"{field.Name}\" failed: {result.ErrorMessage}");
+                context?.Report?.Problems.Add($"Script field \"{field.Name}\" failed: {result.ErrorMessage}");
                 value.ValidationError = result.ErrorMessage;
                 continue;
             }
@@ -332,6 +341,7 @@ public sealed class ProfileApplicator : IProfileApplicator
             if (!result.Success)
             {
                 Trace.TraceError($"Post-process script \"{field.Name}\" failed: {result.ErrorMessage}");
+                context?.Report?.Problems.Add($"Post-process script of \"{field.Name}\" failed: {result.ErrorMessage}");
                 continue;
             }
 
@@ -372,7 +382,10 @@ public sealed class ProfileApplicator : IProfileApplicator
         {
             var result = await _scripts.RunProfileScriptAsync(script, execContext, cancellationToken, sharedScriptSource).ConfigureAwait(false);
             if (!result.Success)
+            {
                 Trace.TraceError($"Script \"{script.Name}\" failed: {result.ErrorMessage}");
+                context?.Report?.Problems.Add($"Script \"{script.Name}\" failed: {result.ErrorMessage}");
+            }
         }
 
         // A script may have touched any field — recompute validation for all of them rather than

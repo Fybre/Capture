@@ -96,6 +96,7 @@ public partial class MainViewModel
         {
             foreach (var row in rows)
                 await _store.RestoreAsync(row.Id).ConfigureAwait(true);
+            await RecordAsync(rows, DocumentEventKind.Lifecycle, "Restored from Trash").ConfigureAwait(true);
 
             await ReloadDocumentsAsync().ConfigureAwait(true);
             StatusText = $"Restored {rows.Count} document(s)";
@@ -222,6 +223,7 @@ public partial class MainViewModel
                 Documents.Remove(row);
                 SelectedDocuments.Remove(row);
             }
+            await RecordAsync(rows, DocumentEventKind.Lifecycle, "Moved to Trash").ConfigureAwait(true);
 
             RefreshBatchAccents();
             RefreshDocumentGroups();
@@ -273,8 +275,14 @@ public partial class MainViewModel
         try
         {
             var targetRow = rows[0];
+            var targetPages = targetRow.Document.PageCount;
+            var mergeTimer = Stopwatch.StartNew();
             var merged = await _pageManagement.MergeDocumentsAsync(rows.Select(row => row.Id).ToList())
                 .ConfigureAwait(true);
+            await RecordAsync(targetRow, DocumentEventKind.Pages,
+                $"Merged in {rows.Count - 1} document(s) after page {targetPages}",
+                string.Join("\n", rows.Skip(1).Select(row => $"{row.Document.OriginalFileName} ({row.Document.PageCount} page(s))")),
+                mergeTimer.Elapsed).ConfigureAwait(true);
 
             foreach (var absorbed in rows.Skip(1))
                 Documents.Remove(absorbed);
@@ -301,6 +309,15 @@ public partial class MainViewModel
         }
     }
 
+    /// <summary>What Mark ready overrode — the status, and why it needed review.</summary>
+    private static string? ReadyDetail(DocumentStatus previous, string? reviewNote) => previous switch
+    {
+        DocumentStatus.Ready => null,
+        DocumentStatus.Exported => "Was Exported — it can be exported again.",
+        DocumentStatus.NeedsReview => string.IsNullOrWhiteSpace(reviewNote) ? "Was Needs review." : $"Was Needs review:\n{reviewNote}",
+        _ => $"Was {previous}."
+    };
+
     [RelayCommand(CanExecute = nameof(CanMarkReady))]
     private async Task MarkReadyAsync()
     {
@@ -313,11 +330,16 @@ public partial class MainViewModel
         IsBusy = true;
         try
         {
-            var document = SelectedDocument.Document;
+            var readyRow = SelectedDocument;
+            var document = readyRow.Document;
+            var previousStatus = document.Status;
+            var previousNote = document.ReviewNote;
+            var redactionBefore = document.RedactionStatus;
             document.Status = DocumentStatus.Ready;
             document.ReviewNote = null;
             await _store.UpdateAsync(document);
-            SelectedDocument.NotifyIndexes();
+            readyRow.NotifyIndexes();
+            await RecordAsync(readyRow, DocumentEventKind.Review, "Marked ready", ReadyDetail(previousStatus, previousNote)).ConfigureAwait(true);
             StatusText = "Marked ready";
             StatusIsError = false;
             _toasts.ShowSuccess(StatusText);
@@ -329,7 +351,9 @@ public partial class MainViewModel
             if (FindDocumentType(document.ProfileId) is { } profile)
             {
                 var indexes = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
+                var stepsTimer = Stopwatch.StartNew();
                 await RunPostIndexStepsAsync(document, indexes, profile).ConfigureAwait(true);
+                await RecordRedactionChangeAsync(readyRow, redactionBefore, stepsTimer.Elapsed).ConfigureAwait(true);
 
                 // RunPostIndexStepsAsync can trigger automatic redaction — reload candidates so a
                 // fresh detection shows up immediately instead of only after reselecting the document.
@@ -378,18 +402,24 @@ public partial class MainViewModel
                 }
 
                 var document = row.Document;
+                var previousStatus = document.Status;
+                var previousNote = document.ReviewNote;
+                var redactionBefore = document.RedactionStatus;
                 document.Status = DocumentStatus.Ready;
                 document.ReviewNote = null;
                 await _store.UpdateAsync(document).ConfigureAwait(true);
                 row.NotifyIndexes();
                 marked++;
+                await RecordAsync(row, DocumentEventKind.Review, "Marked ready", ReadyDetail(previousStatus, previousNote)).ConfigureAwait(true);
 
                 // Same as MarkReadyAsync: reaching Ready by bulk override should trigger the same
                 // post-index steps (redaction, etc.) as reaching it any other way.
                 if (FindDocumentType(document.ProfileId) is { } profile)
                 {
                     var indexes = await _indexes.GetAsync(document.Id).ConfigureAwait(true);
+                    var stepsTimer = Stopwatch.StartNew();
                     await RunPostIndexStepsAsync(document, indexes, profile).ConfigureAwait(true);
+                    await RecordRedactionChangeAsync(row, redactionBefore, stepsTimer.Elapsed).ConfigureAwait(true);
                 }
             }
 
@@ -438,6 +468,7 @@ public partial class MainViewModel
         LoadReviewIndexes(value);
         await LoadRedactionCandidatesAsync(value);
         ApplyRedactionsCommand.NotifyCanExecuteChanged();
+        await LoadHistoryAsync(value);
         await LoadSelectedDocumentAsync(value);
     }
 

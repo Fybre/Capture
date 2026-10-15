@@ -11,6 +11,9 @@ public sealed record ExportResult(bool Success, string? Message)
     /// <summary>What the export produced, for the document's export history — e.g. "Therefore document
     /// 1234", or the file it wrote.</summary>
     public string? Reference { get; init; }
+
+    /// <summary>How long the export took; set by <see cref="ProfileExportRunner"/>.</summary>
+    public TimeSpan? Elapsed { get; init; }
 }
 
 public sealed record ExportDocumentContext(

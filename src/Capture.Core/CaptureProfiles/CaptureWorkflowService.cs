@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using Capture.Core.Import;
 using Capture.Core.Indexing;
@@ -246,6 +247,7 @@ public sealed class CaptureWorkflowService(
             // survivor's true page position in the source file for CapturePlanMaterializer's
             // single-source-PDF fast path, which extracts pages directly from the original PDF by number.
             IReadOnlyDictionary<int, int>? originalPageNumbers = null;
+            IReadOnlyList<int> removedBlankPages = [];
             if (profile.RemoveBlankPagesOnIngestion)
             {
                 var survivors = rasters.Where(raster => !blanks.IsBlank(raster.ImagePath, profile.RemoveBlankPagesInkPercent)).ToList();
@@ -256,6 +258,7 @@ public sealed class CaptureWorkflowService(
                     mapping[survivorIndex + 1] = survivors[survivorIndex].PageNumber;
                     renumbered.Add(survivors[survivorIndex] with { PageNumber = survivorIndex + 1 });
                 }
+                removedBlankPages = rasters.Except(survivors).Select(raster => raster.PageNumber).ToList();
                 rasters = renumbered;
                 originalPageNumbers = mapping;
             }
@@ -263,6 +266,9 @@ public sealed class CaptureWorkflowService(
             pagesFound += rasters.Count;
             var correctedRasters = rasters.ToArray();
             var correctedPages = new System.Collections.Concurrent.ConcurrentDictionary<int, byte>();
+            // How long each page took — for the documents' history, to show where an import's time went.
+            var readTimes = new System.Collections.Concurrent.ConcurrentDictionary<int, TimeSpan>();
+            var straightenTimes = new System.Collections.Concurrent.ConcurrentDictionary<int, TimeSpan>();
 
             // Each page's OCR/lattice build, barcode decode, zone extraction, and blank-page check are
             // independent of every other page — OCR in particular spawns its own Tesseract process per
@@ -296,9 +302,17 @@ public sealed class CaptureWorkflowService(
                         Height = raster.Height,
                         Dpi = raster.Dpi
                     };
+                    var pageNumber = raster.PageNumber;
+                    var timer = Stopwatch.StartNew();
                     var lattice = await latticeBuilder.BuildPageAsync(transientDocument, transientPage, ct, profile.OcrOptions).ConfigureAwait(false);
-                    if (profile.StraightenPages && lattice.Source != LatticeSource.PdfText
-                        && await StraightenAsync(raster, lattice, ct).ConfigureAwait(false) is { } straightened)
+                    var readTime = timer.Elapsed;
+                    var straightenTimer = Stopwatch.StartNew();
+                    var straightenedRaster = profile.StraightenPages && lattice.Source != LatticeSource.PdfText
+                        ? await StraightenAsync(raster, lattice, ct).ConfigureAwait(false)
+                        : null;
+                    if (profile.StraightenPages && lattice.Source != LatticeSource.PdfText)
+                        straightenTimes[pageNumber] = straightenTimer.Elapsed;
+                    if (straightenedRaster is { } straightened)
                     {
                         // Read again from the corrected image itself — for a scanned PDF too, whose
                         // pages would otherwise be read from the uncorrected file.
@@ -321,7 +335,9 @@ public sealed class CaptureWorkflowService(
                             Height = raster.Height,
                             Dpi = raster.Dpi
                         }, ct, profile.OcrOptions).ConfigureAwait(false);
+                        readTime += straightenTimer.Elapsed - straightenTimes[pageNumber];
                     }
+                    readTimes[pageNumber] = readTime;
 
                     var analyzedBarcodes = new List<AnalyzedBarcode>();
                     foreach (var rule in allRules.Where(rule => rule.Type == SeparationStrategyType.Barcode))
@@ -376,12 +392,22 @@ public sealed class CaptureWorkflowService(
                 await ContentHashAsync(sourcePath, cancellationToken).ConfigureAwait(false))
             {
                 OriginalPageNumbers = originalPageNumbers,
-                CorrectedPages = correctedPages.Keys.ToHashSet()
+                RemovedBlankPages = removedBlankPages,
+                CorrectedPages = correctedPages.Keys.ToHashSet(),
+                ReadTimes = new Dictionary<int, TimeSpan>(readTimes),
+                StraightenTimes = new Dictionary<int, TimeSpan>(straightenTimes)
             };
         }
 
         if (profile.AiSeparation)
+        {
+            var aiTimer = Stopwatch.StartNew();
             analyzedInputs = await AddAiVerdictsAsync(profile, analyzedInputs, materializationSources, cancellationToken, status).ConfigureAwait(false);
+            var aiPages = analyzedInputs.Sum(input => input.Pages.Count(page => page.Ai is not null));
+            if (aiPages > 0)
+                foreach (var id in materializationSources.Keys.ToList())
+                    materializationSources[id] = materializationSources[id] with { AiSeparationTime = aiTimer.Elapsed, AiSeparationPages = aiPages };
+        }
 
         return new AnalysisResult(analyzedInputs, materializationSources);
     }
@@ -507,7 +533,7 @@ public sealed class CaptureWorkflowService(
             pages, CapturePlanner.AiTypes(profile), profile.AiSeparationGuidance, aiProgress, cancellationToken).ConfigureAwait(false);
         var next = 0;
         return inputs
-            .Select(input => input with { Pages = input.Pages.Select(page => page with { Ai = verdicts[next++] }).ToList() })
+            .Select(input => input with { Pages = input.Pages.Select(page => page with { Ai = verdicts[next++] with { Provider = aiSeparator.Name } }).ToList() })
             .ToList();
     }
 

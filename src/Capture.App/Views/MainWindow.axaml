@@ -1177,6 +1177,81 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Button Classes="ghost"
+                                Command="{Binding ToggleHistoryCommand}"
+                                IsVisible="{Binding SelectedDocument.HasHistory, FallbackValue=False}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Padding="0,4"
+                                Margin="0,4,0,6"
+                                ToolTip.Tip="Show or hide the steps this document went through">
+                            <DockPanel LastChildFill="True">
+                                <TextBlock Text="{Binding HistoryChevron}"
+                                           DockPanel.Dock="Left"
+                                           FontSize="11"
+                                           Width="14"
+                                           Foreground="{DynamicResource FaintBrush}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="HISTORY"
+                                           DockPanel.Dock="Left"
+                                           Classes="eyebrow"
+                                           FontSize="11"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedDocument.History.Count, StringFormat=' · {0}', FallbackValue=''}"
+                                           DockPanel.Dock="Left"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource FaintBrush}"
+                                           Margin="0,0,8,0"
+                                           VerticalAlignment="Center" />
+                                <Border Height="1" Background="{DynamicResource BorderBrush1}" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Button>
+                        <ItemsControl ItemsSource="{Binding SelectedDocument.History, FallbackValue={x:Null}}"
+                                      IsVisible="{Binding IsHistoryExpanded}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DocumentEventRow">
+                                    <Grid ColumnDefinitions="18,*" Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding Glyph}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource FaintBrush}"
+                                                   Margin="0,2,0,0" />
+                                        <StackPanel Grid.Column="1" Spacing="1">
+                                            <Panel>
+                                                <TextBlock Text="{Binding Message}"
+                                                           FontSize="12"
+                                                           TextWrapping="Wrap"
+                                                           IsVisible="{Binding !IsProblem}" />
+                                                <TextBlock Text="{Binding Message}"
+                                                           FontSize="12"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource CriticalBrush}"
+                                                           IsVisible="{Binding IsProblem}" />
+                                            </Panel>
+                                            <SelectableTextBlock Text="{Binding Detail}"
+                                                                 IsVisible="{Binding HasDetail}"
+                                                                 FontSize="11"
+                                                                 Foreground="{DynamicResource MutedBrush}"
+                                                                 TextWrapping="Wrap" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Byline}"
+                                                           FontSize="10.5"
+                                                           Foreground="{DynamicResource FaintBrush}" />
+                                                <TextBlock Text="{Binding DurationText}"
+                                                           FontSize="10.5"
+                                                           Foreground="{DynamicResource FaintBrush}"
+                                                           IsVisible="{Binding HasNormalDuration}" />
+                                                <TextBlock Text="{Binding DurationText}"
+                                                           FontSize="10.5"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource WarnBrush}"
+                                                           IsVisible="{Binding IsSlow}"
+                                                           ToolTip.Tip="This step took a while" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
                 <StackPanel Grid.Row="2" Margin="16,12" Spacing="8">

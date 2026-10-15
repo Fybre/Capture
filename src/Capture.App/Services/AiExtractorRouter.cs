@@ -26,6 +26,8 @@ public sealed class AiExtractorRouter : IAiExtractor
 
     public bool IsConfigured => CurrentSync().IsConfigured;
 
+    public string Name => AiNames.Describe(Task.Run(() => _settings.LoadAsync()).GetAwaiter().GetResult());
+
     public async Task<IReadOnlyDictionary<Guid, AiExtractedValue>> ExtractAsync(
         string documentText,
         IReadOnlyList<IndexField> fields,
@@ -84,6 +86,8 @@ public sealed class AiPageSeparatorRouter : IAiPageSeparator
 
     public bool IsConfigured => Current() is { IsConfigured: true };
 
+    public string Name => AiNames.Describe(Task.Run(() => _settings.LoadAsync()).GetAwaiter().GetResult());
+
     public Task<IReadOnlyList<AiPageVerdict>> AnalyzeAsync(
         IReadOnlyList<AiSeparationPage> pages,
         IReadOnlyList<AiSeparationType>? types,
@@ -101,4 +105,19 @@ public sealed class AiPageSeparatorRouter : IAiPageSeparator
             AiProvider.None => null,
             _ => _cloud
         };
+}
+
+/// <summary>Names the AI in use, for documents' history: the model and the server it runs on, or the
+/// local model.</summary>
+public static class AiNames
+{
+    public static string Describe(WatchSettings settings)
+    {
+        if (settings.AiProvider == AiProvider.Local)
+            return "the local AI model";
+        if (settings.AiProvider == AiProvider.None)
+            return "no AI";
+        var model = string.IsNullOrWhiteSpace(settings.AiModel) ? "AI" : settings.AiModel.Trim();
+        return Uri.TryCreate(settings.AiEndpoint, UriKind.Absolute, out var endpoint) ? $"{model} at {endpoint.Host}" : model;
+    }
 }

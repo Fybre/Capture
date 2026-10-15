@@ -54,7 +54,9 @@ public sealed class ProfileExportRunner
                 BatchFields = batchFields ?? [],
                 Locale = profile.Locale
             };
+            var timer = Stopwatch.StartNew();
             var result = await writer.ExportAsync(definition, context, cancellationToken).ConfigureAwait(false) with { ExportId = definition.Id };
+            result = result with { Elapsed = timer.Elapsed };
             Trace.TraceInformation(result.Success
                 ? $"Export \"{definition.Name}\" succeeded for document {document.Id}: {result.Message}"
                 : $"Export \"{definition.Name}\" failed for document {document.Id}: {result.Message}");

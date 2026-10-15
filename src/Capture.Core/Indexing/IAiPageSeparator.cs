@@ -12,13 +12,20 @@ public sealed record AiSeparationPage(string Text, string? ImagePath = null, boo
 /// <see cref="AiSeparationType.Id"/>, or null when none fits), how sure it is (0–100) and why. When no
 /// type fits, <see cref="SuggestedType"/> is the AI's own short label for the document, if it gave one —
 /// a hint at a type the profile is missing.</summary>
-public sealed record AiPageVerdict(bool StartsNewDocument, string? TypeId, int Confidence, string Reason, string? SuggestedType = null);
+public sealed record AiPageVerdict(bool StartsNewDocument, string? TypeId, int Confidence, string Reason, string? SuggestedType = null)
+{
+    /// <summary>Which AI gave this answer (<see cref="IAiPageSeparator.Name"/>), for the document's history.</summary>
+    public string? Provider { get; init; }
+}
 
 /// <summary>Decides where documents start and what type each is, one page at a time with its neighbours
 /// for context.</summary>
 public interface IAiPageSeparator
 {
     bool IsConfigured { get; }
+
+    /// <summary>Which AI this is, for a document's history — e.g. "gpt-4o-mini at api.openai.com".</summary>
+    string Name => "AI";
 
     /// <summary>One verdict per page, in the same order. Never throws for a single page's failure: that
     /// page gets confidence 0 and an "AI failed" reason, and continues the previous document. With

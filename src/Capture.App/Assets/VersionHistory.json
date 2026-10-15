@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.8.26",
+    "date": "2026-10-15",
+    "changes": [
+      "Each document keeps a history of what happened to it, shown under History in the review panel (collapsed until you open it): where it came from, why it was split off and given its type (the rule that matched, or the AI's answer), which AI was used for splitting and for fields, whether the text came from the PDF or OCR, page fixes, how its fields were read, AI calls or scripts that failed, and every change made since — field edits with the value before and after, Mark ready, page changes, redactions, exports and Trash — with when, who (Capture or the signed-in user), and how long the slower steps took — anything over 10 seconds is highlighted. Sensitive field values are never recorded.",
+      "A capture profile with a hidden batch field opened with \"Object reference not set to an instance of an object\" instead of the designer. It opens again.",
+      "In the profile designer, opening a document type with a hidden field straight after another type could copy that type's scripts and exports into it. Fixed.",
+      "A part of a profile Capture can't load no longer stops the profile opening: it's marked ⚠ with the reason and left as saved, and the rest can be edited."
+    ]
+  },
+  {
     "version": "0.8.25",
     "date": "2026-10-15",
     "changes": [

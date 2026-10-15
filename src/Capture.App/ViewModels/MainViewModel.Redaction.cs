@@ -138,8 +138,11 @@ public partial class MainViewModel
                 {
                     var settings = new RedactionSettings { Entities = entities };
                     var pages = await _store.GetPagesAsync(row.Id).ConfigureAwait(true);
+                    var timer = Stopwatch.StartNew();
                     await _redactionDetection.DetectAsync(row.Document, pages, row.DocumentIndexes, settings).ConfigureAwait(true);
                     row.NotifyIndexes();
+                    await RecordAsync(row, DocumentEventKind.Redaction,
+                        $"Checked for information to redact ({SelectedRedactEntitySet?.Name ?? "chosen set"})", duration: timer.Elapsed).ConfigureAwait(true);
                 }
                 catch (Exception ex)
                 {
@@ -340,7 +343,15 @@ public partial class MainViewModel
             await _redactionCandidates.SaveAsync(document.Id, candidates).ConfigureAwait(true);
 
             var pages = await _store.GetPagesAsync(document.Id).ConfigureAwait(true);
+            var applyTimer = Stopwatch.StartNew();
             await _redactionApplier.ApplyAsync(document, pages, candidates).ConfigureAwait(true);
+            var applyTime = applyTimer.Elapsed;
+            var confirmed = candidates.Count(candidate => candidate.Decision == RedactionDecision.Confirmed);
+            var rejected = candidates.Count(candidate => candidate.Decision == RedactionDecision.Rejected);
+            await (document.RedactionStatus == RedactionStatus.Applied
+                ? RecordAsync(SelectedDocument, DocumentEventKind.Redaction, $"Applied redactions: {confirmed} area(s) blacked out",
+                    rejected > 0 ? $"{rejected} suggestion(s) rejected" : null, applyTime)
+                : RecordAsync(SelectedDocument, DocumentEventKind.Error, "Applying redactions failed", document.RedactionError, applyTime)).ConfigureAwait(true);
 
             // The checklist stays populated (and editable) after this — applying doesn't "use up" the
             // candidates, it just regenerates the redacted file from whatever's currently confirmed, so

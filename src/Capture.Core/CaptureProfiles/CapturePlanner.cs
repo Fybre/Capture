@@ -56,9 +56,23 @@ public sealed class CapturePlanner
         var consumed = new List<SourcePage>();
         BatchBuilder? batch = null;
         DocumentBuilder? document = null;
+        // Why documents start and what they are, for each document's history. Notes about a page that
+        // isn't in any document (a separator sheet, a new batch) go to the next document.
+        var pending = new List<string>();
+        DocumentBuilder Begin(DocumentBuilder built, string reason)
+        {
+            built.Decisions.AddRange(pending);
+            pending.Clear();
+            built.Decisions.Add(reason);
+            return built;
+        }
 
+        var firstInput = true;
         foreach (var input in inputs)
         {
+            if (!firstInput && profile.FileIsDocumentBoundary)
+                pending.Add("A new file starts a new document.");
+            firstInput = false;
             foreach (var page in input.Pages)
             {
                 var pageRef = new SourcePage(page.InputId, page.PageNumber);
@@ -69,6 +83,7 @@ public sealed class CapturePlanner
                     document = null;
                     batch = new BatchBuilder(false, CaptureValues(profile.Batch, batchMatches), batchMatches, pageRef);
                     batches.Add(batch);
+                    pending.Add($"Page {page.PageNumber}: a new batch started — {DescribeMatches(batchMatches, profile.Batch.StartRules)}.");
                 }
 
                 // A type set to let the AI decide drops out of rule matching on pages the AI analysed.
@@ -93,7 +108,8 @@ public sealed class CapturePlanner
                     // from its pages' rules once it's complete (see ResolveTypeFromPages).
                     if (ai.StartsNewDocument || document is null)
                     {
-                        document = new DocumentBuilder(null, []) { TypeFromPages = true };
+                        document = Begin(new DocumentBuilder(null, []) { TypeFromPages = true },
+                            ai.StartsNewDocument ? $"Page {page.PageNumber}: {AiDecision(ai, "a new document starts here")}" : $"Page {page.PageNumber}: first page.");
                         (batch ??= AddGenericBatch(batches)).Documents.Add(document);
                     }
 
@@ -107,10 +123,17 @@ public sealed class CapturePlanner
                     var aiStarts = ai.StartsNewDocument && (aiType?.AiStartsNewDocument ?? true);
                     if (aiStarts || document is null)
                     {
-                        document = new DocumentBuilder(type, selected?.AllMatches ?? RuleValueMatches(type, page))
+                        document = Begin(new DocumentBuilder(type, selected?.AllMatches ?? RuleValueMatches(type, page))
                         {
                             AiSuggestedType = selected is null && aiType is null ? ai.SuggestedType : null
-                        };
+                        }, aiStarts
+                            ? $"Page {page.PageNumber}: {AiDecision(ai, $"a new {aiType?.Name ?? "document"} starts here")}"
+                            : $"Page {page.PageNumber}: first page.");
+                        document.Decisions.Add(
+                            selected is not null ? $"Type {selected.Type.Name}: its rules matched — {DescribeMatches(selected.AllMatches, selected.Type.StartRules, selected.Type.RecognitionRules)}."
+                            : aiType is not null ? $"Type {aiType.Name}: chosen by the AI."
+                            : type is not null ? $"Type {type.Name}: the fallback type, as the AI matched none of the types{(ai.SuggestedType is { } suggested ? $" (it called it \"{suggested}\")" : string.Empty)}."
+                            : "No document type: the AI matched none, and there's no fallback type.");
                         (batch ??= AddGenericBatch(batches)).Documents.Add(document);
                         if (type is null)
                             diagnostics.Add(new ProcessingDiagnostic("unclassified-page", "The AI matched no document type and there's no fallback type.", pageRef));
@@ -125,7 +148,9 @@ public sealed class CapturePlanner
                 }
                 else if (documentStarts || (document is null && selected is not null))
                 {
-                    document = new DocumentBuilder(selected!.Type, selected.AllMatches);
+                    document = Begin(new DocumentBuilder(selected!.Type, selected.AllMatches), documentStarts
+                        ? $"Page {page.PageNumber}: a new {selected.Type.Name} starts — {DescribeMatches(selected.StartMatches.Count > 0 && IsMatch(selected.Type.StartRules, selected.StartMatches) ? selected.StartMatches : selected.RecognitionMatches, selected.Type.StartRules, selected.Type.RecognitionRules)}."
+                        : $"Page {page.PageNumber}: first page, identified as {selected.Type.Name} — {DescribeMatches(selected.AllMatches, selected.Type.StartRules, selected.Type.RecognitionRules)}.");
                     (batch ??= AddGenericBatch(batches)).Documents.Add(document);
                 }
 
@@ -134,6 +159,7 @@ public sealed class CapturePlanner
                 if (consume)
                 {
                     consumed.Add(pageRef);
+                    pending.Add($"Page {page.PageNumber} was a separator page and was removed.");
                     continue;
                 }
 
@@ -141,13 +167,19 @@ public sealed class CapturePlanner
                 if (document is null)
                 {
                     var fallback = profile.DocumentTypes.FirstOrDefault(item => item.Id == profile.DefaultDocumentTypeId);
-                    document = new DocumentBuilder(fallback, []);
+                    document = Begin(new DocumentBuilder(fallback, []), fallback is null
+                        ? $"Page {page.PageNumber}: no rule matched, and there's no fallback type."
+                        : $"Page {page.PageNumber}: no rule matched, so it's a {fallback.Name} (the fallback type).");
                     batch.Documents.Add(document);
                     if (fallback is null)
                         diagnostics.Add(new ProcessingDiagnostic("unclassified-page", "No document type or fallback matched this page.", pageRef));
                 }
                 if (profile.AiSeparation && page.Ai is null && !document.ReviewReasons.Contains(AiNotSetUpReason))
                     document.ReviewReasons.Add(AiNotSetUpReason);
+                document.Decisions.AddRange(pending);
+                pending.Clear();
+                if (ai is not null)
+                    document.AiProvider ??= ai.Provider ?? "AI";
                 document.Pages.Add(pageRef);
                 document.Analyzed.Add(page);
             }
@@ -187,6 +219,10 @@ public sealed class CapturePlanner
 
         document.Type = first?.Type ?? profile.DocumentTypes.FirstOrDefault(item => item.Id == profile.DefaultDocumentTypeId);
         document.Matches = first?.AllMatches ?? [];
+        document.Decisions.Add(first is not null
+            ? $"Type {first.Type.Name}: its rules matched — {DescribeMatches(first.AllMatches, first.Type.StartRules, first.Type.RecognitionRules)}."
+            : document.Type is { } fallback ? $"Type {fallback.Name}: no type's rules matched its pages, so the fallback type."
+            : "No document type: no type's rules matched its pages, and there's no fallback type.");
         if (first is not null && others.Count > 0)
         {
             var firstPage = document.Analyzed.First(page => MatchDocumentTypes([first.Type], page).Count > 0).PageNumber;
@@ -194,6 +230,40 @@ public sealed class CapturePlanner
             document.ReviewReasons.Add(
                 $"Pages match more than one document type ({first.Type.Name} on page {firstPage}, {listed}) — the AI may have joined two documents. It was given {first.Type.Name}.");
         }
+    }
+
+    private static string AiDecision(AiPageVerdict ai, string decision)
+    {
+        if (ai.Reason.StartsWith("AI failed", StringComparison.Ordinal))
+            return ai.Reason;
+        var reason = string.IsNullOrWhiteSpace(ai.Reason) ? "." : $": {ai.Reason.Trim().TrimEnd('.')}.";
+        return $"the AI says {decision} ({ai.Confidence}% sure){reason}";
+    }
+
+    /// <summary>The rules that matched, by name, with what they found — e.g. "Barcode found
+    /// \"INV-1042\"".</summary>
+    private static string DescribeMatches(IEnumerable<RuleMatch> matches, params RuleSet[] sets)
+    {
+        var rules = sets.SelectMany(set => set.Rules).ToList();
+        var described = matches.Select(match =>
+        {
+            var rule = rules.FirstOrDefault(item => item.Id == match.RuleId);
+            var name = !string.IsNullOrWhiteSpace(rule?.Name) ? rule.Name.Trim() : rule?.Type switch
+            {
+                SeparationStrategyType.Barcode => "barcode rule",
+                SeparationStrategyType.BlankPage => "blank page rule",
+                SeparationStrategyType.EveryNPages => "page count rule",
+                SeparationStrategyType.Regex => "text rule",
+                SeparationStrategyType.OcrZone => "zone rule",
+                SeparationStrategyType.CaptureSeparator => "separator sheet",
+                _ => "rule"
+            };
+            var value = match.CapturedValue?.Trim();
+            if (string.IsNullOrEmpty(value))
+                return name;
+            return $"{name} found \"{(value.Length > 40 ? value[..40] + "…" : value)}\"";
+        }).Distinct().ToList();
+        return described.Count == 0 ? "its rules matched" : string.Join(", ", described);
     }
 
     private static string NoTypeFitsReason(AiPageVerdict ai, DocumentTypeDefinition? fallback)
@@ -369,11 +439,14 @@ public sealed class CapturePlanner
         public List<SourcePage> Pages { get; } = [];
         public List<AnalyzedPage> Analyzed { get; } = [];
         public List<string> ReviewReasons { get; } = [];
+        public List<string> Decisions { get; } = [];
+        public string? AiProvider { get; set; }
         public string? AiSuggestedType { get; init; }
 
         /// <summary>Split off by the AI with its type still to come from its pages' rules.</summary>
         public bool TypeFromPages { get; init; }
 
-        public PlannedDocument Build() => new(Id, Type, Pages, Matches, ReviewReasons.Count > 0 ? ReviewReasons : null, AiSuggestedType);
+        public PlannedDocument Build() => new(Id, Type, Pages, Matches, ReviewReasons.Count > 0 ? ReviewReasons : null, AiSuggestedType,
+            Decisions.Count > 0 ? Decisions : null, AiProvider);
     }
 }
